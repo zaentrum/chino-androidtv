@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- app_name comes from the Gradle product flavors (beta / prod) — see app/build.gradle.kts. -->
+<resources>
+    <string name="auth_title">Connect your Chino account</string>
+    <string name="auth_instructions">On your phone or laptop, open</string>
+    <string name="auth_qr_or">Scan with your phone — or visit:</string>
+    <string name="auth_qr_description">QR code to open the sign-in page on your phone</string>
+    <string name="auth_enter_code">and enter this code:</string>
+    <string name="auth_waiting">Waiting for confirmation…</string>
+    <string name="auth_retry">Try again</string>
+    <string name="auth_error_prefix">Could not start sign-in: </string>
+
+    <string name="library_title">Recently added — Movies</string>
+    <string name="library_loading">Loading your library…</string>
+    <string name="library_empty">No items yet.</string>
+    <string name="library_error_prefix">Could not load library: </string>
+</resources>

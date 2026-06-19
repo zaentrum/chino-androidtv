@@ -1,0 +1,156 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+    tags: ["v*"]
+  pull_request:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  # ---------------------------------------------------------------------------
+  # Neutrality gate: this is a PUBLIC, vendor-neutral client. Fail the build if
+  # any internal hostname, competitor product name, or acquisition vocabulary
+  # leaks into the tree. Runs first; build jobs depend on it.
+  # ---------------------------------------------------------------------------
+  neutrality:
+    name: Neutrality check
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install ripgrep
+        run: sudo apt-get update && sudo apt-get install -y ripgrep
+
+      # Patterns are assembled from fragments so the forbidden tokens never
+      # appear verbatim in this file — the tree (including this workflow) stays
+      # literally free of every banned string.
+      - name: No internal hostnames
+        run: |
+          # The internal platform host (and any of its subdomains) must never appear.
+          HOST_RE="nalet\\.${HOST_TLD}"
+          if rg -n -i --hidden -g '!.git/**' "$HOST_RE" .; then
+            echo "::error::Internal hostname found above. This is a public repo." >&2
+            exit 1
+          fi
+          echo "OK: no internal hostnames."
+        env:
+          HOST_TLD: cloud
+
+      - name: No competitor product names
+        run: |
+          # Competitor media-server product names must never appear (incl. comments).
+          NAMES_RE="\\b(jelly${A}|${B}lex|em${C}|${D}odi|${E}flix)\\b"
+          if rg -n -i --hidden -g '!.git/**' "$NAMES_RE" .; then
+            echo "::error::Competitor product name found above." >&2
+            exit 1
+          fi
+          echo "OK: no competitor product names."
+        env:
+          A: fin
+          B: p
+          C: by
+          D: k
+          E: nalet
+
+      - name: No acquisition vocabulary in user-facing text
+        run: |
+          # Acquisition vocabulary must not appear in user-facing surfaces
+          # (Android resources and docs).
+          VOCAB_RE="(index${X}|trac${V}|use${Y}|${Z}|tor${W})"
+          if rg -n -i --hidden -w -g '!.git/**' "$VOCAB_RE" app/src/main/res *.md 2>/dev/null; then
+            echo "::error::Acquisition vocabulary found in user-facing text above." >&2
+            exit 1
+          fi
+          echo "OK: no acquisition vocabulary in user-facing text."
+        env:
+          X: er
+          V: ker
+          Y: net
+          Z: arr
+          W: rent
+
+  # ---------------------------------------------------------------------------
+  # Debug builds: always build both flavors so every push is exercised.
+  # ---------------------------------------------------------------------------
+  build:
+    name: Build debug APKs
+    needs: neutrality
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Assemble beta debug APK
+        run: ./gradlew :app:assembleBetaDebug --stacktrace
+
+      - name: Assemble prod debug APK
+        run: ./gradlew :app:assembleProdDebug --stacktrace
+
+      - name: Upload debug APKs
+        uses: actions/upload-artifact@v4
+        with:
+          name: debug-apks
+          path: app/build/outputs/apk/**/debug/*.apk
+          if-no-files-found: warn
+
+  # ---------------------------------------------------------------------------
+  # Signed release AAB: only runs when an upload keystore secret is configured.
+  # When the secret is absent the whole job is skipped — it never fails the
+  # pipeline for forks / contributors who don't have signing material.
+  # ---------------------------------------------------------------------------
+  release:
+    name: Build signed release AAB
+    needs: neutrality
+    if: ${{ secrets.SIGNING_KEYSTORE_B64 != '' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      - name: Decode signing keystore
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          echo "$SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
+          echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
+
+      - name: Build signed prod release AAB
+        env:
+          SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
+          SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
+          SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
+          VERSION_CODE: ${{ github.run_number }}
+        run: ./gradlew :app:bundleProdRelease --stacktrace
+
+      - name: Upload release AAB
+        uses: actions/upload-artifact@v4
+        with:
+          name: release-aab
+          path: app/build/outputs/bundle/prodRelease/*.aab
+          if-no-files-found: warn
