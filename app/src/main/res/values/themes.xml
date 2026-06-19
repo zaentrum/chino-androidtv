@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- NoActionBar.Fullscreen kills the system action bar and status/nav decor
+         so Compose draws over the whole 1920x1080 surface. TV Compose hosts
+         the top action row itself (app-name header / Search button /
+         etc.), which used to double up with the system bar's title and waste
+         ~50dp of vertical real estate. -->
+    <style name="Theme.ChinoTv" parent="@android:style/Theme.DeviceDefault.NoActionBar.Fullscreen">
+        <item name="android:windowBackground">@android:color/black</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
+        <item name="android:windowTranslucentStatus">true</item>
+        <item name="android:windowTranslucentNavigation">true</item>
+    </style>
+</resources>

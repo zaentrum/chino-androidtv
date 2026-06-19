@@ -1,0 +1,14 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Default config: only HTTPS allowed. The chino-api beta route serves a
+    valid public cert, so no domain-specific overrides are needed. If you
+    later need to talk to a private CA host (e.g. an internal preview
+    deployment), add a <domain-config> with a <trust-anchors> block.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+</network-security-config>
