@@ -109,14 +109,34 @@ jobs:
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
+  # Secret presence as a job output. The `secrets` context is NOT allowed in a
+  # job-level `if:`, so read it in a step here and gate `release` on the output.
+  # ---------------------------------------------------------------------------
+  check-secrets:
+    name: Check signing secrets
+    runs-on: ubuntu-latest
+    outputs:
+      has_keystore: ${{ steps.check.outputs.has_keystore }}
+    steps:
+      - id: check
+        env:
+          SIGNING_KEYSTORE_B64: ${{ secrets.SIGNING_KEYSTORE_B64 }}
+        run: |
+          if [ -n "$SIGNING_KEYSTORE_B64" ]; then
+            echo "has_keystore=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "has_keystore=false" >> "$GITHUB_OUTPUT"
+          fi
+
+  # ---------------------------------------------------------------------------
   # Signed release AAB: only runs when an upload keystore secret is configured.
   # When the secret is absent the whole job is skipped — it never fails the
   # pipeline for forks / contributors who don't have signing material.
   # ---------------------------------------------------------------------------
   release:
     name: Build signed release AAB
-    needs: neutrality
-    if: ${{ secrets.SIGNING_KEYSTORE_B64 != '' }}
+    needs: [neutrality, check-secrets]
+    if: ${{ needs.check-secrets.outputs.has_keystore == 'true' }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
