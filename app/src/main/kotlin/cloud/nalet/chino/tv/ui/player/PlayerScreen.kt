@@ -119,6 +119,17 @@ private val LOADING_MESSAGES: List<String> = listOf(
     "Buffering more cinema magic…",
 )
 
+/** How long a mid-stream rebuffer must persist before we proactively drop a
+ *  quality rung. The playback buffer is huge (4 min), so entering STATE_BUFFERING
+ *  means it fully drained; 12 s of continued stall past that is clearly the
+ *  current rung out-running what nas001 can serve under contention — the BRAVIA
+ *  4K-high "stutters every few minutes but never errors" case. */
+private const val REBUFFER_FALLBACK_MS = 12_000L
+
+/** Kinds the manual "Skip …" pill handles. Post-credits previews are excluded —
+ *  they get the "Next episode ▶" card instead (see [isPostCreditsPreview]). */
+private val SKIPPABLE_MANUAL_KINDS = setOf("intro", "recap", "credits")
+
 @Composable
 fun PlayerScreen(
     viewModel: PlayerViewModel,
@@ -416,6 +427,11 @@ private fun ExoPlayback(
     // a separate snapshotFlow.
     val sawFirstFrameState = remember { mutableStateOf(false) }
     val bufferingState = remember { mutableStateOf(true) }
+    // Timestamp a MID-STREAM rebuffer began (0 = not rebuffering). Distinct from
+    // the listener's bufferingStartTs (telemetry only) because the sustained-
+    // rebuffer watchdog below reads it from a Compose coroutine to trigger a
+    // proactive quality drop. Reset when the player rebuilds for a new item/rung.
+    val rebufferSinceMs = remember(player) { mutableStateOf(0L) }
     // Set by the listener on STATE_ENDED; a LaunchedEffect below auto-advances
     // to the next episode (series) or the top recommendation (movie). guarded
     // by autoAdvanced so the end-of-media path and the credits countdown can't
@@ -442,9 +458,14 @@ private fun ExoPlayback(
                     Player.STATE_BUFFERING -> {
                         bufferingStartTs = System.currentTimeMillis()
                         bufferingState.value = true
+                        // Arm the sustained-rebuffer watchdog only AFTER the
+                        // first frame — initial startup buffering shouldn't drop
+                        // quality (that's just the cold-transcode latency).
+                        if (sawFirstFrame) rebufferSinceMs.value = System.currentTimeMillis()
                     }
                     Player.STATE_READY -> {
                         bufferingState.value = false
+                        rebufferSinceMs.value = 0L
                         if (bufferingStartTs > 0) {
                             viewModel.reportTelemetry(
                                 "buffering_end",
@@ -463,9 +484,10 @@ private fun ExoPlayback(
                     }
                     Player.STATE_ENDED -> {
                         viewModel.reportTelemetry("playback_complete")
+                        rebufferSinceMs.value = 0L
                         endedState.value = true
                     }
-                    Player.STATE_IDLE -> Unit
+                    Player.STATE_IDLE -> rebufferSinceMs.value = 0L
                 }
             }
             override fun onPositionDiscontinuity(
@@ -553,6 +575,35 @@ private fun ExoPlayback(
         }
     }
 
+    // Sustained-rebuffer → quality fallback watchdog. onPlayerError only covers
+    // a HARD failure (decode error, segment retry exhausted); the BRAVIA's
+    // "stutters every few minutes but keeps recovering" is a SOFT failure — the
+    // 4-min buffer drains, playback stalls in STATE_BUFFERING, and the slow
+    // segment eventually lands so no PlaybackException ever fires. When a
+    // mid-stream rebuffer persists past REBUFFER_FALLBACK_MS we drop a rung
+    // proactively (the same recovery, earlier): smaller segments keep ahead of
+    // nas001 NFS contention. Fires at most once per player instance — the
+    // fallback rebuilds the player (keyed remember resets the flag + timestamp),
+    // so the next-lower rung gets a fresh watchdog; on `low` attemptQualityFallback
+    // returns false and we stop probing.
+    var rebufferFallbackFired by remember(player) { mutableStateOf(false) }
+    LaunchedEffect(player) {
+        while (true) {
+            delay(1_000)
+            if (rebufferFallbackFired) continue
+            val since = rebufferSinceMs.value
+            if (since > 0L && System.currentTimeMillis() - since >= REBUFFER_FALLBACK_MS) {
+                rebufferFallbackFired = true // claim first: attemptQualityFallback rebuilds the player
+                if (viewModel.attemptQualityFallback()) {
+                    viewModel.reportTelemetry(
+                        "rebuffer_quality_fallback",
+                        mapOf("stall_ms" to (System.currentTimeMillis() - since).toString()),
+                    )
+                }
+            }
+        }
+    }
+
     // Binge-mode segment handling. Polls every 500ms; each segment is acted
     // on at most once per session via handledKeys. When a segment matches, we
     // arm `pendingSkip` and surface a countdown pill — that gives the user a
@@ -631,14 +682,23 @@ private fun ExoPlayback(
             } ?: continue
             val key = "${active.kind}:${active.startMs}"
             val cd = settings.countdownSec.coerceAtLeast(1)
+            // A post-credits preview (a next-episode teaser mislabelled as a
+            // recap, or an explicit `preview`) is NOT skippable content — it
+            // plays with a "Next episode ▶" card over it. With auto-play-next
+            // on, the card counts down and jumps; with it off, only the manual
+            // card below appears (no auto-jump). Either way it must NOT trip the
+            // recap-skip branch, hence the !isPreview guard there.
+            val isPreview = isPostCreditsPreview(active, ready.segments)
             when {
+                isPreview && settings.autoPlayNext && onPlayNext != null ->
+                    pendingSkip = PendingSkip.PreviewNext(key, cd)
                 active.kind.equals("intro", ignoreCase = true) && settings.autoSkipIntro ->
                     pendingSkip = PendingSkip.SkipIntro(key, active.endMs, cd)
                 // Recap segments ("Previously on…") share the autoSkipIntro
                 // setting because both are content the viewer has already
                 // seen. Separate user setting can be added later if anyone
                 // wants different behaviour for the two.
-                active.kind.equals("recap", ignoreCase = true) && settings.autoSkipIntro ->
+                active.kind.equals("recap", ignoreCase = true) && !isPreview && settings.autoSkipIntro ->
                     pendingSkip = PendingSkip.SkipRecap(key, active.endMs, cd)
                 active.kind.equals("credits", ignoreCase = true) && settings.autoPlayNext && onPlayNext != null ->
                     pendingSkip = PendingSkip.PlayNext(key, cd)
@@ -682,6 +742,14 @@ private fun ExoPlayback(
                 if (next != null && onPlayNext != null && !autoAdvanced) {
                     autoAdvanced = true
                     viewModel.reportTelemetry("auto_play_next", mapOf("next" to next))
+                    onPlayNext(next)
+                }
+            }
+            is PendingSkip.PreviewNext -> {
+                val next = viewModel.resolveNextUp()
+                if (next != null && onPlayNext != null && !autoAdvanced) {
+                    autoAdvanced = true
+                    viewModel.reportTelemetry("auto_play_next_preview", mapOf("next" to next))
                     onPlayNext(next)
                 }
             }
@@ -1100,14 +1168,36 @@ private fun ExoPlayback(
         // replaces the plain button with the countdown card the same way). It's
         // focusable so DPAD users can reach it, but never calls requestFocus —
         // so it can't steal focus from the playback controls.
-        val skipSeg = if (pendingSkip == null) {
+        val activeManualSeg = if (pendingSkip == null) {
             ready.segments.firstOrNull { seg ->
                 positionMs in seg.startMs until seg.endMs && when (seg.kind.lowercase()) {
-                    "intro", "recap", "credits" -> true
+                    "intro", "recap", "credits", "preview" -> true
                     else -> false
                 }
             }
         } else null
+        // A post-credits preview gets a "Next episode ▶" card (play the teaser,
+        // jump on activate); intro/recap/credits keep the plain "Skip …" button.
+        // The preview claims the segment first so a post-credits recap shows
+        // "Next episode" rather than "Skip Recap".
+        val previewSeg = activeManualSeg
+            ?.takeIf { onPlayNext != null && isPostCreditsPreview(it, ready.segments) }
+        val skipSeg = activeManualSeg
+            ?.takeIf { it !== previewSeg && it.kind.lowercase() in SKIPPABLE_MANUAL_KINDS }
+        if (previewSeg != null) {
+            NextEpisodeButton(
+                onPlay = {
+                    noteInteraction()
+                    chromeCoroutineScope.launch {
+                        val next = viewModel.resolveNextUp()
+                        if (next != null && onPlayNext != null) {
+                            viewModel.reportTelemetry("play_next_preview", mapOf("next" to next))
+                            onPlayNext(next)
+                        }
+                    }
+                },
+            )
+        }
         if (skipSeg != null) {
             SkipSegmentButton(
                 segment = skipSeg,
@@ -1137,6 +1227,29 @@ private fun ExoPlayback(
         if (skippedIntroPill) {
             SkippedIntroPill(onTimeout = { skippedIntroPill = false })
         }
+    }
+}
+
+/**
+ * Position-based reclassification of a next-episode preview. The analyzer
+ * mislabels post-credits "next time on…" teasers as `recap` (a "Previously
+ * on…" opener) — hundreds of them in the catalog — so a recap that STARTS at
+ * or after the credits is really a post-roll preview, and an explicit `preview`
+ * kind always is. Such segments get the "Next episode ▶" card treatment (play
+ * the teaser, offer to jump) instead of the skip-recap treatment (seek past it,
+ * which robbed the viewer of the teaser). A genuine opening recap starts near
+ * 0:00 and keeps the skip behaviour.
+ */
+private fun isPostCreditsPreview(seg: Segment, all: List<Segment>): Boolean {
+    when (seg.kind.lowercase()) {
+        "preview" -> return true
+        "recap" -> {
+            val creditsStart = all
+                .filter { it.kind.equals("credits", ignoreCase = true) }
+                .minByOrNull { it.startMs }?.startMs ?: return false
+            return seg.startMs >= creditsStart
+        }
+        else -> return false
     }
 }
 
@@ -1353,6 +1466,14 @@ sealed class PendingSkip {
         override val kind = "next"
         override fun withSecLeft(n: Int) = copy(secLeft = n)
     }
+    /** Post-credits next-episode preview: the teaser plays while a "Next episode
+     *  ▶ in Ns" card counts down to the jump (BACK cancels → keep watching the
+     *  teaser). Unlike [PlayNext] it does NOT seek/skip — the preview stays on
+     *  screen underneath the card. */
+    data class PreviewNext(override val key: String, override val secLeft: Int) : PendingSkip() {
+        override val kind = "preview"
+        override fun withSecLeft(n: Int) = copy(secLeft = n)
+    }
 }
 
 @Composable
@@ -1362,6 +1483,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
         is PendingSkip.SkipRecap -> "Skipping recap in ${prompt.secLeft}s"
         is PendingSkip.SkipCredits -> "Skipping credits in ${prompt.secLeft}s"
         is PendingSkip.PlayNext -> "Up next in ${prompt.secLeft}s"
+        is PendingSkip.PreviewNext -> "Next episode ▶ in ${prompt.secLeft}s"
     }
     Box(
         modifier = Modifier.fillMaxSize().padding(32.dp),
@@ -1439,6 +1561,59 @@ private fun SkipSegmentButton(
             Text(
                 text = label,
                 color = if (focused) Color.White else Color.Black,
+                fontWeight = FontWeight.SemiBold,
+            )
+        }
+    }
+}
+
+/** "Next episode ▶" card shown over a post-credits preview (a next-episode
+ *  teaser the analyzer mislabelled as a recap, or an explicit `preview`). Plays
+ *  the teaser underneath; activating jumps straight to the next episode. Styled
+ *  as the brand-blue counterpart of [SkipSegmentButton] so it reads as the same
+ *  "there's an action here" affordance family. Focusable + DPAD-activatable but
+ *  never requests focus, so it can't steal focus from the transport controls. */
+@Composable
+private fun NextEpisodeButton(
+    onPlay: () -> Unit,
+) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier.fillMaxSize().padding(32.dp),
+        contentAlignment = Alignment.BottomEnd,
+    ) {
+        Row(
+            modifier = Modifier
+                .clip(RectangleShape)
+                // Blue by default (this is the primary action, not a dismiss);
+                // focus deepens it + adds the ring for 10-ft legibility.
+                .background(ChinoAccent)
+                .then(
+                    if (focused) Modifier.border(3.dp, Color.White, RectangleShape)
+                    else Modifier,
+                )
+                .onFocusChanged { focused = it.isFocused }
+                .focusable()
+                .onKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown &&
+                        (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                            e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
+                        onPlay(); true
+                    } else false
+                }
+                .padding(horizontal = 18.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            androidx.tv.material3.Icon(
+                imageVector = Lucide.SkipForward,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(18.dp),
+            )
+            Text(
+                text = "Next episode",
+                color = Color.White,
                 fontWeight = FontWeight.SemiBold,
             )
         }

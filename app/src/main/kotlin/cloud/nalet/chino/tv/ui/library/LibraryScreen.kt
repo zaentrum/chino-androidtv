@@ -65,6 +65,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.R
 import cloud.nalet.chino.tv.ui.theme.LogoMark
+import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
@@ -1003,10 +1004,10 @@ private fun ContinueWatchingCard(
                     .aspectRatio(2f / 3f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                AsyncImage(
+                PosterImage(
                     model = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
+                    title = displayTitle,
                     contentDescription = displayTitle,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Watched ✓ badge — top-right, shown once the user finishes a
@@ -1455,10 +1456,10 @@ private fun PosterCard(
                     .aspectRatio(2f / 3f)
                     .background(MaterialTheme.colorScheme.surfaceVariant),
             ) {
-                AsyncImage(
+                PosterImage(
                     model = posterUrl,
+                    title = item.title,
                     contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Watched badge — top-right of the poster. Server stamps

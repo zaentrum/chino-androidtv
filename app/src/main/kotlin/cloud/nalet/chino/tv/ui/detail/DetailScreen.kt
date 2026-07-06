@@ -8,6 +8,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -230,10 +231,10 @@ private fun DetailContent(
                 horizontalArrangement = Arrangement.spacedBy(32.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
-                AsyncImage(
+                PosterImage(
                     model = "${s.baseUrl}/v1/items/${s.item.id}/poster?stream=${s.streamToken}",
+                    title = s.item.title,
                     contentDescription = null,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier
                         .width(200.dp)
                         .aspectRatio(2f / 3f)
@@ -1033,10 +1034,10 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
                     .height(270.dp)
                     .background(ChinoBg),
             ) {
-                AsyncImage(
+                PosterImage(
                     model = posterUrl,
+                    title = item.title,
                     contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
             }

@@ -7,6 +7,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -58,7 +59,6 @@ import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -71,7 +71,6 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.model.Item
-import coil.compose.AsyncImage
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 
@@ -406,10 +405,10 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                     .aspectRatio(2f / 3f)
                     .background(ChinoBg),
             ) {
-                AsyncImage(
+                PosterImage(
                     model = posterUrl,
+                    title = item.title,
                     contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // Watched ✓ badge — emerald, same as PosterCard (tv-ahead of

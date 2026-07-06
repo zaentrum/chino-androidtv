@@ -5,6 +5,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -42,7 +43,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
-import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -63,7 +63,6 @@ import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.library.watchedCardAction
-import coil.compose.AsyncImage
 
 @Composable
 fun BrowseScreen(
@@ -305,10 +304,10 @@ internal fun PosterGridCard(
                     .aspectRatio(2f / 3f)
                     .background(ChinoBg),
             ) {
-                AsyncImage(
+                PosterImage(
                     model = posterUrl,
+                    title = item.title,
                     contentDescription = item.title,
-                    contentScale = ContentScale.Crop,
                     modifier = Modifier.fillMaxSize(),
                 )
                 // "Saved" bookmark badge — top-LEFT so it never collides with the
