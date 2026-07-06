@@ -1,5 +1,11 @@
 package cloud.nalet.chino.tv.ui.profile
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -27,6 +33,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -141,7 +148,7 @@ private fun ReadyContent(
                 Text(
                     text = "Nothing watched yet. Watched items appear here once you finish a " +
                         "movie or episode (or mark one watched on a detail page).",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 14.sp,
                 )
             }
@@ -166,9 +173,9 @@ private fun IdentityCard(displayName: String, email: String) {
     Row(
         modifier = Modifier
             .fillMaxWidth(0.7f)
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF161B22))
-            .border(width = 1.dp, color = Color(0xFF30363D), shape = RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
+            .background(ChinoSurface)
+            .border(width = 1.dp, color = ChinoBorder, shape = RectangleShape)
             .padding(20.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
@@ -186,7 +193,7 @@ private fun IdentityCard(displayName: String, email: String) {
             if (email.isNotBlank() && email != displayName) {
                 Text(
                     text = email,
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 14.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -216,10 +223,10 @@ private fun HistoryRow(
         modifier = Modifier
             .fillMaxWidth(0.85f)
             .padding(vertical = 4.dp)
-            .clip(RoundedCornerShape(10.dp))
-            .background(if (focused) Color(0xFF21262D) else Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else ChinoSurface)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(10.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -240,8 +247,8 @@ private fun HistoryRow(
             modifier = Modifier
                 .height(64.dp)
                 .aspectRatio(if (isEpisode) 16f / 9f else 2f / 3f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF0D1117)),
+                .clip(RectangleShape)
+                .background(ChinoBg),
         ) {
             AsyncImage(
                 model = if (isEpisode) {
@@ -278,12 +285,12 @@ private fun HistoryRow(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
                     if (epNum.isNotEmpty()) {
-                        Text(text = epNum, color = Color(0xFF58A6FF), fontSize = 13.sp)
-                        Text(text = "·", color = Color(0xFF8B949E), fontSize = 13.sp)
+                        Text(text = epNum, color = ChinoAccent, fontSize = 13.sp)
+                        Text(text = "·", color = ChinoMuted, fontSize = 13.sp)
                     }
                     Text(
                         text = item.title,
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -299,20 +306,20 @@ private fun HistoryRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         item.year?.let {
-                            Text(it.toString(), color = Color(0xFF8B949E), fontSize = 13.sp)
+                            Text(it.toString(), color = ChinoMuted, fontSize = 13.sp)
                         }
                         ratingText?.let {
                             if (item.year != null) {
-                                Text("•", color = Color(0xFF8B949E), fontSize = 13.sp)
+                                Text("•", color = ChinoMuted, fontSize = 13.sp)
                             }
-                            Text(it, color = Color(0xFF58A6FF), fontSize = 13.sp)
+                            Text(it, color = ChinoAccent, fontSize = 13.sp)
                         }
                     }
                 }
             }
         }
         watchedDateLabel(item.watchedAt)?.let {
-            Text(text = it, color = Color(0xFF8B949E), fontSize = 13.sp, maxLines = 1)
+            Text(text = it, color = ChinoMuted, fontSize = 13.sp, maxLines = 1)
         }
     }
 }
@@ -335,7 +342,7 @@ private fun Centered(text: String, isError: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF8B949E),
+            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
             fontSize = 18.sp,
         )
     }

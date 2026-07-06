@@ -10,14 +10,14 @@ import androidx.compose.ui.graphics.Color
 // aligned with the web token vocabulary (bg, surface, border, muted,
 // accent, …) so cross-platform design discussions reference the same
 // words.
-val ChinoBg = Color(0xFF0D1117)           // nalet.bg — primary canvas
-val ChinoSurface = Color(0xFF161B22)      // nalet.surface
-val ChinoSurfaceHi = Color(0xFF1C2128)    // nalet.surface-2
-val ChinoBorder = Color(0xFF21262D)       // nalet.border
-val ChinoBorderHi = Color(0xFF30363D)     // nalet.border-2
+val ChinoBg = Color(0xFF0B0F19)           // nalet.bg — primary canvas
+val ChinoSurface = Color(0xFF11161F)      // nalet.surface
+val ChinoSurfaceHi = Color(0xFF161B26)    // nalet.surface-2
+val ChinoBorder = Color(0xFF1F2633)       // nalet.border
+val ChinoBorderHi = Color(0xFF2A3142)     // nalet.border-2
 val ChinoFg = Color(0xFFE6E6E6)           // fg
 val ChinoText = Color(0xFFC9D1D9)         // nalet.text / fg-2 — wordmark grey
-val ChinoMuted = Color(0xFF8B949E)        // nalet.muted
+val ChinoMuted = Color(0xFFAEB8C2)        // nalet.muted / fg-muted
 val ChinoDim = Color(0xFF6E7787)          // fg-dim
 val ChinoAccent = Color(0xFF58A6FF)       // nalet.accent — cloud-blue
 val ChinoCyan = Color(0xFF00A4DC)         // cloud-cyan

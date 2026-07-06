@@ -1,5 +1,9 @@
 package cloud.nalet.chino.tv.ui.zap
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -28,6 +32,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -308,18 +313,18 @@ private fun ChannelInfoOverlay(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                item.year?.let { Text(it.toString(), color = Color(0xFFC9D1D9), fontSize = 18.sp) }
+                item.year?.let { Text(it.toString(), color = ChinoText, fontSize = 18.sp) }
                 item.rating?.let {
-                    Text("★ ${((it * 10).toInt() / 10.0)}", color = Color(0xFF58A6FF), fontSize = 18.sp)
+                    Text("★ ${((it * 10).toInt() / 10.0)}", color = ChinoAccent, fontSize = 18.sp)
                 }
                 item.genres.take(3).takeIf { it.isNotEmpty() }?.let {
-                    Text(it.joinToString(" · "), color = Color(0xFF8B949E), fontSize = 16.sp)
+                    Text(it.joinToString(" · "), color = ChinoMuted, fontSize = 16.sp)
                 }
             }
             item.overview?.takeIf { it.isNotBlank() }?.let {
                 Text(
                     text = it,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 16.sp,
                     maxLines = 3,
                     overflow = TextOverflow.Ellipsis,
@@ -328,7 +333,7 @@ private fun ChannelInfoOverlay(
             }
             Text(
                 text = "OK · Watch from here     ▼ / CH+ Next     CH- Back     ▲ Info     ◀ ${if (muted) "Unmute" else "Mute"}     ▶ ${if (saved) "Saved" else "Save"}",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 14.sp,
             )
         }
@@ -344,8 +349,8 @@ private fun SaveChip(saved: Boolean) {
     Row(
         modifier = Modifier
             .background(
-                color = if (saved) Color(0xFF2EA043).copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f),
-                shape = androidx.compose.foundation.shape.RoundedCornerShape(999.dp),
+                color = if (saved) ChinoSignalGreen.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f),
+                shape = RectangleShape,
             )
             .padding(horizontal = 14.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -354,12 +359,12 @@ private fun SaveChip(saved: Boolean) {
         Icon(
             imageVector = if (saved) Lucide.BookmarkCheck else Lucide.Bookmark,
             contentDescription = if (saved) "Saved to watchlist" else "Save to watchlist",
-            tint = if (saved) Color(0xFF3FB950) else Color.White,
+            tint = if (saved) ChinoSignalGreen else Color.White,
             modifier = Modifier.size(18.dp),
         )
         Text(
             text = if (saved) "Saved" else "Save",
-            color = if (saved) Color(0xFF3FB950) else Color.White,
+            color = if (saved) ChinoSignalGreen else Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )

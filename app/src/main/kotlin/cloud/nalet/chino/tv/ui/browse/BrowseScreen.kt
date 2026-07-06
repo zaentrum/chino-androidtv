@@ -1,5 +1,11 @@
 package cloud.nalet.chino.tv.ui.browse
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -35,6 +41,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -171,7 +178,7 @@ private fun BrowseGrid(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     text = "No ${if (type == "movie") "movies" else "shows"} match the current filters.",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                     modifier = Modifier.padding(vertical = 24.dp),
                 )
@@ -203,7 +210,7 @@ private fun BrowseGrid(
             val plural = if (type == "movie") "movies" else "shows"
             Text(
                 text = if (s.hasMore) "Loading more…" else "You've reached the end — ${s.items.size} $plural.",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 12.sp,
                 modifier = Modifier.padding(top = 16.dp),
             )
@@ -286,16 +293,17 @@ internal fun PosterGridCard(
         onClick = onClick,
         onLongClick = onLongPress,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .onFocusChanged { focused = it.isFocused },
     ) {
-        Column(modifier = Modifier.background(Color(0xFF161B22))) {
+        Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .background(Color(0xFF0D1117)),
+                    .background(ChinoBg),
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -310,8 +318,8 @@ internal fun PosterGridCard(
                         modifier = Modifier
                             .align(Alignment.TopStart)
                             .padding(6.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(Color(0xFF1F6FEB))
+                            .clip(RectangleShape)
+                            .background(ChinoAccent)
                             .padding(4.dp),
                     ) {
                         Icon(
@@ -327,8 +335,8 @@ internal fun PosterGridCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(Color(0xFF2EA043))
+                            .clip(RectangleShape)
+                            .background(ChinoSignalGreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -341,7 +349,7 @@ internal fun PosterGridCard(
             ) {
                 Text(
                     text = item.title,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -353,10 +361,10 @@ internal fun PosterGridCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = Color(0xFF8B949E), fontSize = 14.sp) }
+                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 14.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = Color(0xFF8B949E), fontSize = 14.sp)
-                            Text(it, color = Color(0xFF58A6FF), fontSize = 14.sp)
+                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 14.sp)
+                            Text(it, color = ChinoAccent, fontSize = 14.sp)
                         }
                     }
                 }
@@ -366,7 +374,7 @@ internal fun PosterGridCard(
                 if (focused && onLongPress != null) {
                     Text(
                         text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -382,7 +390,7 @@ private fun Centered(text: String, loading: Boolean = false, isError: Boolean = 
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = if (loading) "Loading $text…" else text,
-            color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF8B949E),
+            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
             fontSize = 18.sp,
         )
     }

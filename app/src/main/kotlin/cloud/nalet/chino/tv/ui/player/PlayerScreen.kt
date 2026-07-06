@@ -1,5 +1,10 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -48,6 +53,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -71,6 +77,7 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
+import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.KeyEventBus
 import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.ui.settings.BugReportState
@@ -175,18 +182,19 @@ private fun TerminalErrorScreen(
                     )
                     Text(
                         text = "Thanks — the report landed on the dev backlog.",
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         fontSize = 13.sp,
                     )
                 }
                 else -> {
                     if (report is BugReportState.Failed) {
-                        Text(text = report.message, color = Color(0xFFF85149), fontSize = 13.sp)
+                        Text(text = report.message, color = ChinoError, fontSize = 13.sp)
                     }
                     Button(
                         // Swallow repeat presses while a submit is in flight.
                         onClick = { if (report !is BugReportState.Sending) onReport() },
                         modifier = Modifier.focusRequester(reportRow),
+                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(
                             if (report is BugReportState.Sending) "Sending the report…"
@@ -952,7 +960,7 @@ private fun ExoPlayback(
                     }
                     Text(
                         text = LOADING_MESSAGES[msgIdx],
-                        color = Color(0xFFC9D1D9),
+                        color = ChinoText,
                         style = MaterialTheme.typography.titleMedium,
                     )
                 }
@@ -1181,9 +1189,9 @@ private fun MenuPopover(width: Dp, content: @Composable ColumnScope.() -> Unit) 
             modifier = Modifier
                 .width(width)
                 .heightIn(max = 460.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 4.dp),
             content = content,
@@ -1197,8 +1205,8 @@ private fun PlayerMenuHeader(title: String, trailing: String? = null) {
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(title, color = Color(0xFF8B949E), fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        if (trailing != null) Text(trailing, color = Color(0xFF8B949E).copy(alpha = 0.7f), fontSize = 11.sp)
+        Text(title, color = ChinoMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
+        if (trailing != null) Text(trailing, color = ChinoMuted.copy(alpha = 0.7f), fontSize = 11.sp)
     }
 }
 
@@ -1214,7 +1222,7 @@ private fun PlayerMenuRow(
     var focused by remember { mutableStateOf(false) }
     val base = Modifier
         .fillMaxWidth()
-        .background(if (focused) Color(0xFF58A6FF).copy(alpha = 0.22f) else Color.Transparent)
+        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
         .padding(horizontal = 16.dp, vertical = 10.dp)
     val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
     Row(
@@ -1235,14 +1243,14 @@ private fun PlayerMenuRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
-                color = if (selected) Color(0xFF58A6FF) else Color.White,
+                color = if (selected) ChinoAccent else Color.White,
                 fontSize = 15.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
             )
             if (secondary != null) {
-                Text(text = secondary, color = Color(0xFF8B949E), fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(text = secondary, color = ChinoMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
             }
         }
     }
@@ -1253,9 +1261,9 @@ private fun MenuCheckbox(selected: Boolean) {
     Box(
         modifier = Modifier
             .size(16.dp)
-            .clip(RoundedCornerShape(3.dp))
-            .background(if (selected) Color(0xFF58A6FF) else Color.Transparent)
-            .border(1.dp, if (selected) Color(0xFF58A6FF) else Color.White.copy(alpha = 0.3f), RoundedCornerShape(3.dp)),
+            .clip(RectangleShape)
+            .background(if (selected) ChinoAccent else Color.Transparent)
+            .border(1.dp, if (selected) ChinoAccent else Color.White.copy(alpha = 0.3f), RectangleShape),
         contentAlignment = Alignment.Center,
     ) {
         if (selected) Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
@@ -1361,7 +1369,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xCC101010), shape = RoundedCornerShape(12.dp))
+                .background(Color(0xCC101010), shape = RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1369,7 +1377,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
             Text(text = message, color = Color.White, fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Press BACK to cancel",
-                color = Color(0xFFAEB8C2),
+                color = ChinoMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -1401,12 +1409,12 @@ private fun SkipSegmentButton(
     ) {
         Row(
             modifier = Modifier
-                .clip(RoundedCornerShape(24.dp))
+                .clip(RectangleShape)
                 // Web's button is white-on-black; on focus we lift to the brand
                 // blue + ring so it reads at 10-ft like the other chrome.
-                .background(if (focused) Color(0xFF58A6FF) else Color.White)
+                .background(if (focused) ChinoAccent else Color.White)
                 .then(
-                    if (focused) Modifier.border(3.dp, Color(0xFF58A6FF), RoundedCornerShape(24.dp))
+                    if (focused) Modifier.border(3.dp, ChinoAccent, RectangleShape)
                     else Modifier,
                 )
                 .onFocusChanged { focused = it.isFocused }
@@ -1463,7 +1471,7 @@ private fun SubtitlePanel(
         if (tracks.isEmpty()) {
             Text(
                 text = "No subtitles available",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -1575,7 +1583,7 @@ private fun AudioPanel(
         if (tracks.isEmpty()) {
             Text(
                 text = "No audio tracks",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -1648,7 +1656,7 @@ private fun PlaybackInfoOverlay(
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xE6101010), shape = RoundedCornerShape(12.dp))
+                .background(Color(0xE6101010), shape = RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 14.dp)
                 .width(360.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -1663,13 +1671,13 @@ private fun PlaybackInfoOverlay(
                 Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                     Text(
                         text = "$label:",
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         style = MaterialTheme.typography.bodySmall,
                         modifier = Modifier.width(80.dp),
                     )
                     Text(
                         text = value,
-                        color = Color(0xFFC9D1D9),
+                        color = ChinoText,
                         style = MaterialTheme.typography.bodySmall,
                     )
                 }
@@ -1720,7 +1728,7 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xCC101010), shape = RoundedCornerShape(12.dp))
+                .background(Color(0xCC101010), shape = RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1728,7 +1736,7 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
             Text(text = "Skipped intro", color = Color.White, fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Press BACK to watch from the start",
-                color = Color(0xFFAEB8C2),
+                color = ChinoMuted,
                 style = MaterialTheme.typography.bodySmall,
             )
         }
@@ -1747,7 +1755,7 @@ private fun SubtitleBanner(label: String, onDismiss: () -> Unit) {
     ) {
         Box(
             modifier = Modifier
-                .background(Color(0xE6202020), shape = RoundedCornerShape(8.dp))
+                .background(Color(0xE6202020), shape = RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 8.dp),
         ) {
             Text(text = label, color = Color.White, style = MaterialTheme.typography.bodyLarge)
@@ -1803,7 +1811,7 @@ private fun PreparingSpinner() {
         // Foreground arc — 270° wedge that rotates. The leading 1/4 of the
         // ring is transparent which produces the chasing-comet look.
         drawArc(
-            color = Color(0xFF58A6FF),
+            color = ChinoAccent,
             startAngle = rotation,
             sweepAngle = 270f,
             useCenter = false,

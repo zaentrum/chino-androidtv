@@ -1,5 +1,13 @@
 package cloud.nalet.chino.tv.ui.watchlist
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -43,6 +51,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -242,10 +251,10 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
     Row(
         modifier = Modifier
             .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (focused) Color(0xFF21262D) else Color.Transparent)
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else Color.Transparent)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(8.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -270,7 +279,7 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
         )
         Text(
             text = "· ${list.itemCount}",
-            color = Color(0xFF8B949E),
+            color = ChinoMuted,
             fontSize = 16.sp,
         )
     }
@@ -280,7 +289,7 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
 private fun ShelfHint(text: String) {
     Text(
         text = text,
-        color = Color(0xFF8B949E),
+        color = ChinoMuted,
         fontSize = 14.sp,
         modifier = Modifier.padding(start = 34.dp, bottom = 16.dp),
     )
@@ -319,13 +328,13 @@ private fun MoreContent(
             )
             Text(
                 text = "· ${list.itemCount}",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 18.sp,
             )
             Spacer(modifier = Modifier.weight(1f))
             if (!list.isDefault) {
                 HeaderIconButton(icon = Lucide.Pencil, label = "Rename", onClick = onRename)
-                HeaderIconButton(icon = Lucide.Trash2, label = "Delete", tint = Color(0xFFE5534B), onClick = onDelete)
+                HeaderIconButton(icon = Lucide.Trash2, label = "Delete", tint = ChinoError, onClick = onDelete)
             } else {
                 // The default list can be renamed but never deleted.
                 HeaderIconButton(icon = Lucide.Pencil, label = "Rename", onClick = onRename)
@@ -352,7 +361,7 @@ private fun MoreContent(
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(
                         text = "${items.size} saved",
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 16.dp),
                     )
@@ -374,10 +383,10 @@ private fun HeaderIconButton(
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (focused) Color(0xFF21262D) else Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else ChinoSurface)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(999.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -405,10 +414,10 @@ private fun NewListChip(onClick: () -> Unit) {
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(999.dp))
-            .background(if (focused) Color(0xFF21262D) else Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else ChinoSurface)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(999.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -425,8 +434,8 @@ private fun NewListChip(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Lucide.Plus, contentDescription = "New list", tint = Color(0xFF58A6FF), modifier = Modifier.size(16.dp))
-        Text(text = "New list", color = Color(0xFFC9D1D9), fontSize = 14.sp)
+        Icon(Lucide.Plus, contentDescription = "New list", tint = ChinoAccent, modifier = Modifier.size(16.dp))
+        Text(text = "New list", color = ChinoText, fontSize = 14.sp)
     }
 }
 
@@ -454,9 +463,9 @@ private fun NameDialog(
         Column(
             modifier = Modifier
                 .width(420.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
@@ -465,12 +474,12 @@ private fun NameDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp)
-                    .clip(RoundedCornerShape(8.dp))
-                    .background(Color(0xFF0D1117))
+                    .clip(RectangleShape)
+                    .background(ChinoBg)
                     .border(
                         width = if (focused) 2.dp else 1.dp,
-                        color = if (focused) Color(0xFF58A6FF) else Color(0xFF30363D),
-                        shape = RoundedCornerShape(8.dp),
+                        color = if (focused) ChinoAccent else ChinoBorder,
+                        shape = RectangleShape,
                     )
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
@@ -481,7 +490,7 @@ private fun NameDialog(
                         onValueChange = { if (it.length <= 60) value = it },
                         singleLine = true,
                         textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                        cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                        cursorBrush = SolidColor(ChinoAccent),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),
                         modifier = Modifier
@@ -490,13 +499,13 @@ private fun NameDialog(
                             .onFocusChanged { focused = it.isFocused },
                     )
                     if (value.isEmpty()) {
-                        Text(text = "List name…", color = Color(0xFF8B949E), fontSize = 16.sp)
+                        Text(text = "List name…", color = ChinoMuted, fontSize = 16.sp)
                     }
                 }
             }
             Text(
                 text = "Press the on-screen Done key to save, BACK to cancel.",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 12.sp,
             )
         }
@@ -508,7 +517,7 @@ private fun Centered(text: String, isError: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF8B949E),
+            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
             fontSize = 18.sp,
         )
     }

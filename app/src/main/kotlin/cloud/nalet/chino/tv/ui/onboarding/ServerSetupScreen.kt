@@ -29,6 +29,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.font.FontWeight
@@ -41,7 +42,12 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.ui.theme.LogoMark
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 
 /**
  * First-run "connect to your server" screen for the neutral self-host client.
@@ -83,7 +89,7 @@ fun ServerSetupScreen(
                 )
                 Text(
                     text = "Enter the address of your Chino server.",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                     textAlign = TextAlign.Center,
                 )
@@ -99,6 +105,7 @@ fun ServerSetupScreen(
                     onClick = { viewModel.connect(url) },
                     enabled = !probing && url.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
+                    shape = ButtonDefaults.shape(shape = RectangleShape),
                 ) {
                     Text(text = if (probing) "Connecting…" else "Connect")
                 }
@@ -111,6 +118,7 @@ fun ServerSetupScreen(
                         },
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
+                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(text = "Use ${viewModel.presetUrl.substringAfter("://")}")
                     }
@@ -131,12 +139,13 @@ fun ServerSetupScreen(
                         horizontalAlignment = Alignment.Start,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(text = "Recent", color = Color(0xFF8B949E), fontSize = 14.sp)
+                        Text(text = "Recent", color = ChinoMuted, fontSize = 14.sp)
                         recents.forEach { r ->
                             Button(
                                 onClick = { url = r; viewModel.connect(r) },
                                 enabled = !probing,
                                 modifier = Modifier.fillMaxWidth(),
+                                shape = ButtonDefaults.shape(shape = RectangleShape),
                             ) {
                                 Text(text = r.substringAfter("://"))
                             }
@@ -150,6 +159,7 @@ fun ServerSetupScreen(
                         onClick = onCancel,
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
+                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(text = "Cancel")
                     }
@@ -176,12 +186,12 @@ private fun UrlField(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(ChinoSurface)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color(0xFF58A6FF) else Color(0xFF30363D),
-                shape = RoundedCornerShape(8.dp),
+                color = if (focused) ChinoAccent else ChinoBorder,
+                shape = RectangleShape,
             )
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -193,7 +203,7 @@ private fun UrlField(
                 singleLine = true,
                 enabled = enabled,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                cursorBrush = SolidColor(ChinoAccent),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,
                     imeAction = ImeAction.Go,
@@ -209,7 +219,7 @@ private fun UrlField(
                     // Neutral placeholder — no operator-specific URL on the
                     // store build.
                     text = "https://media.example.com",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                 )
             }

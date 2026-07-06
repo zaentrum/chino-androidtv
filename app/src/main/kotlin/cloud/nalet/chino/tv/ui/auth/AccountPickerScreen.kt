@@ -1,5 +1,9 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -15,8 +19,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Add
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -32,6 +34,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
@@ -44,6 +47,8 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
+import com.composables.icons.lucide.Lucide
+import com.composables.icons.lucide.Plus
 import kotlinx.coroutines.launch
 
 /**
@@ -85,7 +90,7 @@ fun AccountPickerScreen(
             )
             Text(
                 text = "Long-press an account to remove it.",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 14.sp,
             )
             // Initial-focus target: most-recently-used account. Accounts is
@@ -162,7 +167,7 @@ private fun AccountTile(
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .width(160.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .padding(8.dp)
             .then(focusModifier)
             .onFocusChanged { st ->
@@ -180,10 +185,10 @@ private fun AccountTile(
         Box(
             modifier = Modifier
                 .size(128.dp)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .then(
                     if (focused) {
-                        Modifier.border(width = 4.dp, color = Color(0xFF58A6FF), shape = CircleShape)
+                        Modifier.border(width = 4.dp, color = ChinoAccent, shape = RectangleShape)
                     } else Modifier,
                 ),
             contentAlignment = Alignment.Center,
@@ -192,7 +197,7 @@ private fun AccountTile(
         }
         Text(
             text = account.displayName,
-            color = if (focused) Color.White else Color(0xFFC9D1D9),
+            color = if (focused) Color.White else ChinoText,
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
@@ -220,7 +225,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                 .width(420.dp)
                 .padding(24.dp)
                 .clickable(enabled = false) { }, // swallow scrim clicks on the card
-            shape = RoundedCornerShape(16.dp),
+            shape = RectangleShape,
         ) {
             Column(
                 modifier = Modifier.padding(24.dp),
@@ -237,15 +242,16 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                 )
                 Text(
                     text = "You'll need to sign in again to use this account on this TV.",
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onDismiss) { Text("Cancel") }
+                    Button(onClick = onDismiss, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("Cancel") }
                     Button(
                         onClick = onConfirm,
-                        colors = ButtonDefaults.colors(containerColor = Color(0xFFDA3633)),
+                        colors = ButtonDefaults.colors(containerColor = ChinoError),
+                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) { Text("Remove") }
                 }
             }
@@ -261,7 +267,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .width(160.dp)
-            .clip(RoundedCornerShape(16.dp))
+            .clip(RectangleShape)
             .padding(8.dp)
             .onFocusChanged { focused = it.isFocused }
             // clickable is focusable on its own — no separate .focusable()
@@ -271,17 +277,17 @@ private fun AddAccountTile(onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(128.dp)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .background(Color(0x33FFFFFF))
                 .then(
                     if (focused) {
-                        Modifier.border(width = 4.dp, color = Color(0xFF58A6FF), shape = CircleShape)
+                        Modifier.border(width = 4.dp, color = ChinoAccent, shape = RectangleShape)
                     } else Modifier,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
-                imageVector = Icons.Filled.Add,
+                imageVector = Lucide.Plus,
                 contentDescription = "Add account",
                 tint = Color.White,
                 modifier = Modifier.size(56.dp),
@@ -289,7 +295,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
         }
         Text(
             text = "Add account",
-            color = if (focused) Color.White else Color(0xFFC9D1D9),
+            color = if (focused) Color.White else ChinoText,
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,

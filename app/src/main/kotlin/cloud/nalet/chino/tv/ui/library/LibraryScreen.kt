@@ -44,6 +44,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
@@ -64,6 +65,15 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.R
 import cloud.nalet.chino.tv.ui.theme.LogoMark
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.ChevronRight
@@ -527,7 +537,7 @@ internal fun TvSideRail(
         modifier = Modifier
             .width(80.dp)
             .fillMaxHeight()
-            .background(Color(0xFF0D1117)),
+            .background(ChinoBg),
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             // Logo cell: 64dp tall (= topbar height) with a bottom divider so
@@ -536,7 +546,7 @@ internal fun TvSideRail(
                 Box(modifier = Modifier.fillMaxWidth().weight(1f), contentAlignment = Alignment.Center) {
                     LogoMark(sizeDp = 36)
                 }
-                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF30363D)))
+                Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(ChinoBorder))
             }
             androidx.compose.foundation.layout.Column(
                 modifier = Modifier
@@ -558,7 +568,7 @@ internal fun TvSideRail(
             }
         }
         // Right-edge divider — full height, forms the L with the topbar divider.
-        Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(Color(0xFF30363D)))
+        Box(modifier = Modifier.fillMaxHeight().width(1.dp).background(ChinoBorder))
     }
 }
 
@@ -576,16 +586,16 @@ private fun TvRailButton(
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .background(
                 when {
-                    focused -> Color(0xFF21262D)
-                    isActive -> Color(0xFF161B22)
+                    focused -> ChinoBorderHi
+                    isActive -> ChinoSurface
                     else -> Color.Transparent
                 },
             )
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(8.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -604,7 +614,7 @@ private fun TvRailButton(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (isActive || focused) Color(0xFF58A6FF) else Color(0xFF8B949E),
+            tint = if (isActive || focused) ChinoAccent else ChinoMuted,
             modifier = Modifier.size(24.dp),
         )
     }
@@ -636,7 +646,7 @@ internal fun TvTopBar(
     // matches the mobile/web Header (not an elevated #161B22 surface). The
     // 63dp row + 1dp divider = 64dp, aligning with the rail's logo cell.
     androidx.compose.foundation.layout.Column(
-        modifier = Modifier.fillMaxWidth().background(Color(0xFF0D1117)),
+        modifier = Modifier.fillMaxWidth().background(ChinoBg),
     ) {
         androidx.compose.foundation.layout.Row(
             modifier = Modifier
@@ -672,7 +682,7 @@ internal fun TvTopBar(
                 }
             }
         }
-        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(Color(0xFF30363D)))
+        Box(modifier = Modifier.fillMaxWidth().height(1.dp).background(ChinoBorder))
     }
 }
 
@@ -693,12 +703,12 @@ private fun TvSearchBar(
             // #161B22 fill, 1dp #30363D border (focus bumps it to 2dp blue),
             // #C9D1D9 search glyph. (CDP-verified via the mobile SearchField.)
             .height(42.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(ChinoSurface)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color(0xFF58A6FF) else Color(0xFF30363D),
-                shape = RoundedCornerShape(8.dp),
+                color = if (focused) ChinoAccent else ChinoBorder,
+                shape = RectangleShape,
             )
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             // DOWN from the search field goes to the hero Play (not a rail icon).
@@ -725,12 +735,12 @@ private fun TvSearchBar(
         Icon(
             imageVector = Lucide.Search,
             contentDescription = null,
-            tint = Color(0xFFC9D1D9),
+            tint = ChinoText,
             modifier = Modifier.size(18.dp),
         )
         Text(
             text = "Search movies, shows…",
-            color = Color(0xFF8B949E),
+            color = ChinoMuted,
             fontSize = 16.sp,
         )
     }
@@ -754,10 +764,10 @@ internal fun TvIconCell(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(if (focused) Color(0xFF21262D) else Color.Transparent)
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else Color.Transparent)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(8.dp))
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
@@ -886,6 +896,7 @@ internal fun FilterChip(label: String, active: Boolean, onClick: () -> Unit) {
                 contentColor = MaterialTheme.colorScheme.onSurface,
             )
         },
+        shape = ButtonDefaults.shape(shape = RectangleShape),
     ) {
         Text(text = label)
     }
@@ -979,9 +990,10 @@ private fun ContinueWatchingCard(
         // progress shelf. Short press still opens detail.
         onLongClick = onLongPress,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = Modifier
             .width(180.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .onFocusChanged { focused = it.isFocused },
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -1005,8 +1017,8 @@ private fun ContinueWatchingCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2EA043))
+                            .clip(RectangleShape)
+                            .background(ChinoSignalGreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
@@ -1023,13 +1035,13 @@ private fun ContinueWatchingCard(
                             .align(Alignment.BottomStart)
                             .fillMaxWidth()
                             .height(4.dp)
-                            .background(Color(0xFF30363D)),
+                            .background(ChinoBorder),
                     ) {
                         Box(
                             modifier = Modifier
                                 .fillMaxHeight()
                                 .fillMaxWidth(progress)
-                                .background(Color(0xFF58A6FF)),
+                                .background(ChinoAccent),
                         )
                     }
                 }
@@ -1104,7 +1116,7 @@ private fun ContinueWatchingCard(
                     Text(
                         text = if (hasRemove) "Hold OK for options" else "Hold OK to mark watched",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
@@ -1134,7 +1146,7 @@ private fun HeroBanner(
             .fillMaxWidth()
             .padding(horizontal = 16.dp, vertical = 8.dp)
             .height(460.dp)
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(Color.Black)
             // hasFocus is true while Play OR More Info (descendants) hold focus;
             // pauses the carousel so a focused button is never swapped away.
@@ -1192,7 +1204,7 @@ private fun HeroBanner(
                     if (item.year != null) Text("•", color = Color.White)
                     Box(
                         modifier = Modifier
-                            .clip(RoundedCornerShape(4.dp))
+                            .clip(RectangleShape)
                             .background(MaterialTheme.colorScheme.primary)
                             .padding(horizontal = 8.dp, vertical = 2.dp),
                     ) {
@@ -1208,7 +1220,7 @@ private fun HeroBanner(
             item.overview?.let { o ->
                 Text(
                     text = o,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 16.sp,
                     lineHeight = 24.sp,
                     maxLines = 3,
@@ -1241,7 +1253,7 @@ private fun HeroBanner(
                         if (upTarget != null) Modifier.focusProperties { up = upTarget }
                         else Modifier,
                     ),
-                shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+                shape = ButtonDefaults.shape(shape = RectangleShape),
                 colors = ButtonDefaults.colors(
                     containerColor = MaterialTheme.colorScheme.primary,
                     contentColor = Color.White,
@@ -1249,7 +1261,7 @@ private fun HeroBanner(
                     // state actually reads at 10ft — the resting #58A6FF and a
                     // matching focus colour were indistinguishable. Pairs with
                     // tv Button's default focus scale-up.
-                    focusedContainerColor = Color(0xFF79C0FF),
+                    focusedContainerColor = ChinoAccent,
                     focusedContentColor = Color.White,
                 ),
             ) {
@@ -1260,7 +1272,7 @@ private fun HeroBanner(
             Button(
                 onClick = onMoreInfo,
                 modifier = if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier,
-                shape = ButtonDefaults.shape(shape = RoundedCornerShape(8.dp)),
+                shape = ButtonDefaults.shape(shape = RectangleShape),
                 colors = ButtonDefaults.colors(
                     containerColor = Color.White.copy(alpha = 0.2f),
                     contentColor = Color.White,
@@ -1286,7 +1298,7 @@ private fun HeroBanner(
                     Box(
                         modifier = Modifier
                             .size(8.dp)
-                            .clip(CircleShape)
+                            .clip(RectangleShape)
                             .background(if (i == heroIndex) Color.White else Color.White.copy(alpha = 0.3f)),
                     )
                 }
@@ -1310,6 +1322,7 @@ private fun ChromeButton(
             focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
             focusedContentColor = MaterialTheme.colorScheme.onBackground,
         ),
+        shape = ButtonDefaults.shape(shape = RectangleShape),
     ) {
         Icon(
             imageVector = icon,
@@ -1379,29 +1392,30 @@ internal fun SeeAllCard(onClick: () -> Unit) {
     Card(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = Modifier
             .width(180.dp)
-            .clip(RoundedCornerShape(8.dp)),
+            .clip(RectangleShape),
     ) {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(2f / 3f)
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color(0xFF30363D), RoundedCornerShape(8.dp)),
+                .background(ChinoSurface)
+                .border(1.dp, ChinoBorder, RectangleShape),
             verticalArrangement = Arrangement.Center,
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
             Icon(
                 imageVector = Lucide.ChevronRight,
                 contentDescription = null,
-                tint = Color(0xFF58A6FF),
+                tint = ChinoAccent,
                 modifier = Modifier.size(32.dp),
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
             Text(
                 text = "See All",
-                color = Color(0xFF58A6FF),
+                color = ChinoAccent,
                 fontWeight = FontWeight.Medium,
                 style = MaterialTheme.typography.bodyMedium,
             )
@@ -1428,9 +1442,10 @@ private fun PosterCard(
         // Hold-OK opens the card actions menu (web MediaCard overflow parity).
         onLongClick = onLongPress,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = Modifier
             .width(180.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .onFocusChanged { focused = it.isFocused },
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -1455,8 +1470,8 @@ private fun PosterCard(
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
-                            .clip(androidx.compose.foundation.shape.CircleShape)
-                            .background(Color(0xFF2EA043))
+                            .clip(RectangleShape)
+                            .background(ChinoSignalGreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(
@@ -1514,7 +1529,7 @@ private fun PosterCard(
                     Text(
                         text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
                         style = MaterialTheme.typography.bodySmall,
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
@@ -1576,9 +1591,9 @@ internal fun CardActionsMenu(
         Column(
             modifier = Modifier
                 .width(320.dp)
-                .clip(RoundedCornerShape(8.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(8.dp))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 // Swallow scrim clicks that land on the card itself.
                 .clickable(enabled = false) {}
                 .padding(vertical = 4.dp),
@@ -1587,7 +1602,7 @@ internal fun CardActionsMenu(
             // header so it reads as a label not an action.
             Text(
                 text = title,
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -1617,11 +1632,11 @@ private fun CardActionRow(
     var focused by remember { mutableStateOf(false) }
     val base = Modifier
         .fillMaxWidth()
-        .background(if (focused) Color(0xFF58A6FF).copy(alpha = 0.22f) else Color.Transparent)
+        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
         .padding(horizontal = 16.dp, vertical = 12.dp)
     val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
     val fg = when {
-        action.destructive -> Color(0xFFF85149)
+        action.destructive -> ChinoError
         else -> Color.White
     }
     androidx.compose.foundation.layout.Row(
@@ -1680,12 +1695,12 @@ private fun AccountAvatarButton(
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(CircleShape)
+            .clip(RectangleShape)
             .then(
                 if (focused) Modifier.border(
                     width = 2.dp,
-                    color = Color(0xFF58A6FF),
-                    shape = CircleShape,
+                    color = ChinoAccent,
+                    shape = RectangleShape,
                 ) else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }

@@ -1,5 +1,10 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -30,6 +35,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -169,12 +175,12 @@ fun SettingsScreen(
                         // Profile first (mirrors chino-mobile's Settings Account
                         // ordering): identity + watch history.
                         if (onProfile != null) {
-                            Button(onClick = onProfile) {
+                            Button(onClick = onProfile, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                                 Text("Profile")
                             }
                         }
                         if (onSwitchAccount != null) {
-                            Button(onClick = onSwitchAccount) {
+                            Button(onClick = onSwitchAccount, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                                 Text("Switch account")
                             }
                         }
@@ -192,7 +198,7 @@ fun SettingsScreen(
                     subtitle = serverHost?.let { "Connected to $it." }
                         ?: "Connect to a different Chino server.",
                 ) {
-                    Button(onClick = onChangeServer) {
+                    Button(onClick = onChangeServer, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                         Text("Change server")
                     }
                 }
@@ -207,12 +213,15 @@ fun SettingsScreen(
                 subtitle = "Something not working? File a bug straight to the dev backlog — " +
                     "no typing needed, device and app details ride along automatically.",
             ) {
-                Button(onClick = {
-                    // Reset BEFORE showing so a stale Filed/Failed body from
-                    // the previous report doesn't flash.
-                    viewModel.resetBugReport()
-                    showReportPanel = true
-                }) {
+                Button(
+                    onClick = {
+                        // Reset BEFORE showing so a stale Filed/Failed body from
+                        // the previous report doesn't flash.
+                        viewModel.resetBugReport()
+                        showReportPanel = true
+                    },
+                    shape = ButtonDefaults.shape(shape = RectangleShape),
+                ) {
                     Text("Report a problem")
                 }
             }
@@ -274,9 +283,9 @@ private fun ReportProblemDialog(
         Column(
             modifier = Modifier
                 .width(440.dp)
-                .clip(RoundedCornerShape(16.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color(0xFF30363D), RoundedCornerShape(16.dp))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
@@ -291,7 +300,7 @@ private fun ReportProblemDialog(
                 )
                 Text(
                     text = "Thanks — the report landed on the dev backlog.",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
                 )
@@ -303,7 +312,7 @@ private fun ReportProblemDialog(
             } else {
                 Text(
                     text = "REPORT A PROBLEM",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),
@@ -316,7 +325,7 @@ private fun ReportProblemDialog(
                         is BugReportState.Sending -> "Sending the report…"
                         else -> "What's going wrong? Pick the closest match."
                     },
-                    color = if (state is BugReportState.Failed) Color(0xFFF85149) else Color(0xFF8B949E),
+                    color = if (state is BugReportState.Failed) ChinoError else ChinoMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 20.dp).padding(bottom = 4.dp),
                 )
@@ -345,7 +354,7 @@ private fun ReportDialogRow(
     var focused by remember { mutableStateOf(false) }
     val base = Modifier
         .fillMaxWidth()
-        .background(if (focused) Color(0xFF58A6FF).copy(alpha = 0.22f) else Color.Transparent)
+        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
         .padding(horizontal = 20.dp, vertical = 10.dp)
     val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
     Row(
@@ -410,6 +419,7 @@ private fun LangPickerRow(
                         containerColor = MaterialTheme.colorScheme.surfaceVariant,
                         contentColor = MaterialTheme.colorScheme.onSurface,
                     ),
+                    shape = ButtonDefaults.shape(shape = RectangleShape),
                 ) {
                     Text(text = name)
                 }
@@ -441,7 +451,7 @@ private fun Section(
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .clip(RoundedCornerShape(12.dp))
+                .clip(RectangleShape)
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(vertical = 8.dp),
         ) { content() }
@@ -487,6 +497,7 @@ private fun ToggleRow(
                     contentColor = MaterialTheme.colorScheme.onSurface,
                 )
             },
+            shape = ButtonDefaults.shape(shape = RectangleShape),
         ) {
             Text(text = if (value) "ON" else "OFF", fontWeight = FontWeight.SemiBold)
         }
@@ -522,16 +533,16 @@ private fun StepperRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Button(onClick = { if (value > min) onChange(value - 1) }) { Text("−") }
+            Button(onClick = { if (value > min) onChange(value - 1) }, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("−") }
             Box(
                 modifier = Modifier
                     .width(72.dp)
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RectangleShape)
                     .background(MaterialTheme.colorScheme.surfaceVariant)
                     .border(
                         width = 1.dp,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        shape = RoundedCornerShape(8.dp),
+                        shape = RectangleShape,
                     )
                     .padding(vertical = 8.dp),
             ) {
@@ -543,7 +554,7 @@ private fun StepperRow(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
-            Button(onClick = { if (value < max) onChange(value + 1) }) { Text("+") }
+            Button(onClick = { if (value < max) onChange(value + 1) }, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("+") }
         }
     }
 }

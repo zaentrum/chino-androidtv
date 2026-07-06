@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -58,6 +60,7 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -258,13 +261,13 @@ internal fun PlayerTopChrome(
         if (badge != null) {
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(8.dp))
+                    .clip(RectangleShape)
                     .background(Color(0xCC1F1F1F))
                     .padding(horizontal = 12.dp, vertical = 6.dp),
             ) {
                 Text(
                     text = badge,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 13.sp,
                 )
             }
@@ -378,7 +381,7 @@ private fun ScrubberBar(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .background(Color(0x55FFFFFF)),
         )
         // Buffered portion — slightly brighter than the bg, behind playhead.
@@ -386,7 +389,7 @@ private fun ScrubberBar(
             modifier = Modifier
                 .fillMaxWidth(bufferProgress)
                 .height(barHeight)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .background(Color(0x99FFFFFF)),
         )
         // Segment markers (intro / credits / recap / etc.) rendered as
@@ -419,8 +422,8 @@ private fun ScrubberBar(
             modifier = Modifier
                 .fillMaxWidth(playProgress)
                 .height(barHeight)
-                .clip(CircleShape)
-                .background(if (focused) Color(0xFF58A6FF) else Color(0xFFAACCFF)),
+                .clip(RectangleShape)
+                .background(if (focused) ChinoAccent else Color(0xFFAACCFF)),
         )
         // Thumb. Positioned by a horizontally-offset Box at the playProgress
         // fraction; we render it inside a fillMaxWidth wrapper so the parent's
@@ -429,9 +432,9 @@ private fun ScrubberBar(
             Box(
                 modifier = Modifier
                     .size(thumbSize)
-                    .clip(CircleShape)
+                    .clip(RectangleShape)
                     .background(Color.White)
-                    .then(if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), CircleShape) else Modifier),
+                    .then(if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier),
             )
         }
         // Trickplay preview — a sprite-cropped thumbnail floating above the bar
@@ -501,9 +504,9 @@ private fun TrickplayPreview(
         Box(
             modifier = Modifier
                 .size(tileWDp, tileHDp)
-                .clip(RoundedCornerShape(6.dp))
+                .clip(RectangleShape)
                 .background(Color.Black)
-                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)), RoundedCornerShape(6.dp))
+                .border(BorderStroke(1.dp, Color.White.copy(alpha = 0.2f)), RectangleShape)
                 .clipToBounds(),
         ) {
             coil.compose.AsyncImage(
@@ -522,7 +525,7 @@ private fun TrickplayPreview(
         }
         Box(
             modifier = Modifier
-                .clip(RoundedCornerShape(4.dp))
+                .clip(RectangleShape)
                 .background(Color(0xCC000000))
                 .padding(horizontal = 8.dp, vertical = 2.dp),
         ) {
@@ -575,10 +578,10 @@ private fun VolumeControl(
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RoundedCornerShape(20.dp))
+            .clip(RectangleShape)
             .background(if (focused) Color.White.copy(alpha = 0.1f) else Color.Transparent)
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(20.dp)) else Modifier,
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
             .onPreviewKeyEvent { e ->
@@ -606,15 +609,15 @@ private fun VolumeControl(
             modifier = Modifier
                 .width(80.dp)
                 .height(4.dp)
-                .clip(CircleShape)
+                .clip(RectangleShape)
                 .background(Color(0xFF3B3B3B)),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(level.coerceIn(0f, 1f))
                     .fillMaxHeight()
-                    .clip(CircleShape)
-                    .background(Color(0xFF58A6FF)),
+                    .clip(RectangleShape)
+                    .background(ChinoAccent),
             )
         }
     }
@@ -640,7 +643,7 @@ internal fun ControlIconButton(
         // lighten, NOT a full white-fill inversion. The brand-blue focus ring
         // below carries the actual 10-ft focus affordance.
         focused -> Color.White.copy(alpha = 0.2f)
-        accent -> Color(0xFF58A6FF).copy(alpha = 0.3f) // ChromeBtnVariant.Accent (subs on / menu open)
+        accent -> ChinoAccent.copy(alpha = 0.3f) // ChromeBtnVariant.Accent (subs on / menu open)
         else -> Color.White.copy(alpha = 0.1f) // ChromeBtnVariant.Neutral
     }
     val fg = when {
@@ -652,14 +655,14 @@ internal fun ControlIconButton(
     Box(
         modifier = modifier
             .size(size)
-            .clip(CircleShape)
+            .clip(RectangleShape)
             .background(bg)
             // Bright brand-blue ring on focus — high-contrast against both
             // dark video frames and bright-scene frames. Without the ring
             // the button-bg colour change alone was hard to spot at TV
             // viewing distance.
             .then(
-                if (focused) Modifier.border(width = 3.dp, color = Color(0xFF58A6FF), shape = CircleShape)
+                if (focused) Modifier.border(width = 3.dp, color = ChinoAccent, shape = RectangleShape)
                 else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }

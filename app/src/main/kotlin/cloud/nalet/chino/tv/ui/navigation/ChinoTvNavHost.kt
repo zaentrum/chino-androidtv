@@ -22,6 +22,7 @@ import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
 import cloud.nalet.chino.tv.ui.theme.LogoMark
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import cloud.nalet.chino.tv.ui.auth.AuthViewModel
@@ -520,7 +521,7 @@ private fun BootSplash() {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xFF0D1117)),
+            .background(ChinoBg),
         contentAlignment = Alignment.Center,
     ) {
         LogoMark(sizeDp = 64)

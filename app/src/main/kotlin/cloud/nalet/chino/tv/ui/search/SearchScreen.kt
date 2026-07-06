@@ -1,5 +1,13 @@
 package cloud.nalet.chino.tv.ui.search
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -45,6 +53,7 @@ import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -153,12 +162,12 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
         modifier = Modifier
             .fillMaxWidth()
             .height(42.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF161B22))
+            .clip(RectangleShape)
+            .background(ChinoSurface)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color(0xFF58A6FF) else Color(0xFF30363D),
-                shape = RoundedCornerShape(8.dp),
+                color = if (focused) ChinoAccent else ChinoBorder,
+                shape = RectangleShape,
             )
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -167,7 +176,7 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
         Icon(
             imageVector = Lucide.Search,
             contentDescription = null,
-            tint = Color(0xFFC9D1D9),
+            tint = ChinoText,
             modifier = Modifier.size(18.dp),
         )
         Box(modifier = Modifier.weight(1f)) {
@@ -176,7 +185,7 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
                 onValueChange = onChange,
                 singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
-                cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                cursorBrush = SolidColor(ChinoAccent),
                 // The IME's "search" key jumps straight to the first result
                 // (closes the keyboard). On a remote the soft keyboard captures
                 // DPAD-down, so this is the reliable "done typing → browse" path;
@@ -195,7 +204,7 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
             if (query.isEmpty()) {
                 Text(
                     text = "Search movies, shows…",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                 )
             }
@@ -246,7 +255,7 @@ private fun ResultsGrid(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     text = "No matching titles.",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                     modifier = Modifier.padding(vertical = 8.dp),
                 )
@@ -314,10 +323,10 @@ private fun PersonChip(
     var focused by remember { mutableStateOf(false) }
     val base = Modifier
         .width(220.dp)
-        .clip(RoundedCornerShape(10.dp))
-        .background(if (focused) Color(0xFF21262D) else Color(0xFF161B22))
+        .clip(RectangleShape)
+        .background(if (focused) ChinoBorderHi else ChinoSurface)
         .then(
-            if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), RoundedCornerShape(10.dp))
+            if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
             else Modifier,
         )
         .padding(12.dp)
@@ -340,13 +349,13 @@ private fun PersonChip(
         Box(
             modifier = Modifier
                 .size(48.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF0D1117)),
+                .clip(RectangleShape)
+                .background(ChinoBg),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = peopleInitialsOf(person.name),
-                color = Color(0xFFC9D1D9),
+                color = ChinoText,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 16.sp,
             )
@@ -362,7 +371,7 @@ private fun PersonChip(
             )
             Text(
                 text = "· ${if (person.credits == 1) "1 title" else "${person.credits} titles"}",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -385,16 +394,17 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
     Card(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = Modifier
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
     ) {
-        Column(modifier = Modifier.background(Color(0xFF161B22))) {
+        Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .aspectRatio(2f / 3f)
-                    .background(Color(0xFF0D1117)),
+                    .background(ChinoBg),
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -409,8 +419,8 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                         modifier = Modifier
                             .align(Alignment.TopEnd)
                             .padding(6.dp)
-                            .clip(CircleShape)
-                            .background(Color(0xFF2EA043))
+                            .clip(RectangleShape)
+                            .background(ChinoSignalGreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
                         Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
@@ -423,7 +433,7 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
             ) {
                 Text(
                     text = item.title,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -435,10 +445,10 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = Color(0xFF8B949E), fontSize = 14.sp) }
+                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 14.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = Color(0xFF8B949E), fontSize = 14.sp)
-                            Text(it, color = Color(0xFF58A6FF), fontSize = 14.sp)
+                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 14.sp)
+                            Text(it, color = ChinoAccent, fontSize = 14.sp)
                         }
                     }
                 }
@@ -461,7 +471,7 @@ private fun SearchMessage(headline: String, hint: String? = null, isError: Boole
                 fontWeight = FontWeight.SemiBold,
             )
             hint?.let {
-                Text(text = it, color = Color(0xFF8B949E), fontSize = 16.sp)
+                Text(text = it, color = ChinoMuted, fontSize = 16.sp)
             }
         }
     }

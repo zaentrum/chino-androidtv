@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -19,6 +20,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -28,6 +30,7 @@ import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.R
 
 @Composable
@@ -107,7 +110,7 @@ fun DeviceCodeScreen(
                                     style = stroke,
                                 )
                                 drawArc(
-                                    color = Color(0xFF58A6FF),
+                                    color = ChinoAccent,
                                     startAngle = rotation,
                                     sweepAngle = 270f,
                                     useCenter = false,
@@ -175,7 +178,7 @@ fun DeviceCodeScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center,
                             )
-                            Button(onClick = { viewModel.start() }) {
+                            Button(onClick = { viewModel.start() }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                                 Text(text = stringResource(R.string.auth_retry))
                             }
                         }
@@ -192,7 +195,7 @@ private fun QrPanel(payload: String) {
     // dark page bg — phone cameras struggle when the QR sits on near-black.
     Box(
         modifier = Modifier
-            .clip(RoundedCornerShape(12.dp))
+            .clip(RectangleShape)
             .background(Color.White)
             .padding(12.dp),
     ) {
@@ -214,7 +217,7 @@ private fun CodeChips(code: String) {
     ) {
         chars.forEach { c ->
             Surface(
-                shape = RoundedCornerShape(8.dp),
+                shape = RectangleShape,
                 modifier = Modifier.size(width = 56.dp, height = 72.dp),
             ) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

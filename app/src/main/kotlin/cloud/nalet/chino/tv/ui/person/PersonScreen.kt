@@ -1,5 +1,8 @@
 package cloud.nalet.chino.tv.ui.person
 
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,6 +26,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -101,7 +105,7 @@ private fun Filmography(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 Text(
                     text = "No titles for ${s.name}.",
-                    color = Color(0xFF8B949E),
+                    color = ChinoMuted,
                     fontSize = 16.sp,
                     modifier = Modifier.padding(vertical = 24.dp),
                 )
@@ -128,13 +132,13 @@ private fun PersonHeader(name: String, credits: Int) {
         Box(
             modifier = Modifier
                 .size(72.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF161B22)),
+                .clip(RectangleShape)
+                .background(ChinoSurface),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = initialsOf(name),
-                color = Color(0xFFC9D1D9),
+                color = ChinoText,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 26.sp,
             )
@@ -148,7 +152,7 @@ private fun PersonHeader(name: String, credits: Int) {
             )
             Text(
                 text = "· ${creditLabel(credits)}",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 16.sp,
             )
         }
@@ -176,7 +180,7 @@ private fun Centered(text: String, isError: Boolean = false) {
     ) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else Color(0xFF8B949E),
+            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
             fontSize = 18.sp,
         )
     }

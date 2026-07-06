@@ -95,17 +95,14 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Assemble beta debug APK
-        run: ./gradlew :app:assembleBetaDebug --stacktrace
+      - name: Assemble debug APK
+        run: ./gradlew :app:assembleDebug --stacktrace
 
-      - name: Assemble prod debug APK
-        run: ./gradlew :app:assembleProdDebug --stacktrace
-
-      - name: Upload debug APKs
+      - name: Upload debug APK
         uses: actions/upload-artifact@v4
         with:
-          name: debug-apks
-          path: app/build/outputs/apk/**/debug/*.apk
+          name: debug-apk
+          path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: warn
 
   # ---------------------------------------------------------------------------
@@ -160,17 +157,17 @@ jobs:
           echo "$SIGNING_KEYSTORE_B64" | base64 --decode > "$RUNNER_TEMP/upload.keystore"
           echo "SIGNING_KEYSTORE_FILE=$RUNNER_TEMP/upload.keystore" >> "$GITHUB_ENV"
 
-      - name: Build signed prod release AAB
+      - name: Build signed release AAB
         env:
           SIGNING_KEYSTORE_PASSWORD: ${{ secrets.SIGNING_KEYSTORE_PASSWORD }}
           SIGNING_KEY_ALIAS: ${{ secrets.SIGNING_KEY_ALIAS }}
           SIGNING_KEY_PASSWORD: ${{ secrets.SIGNING_KEY_PASSWORD }}
           VERSION_CODE: ${{ github.run_number }}
-        run: ./gradlew :app:bundleProdRelease --stacktrace
+        run: ./gradlew :app:bundleRelease --stacktrace
 
       - name: Upload release AAB
         uses: actions/upload-artifact@v4
         with:
           name: release-aab
-          path: app/build/outputs/bundle/prodRelease/*.aab
+          path: app/build/outputs/bundle/release/*.aab
           if-no-files-found: warn

@@ -1,5 +1,14 @@
 package cloud.nalet.chino.tv.ui.detail
 
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -45,6 +54,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
@@ -173,7 +183,7 @@ private fun DetailContent(
 ) {
     val backdropUrl = "${s.baseUrl}/v1/items/${s.item.id}/backdrop?stream=${s.streamToken}"
     val canResume = s.resumeSec > 30
-    Box(modifier = Modifier.fillMaxSize().background(Color(0xFF0D1117))) {
+    Box(modifier = Modifier.fillMaxSize().background(ChinoBg)) {
         // Backdrop: top 60% of the screen with a gradient that fades into the
         // page background. Matches chino-web DetailPage's aspect-[21/9] hero +
         // bg-gradient-to-t treatment.
@@ -192,7 +202,7 @@ private fun DetailContent(
                             colors = listOf(
                                 Color(0x33000000),
                                 Color(0xCC0D1117),
-                                Color(0xFF0D1117),
+                                ChinoBg,
                             ),
                             startY = 200f,
                         ),
@@ -227,8 +237,8 @@ private fun DetailContent(
                     modifier = Modifier
                         .width(200.dp)
                         .aspectRatio(2f / 3f)
-                        .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF161B22)),
+                        .clip(RectangleShape)
+                        .background(ChinoSurface),
                 )
             Column(
                 modifier = Modifier.weight(1f),
@@ -243,7 +253,7 @@ private fun DetailContent(
                 s.item.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
                     Text(
                         text = tagline,
-                        color = Color(0xFF8B949E),
+                        color = ChinoMuted,
                         fontStyle = FontStyle.Italic,
                         style = MaterialTheme.typography.bodyMedium,
                     )
@@ -349,6 +359,7 @@ private fun DetailActions(
                 focusedContainerColor = MaterialTheme.colorScheme.primary,
                 focusedContentColor = Color.White,
             ),
+            shape = ButtonDefaults.shape(shape = RectangleShape),
         ) {
             Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
             Spacer(Modifier.width(8.dp))
@@ -359,7 +370,7 @@ private fun DetailActions(
         // onPlay(false); the player distinguishes resume vs fromStart. Sits
         // second in the D-pad order (Resume first, Start over next).
         if (canResume) {
-            Button(onClick = { onPlay(false) }) {
+            Button(onClick = { onPlay(false) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Start over")
@@ -368,7 +379,7 @@ private fun DetailActions(
         // Trailer — labeled secondary CTA next to Play (web shows it too).
         pickTrailer(item.trailers)?.let { trailer ->
             val context = androidx.compose.ui.platform.LocalContext.current
-            Button(onClick = { onTrailerLaunch(); launchTrailer(context, trailer) }) {
+            Button(onClick = { onTrailerLaunch(); launchTrailer(context, trailer) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                 Icon(Lucide.Youtube, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Trailer")
@@ -403,7 +414,7 @@ private fun DetailActions(
             icon = Lucide.Heart,
             contentDescription = if (liked) "Liked" else "Like",
             active = liked,
-            activeColor = Color(0xFFE11D48),
+            activeColor = ChinoError,
             onClick = { onToggleLike(!liked) },
         )
     }
@@ -414,13 +425,13 @@ private fun DetailActionCircle(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     active: Boolean = false,
-    activeColor: Color = Color(0xFF2EA043),
+    activeColor: Color = ChinoSignalGreen,
     onClick: () -> Unit,
 ) {
     Button(
         onClick = onClick,
         modifier = Modifier.size(44.dp),
-        shape = ButtonDefaults.shape(shape = CircleShape),
+        shape = ButtonDefaults.shape(shape = RectangleShape),
         contentPadding = PaddingValues(0.dp),
         colors = ButtonDefaults.colors(
             containerColor = if (active) activeColor else Color.White.copy(alpha = 0.1f),
@@ -465,15 +476,15 @@ private fun AddToListPanel(
             modifier = Modifier
                 .width(360.dp)
                 .heightIn(max = 520.dp)
-                .clip(RoundedCornerShape(12.dp))
-                .background(Color(0xFF161B22))
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RoundedCornerShape(12.dp))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
+                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) {
             Text(
                 text = "ADD TO LIST",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 10.dp),
@@ -521,7 +532,7 @@ private fun AddToListRow(
     var focused by remember { mutableStateOf(false) }
     val base = Modifier
         .fillMaxWidth()
-        .background(if (focused) Color(0xFF58A6FF).copy(alpha = 0.22f) else Color.Transparent)
+        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
         .padding(horizontal = 16.dp, vertical = 12.dp)
     val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
     Row(
@@ -539,7 +550,7 @@ private fun AddToListRow(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         if (leadingPlus) {
-            Icon(Lucide.Plus, contentDescription = null, tint = Color(0xFF58A6FF), modifier = Modifier.size(18.dp))
+            Icon(Lucide.Plus, contentDescription = null, tint = ChinoAccent, modifier = Modifier.size(18.dp))
         } else {
             ListCheckbox(checked = checked)
         }
@@ -553,7 +564,7 @@ private fun AddToListRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (secondary != null) {
-                Text(text = secondary, color = Color(0xFF8B949E), fontSize = 12.sp, maxLines = 1)
+                Text(text = secondary, color = ChinoMuted, fontSize = 12.sp, maxLines = 1)
             }
         }
     }
@@ -564,12 +575,12 @@ private fun ListCheckbox(checked: Boolean) {
     Box(
         modifier = Modifier
             .size(18.dp)
-            .clip(RoundedCornerShape(4.dp))
-            .background(if (checked) Color(0xFF2EA043) else Color.Transparent)
+            .clip(RectangleShape)
+            .background(if (checked) ChinoSignalGreen else Color.Transparent)
             .border(
                 1.dp,
-                if (checked) Color(0xFF2EA043) else Color.White.copy(alpha = 0.3f),
-                RoundedCornerShape(4.dp),
+                if (checked) ChinoSignalGreen else Color.White.copy(alpha = 0.3f),
+                RectangleShape,
             ),
         contentAlignment = Alignment.Center,
     ) {
@@ -595,12 +606,12 @@ private fun NewListField(
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .height(44.dp)
-            .clip(RoundedCornerShape(8.dp))
-            .background(Color(0xFF0D1117))
+            .clip(RectangleShape)
+            .background(ChinoBg)
             .border(
                 width = if (focused) 2.dp else 1.dp,
-                color = if (focused) Color(0xFF58A6FF) else Color(0xFF30363D),
-                shape = RoundedCornerShape(8.dp),
+                color = if (focused) ChinoAccent else ChinoBorder,
+                shape = RectangleShape,
             )
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -611,7 +622,7 @@ private fun NewListField(
                 onValueChange = { if (it.length <= 60) value = it },
                 singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
-                cursorBrush = SolidColor(Color(0xFF58A6FF)),
+                cursorBrush = SolidColor(ChinoAccent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),
                 modifier = Modifier
@@ -620,7 +631,7 @@ private fun NewListField(
                     .onFocusChanged { focused = it.isFocused },
             )
             if (value.isEmpty()) {
-                Text(text = "List name…", color = Color(0xFF8B949E), fontSize = 15.sp)
+                Text(text = "List name…", color = ChinoMuted, fontSize = 15.sp)
             }
         }
     }
@@ -677,8 +688,8 @@ private fun SeasonSection(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(12.dp))
-            .background(Color(0xFF161B22)),
+            .clip(RectangleShape)
+            .background(ChinoSurface),
     ) {
         // Season header — focusable; CENTER toggles expand/collapse.
         Row(
@@ -687,7 +698,7 @@ private fun SeasonSection(
                 .clickable { expanded = !expanded }
                 .onFocusChanged { headerFocused = it.isFocused }
                 .focusable()
-                .background(if (headerFocused) Color(0xFF21262D) else Color.Transparent)
+                .background(if (headerFocused) ChinoBorderHi else Color.Transparent)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -699,14 +710,14 @@ private fun SeasonSection(
             )
             Text(
                 text = "${season.episodes.size} episodes",
-                color = Color(0xFF8B949E),
+                color = ChinoMuted,
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
             Icon(
                 imageVector = if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
                 contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = Color(0xFF8B949E),
+                tint = ChinoMuted,
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -717,7 +728,7 @@ private fun SeasonSection(
                         modifier = Modifier
                             .fillMaxWidth()
                             .height(1.dp)
-                            .background(Color(0xFF21262D)),
+                            .background(ChinoBorderHi),
                     )
                 }
                 EpisodeRow(
@@ -746,7 +757,7 @@ private fun EpisodeRow(
             .clickable(onClick = onClick)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .background(if (focused) Color(0xFF21262D) else Color.Transparent)
+            .background(if (focused) ChinoBorderHi else Color.Transparent)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -755,8 +766,8 @@ private fun EpisodeRow(
             modifier = Modifier
                 .width(160.dp)
                 .aspectRatio(16f / 9f)
-                .clip(RoundedCornerShape(6.dp))
-                .background(Color(0xFF0D1117)),
+                .clip(RectangleShape)
+                .background(ChinoBg),
         ) {
             AsyncImage(
                 model = backdropUrl,
@@ -788,13 +799,13 @@ private fun EpisodeRow(
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 episode.durationMs?.let { (it / 60_000L).toInt() }?.takeIf { it > 0 }?.let {
-                    Text(text = "${it}m", color = Color(0xFF8B949E), style = MaterialTheme.typography.bodySmall)
+                    Text(text = "${it}m", color = ChinoMuted, style = MaterialTheme.typography.bodySmall)
                 }
             }
             episode.overview?.takeIf { it.isNotBlank() }?.let {
                 Text(
                     text = it,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     style = MaterialTheme.typography.bodySmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis,
@@ -817,16 +828,16 @@ private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
     Box(
         modifier = Modifier
             .size(40.dp)
-            .clip(CircleShape)
+            .clip(RectangleShape)
             .background(
                 when {
                     focused -> Color.White
-                    watched -> Color(0xFF2EA043)
+                    watched -> ChinoSignalGreen
                     else -> Color.White.copy(alpha = 0.1f)
                 },
             )
             .then(
-                if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), CircleShape) else Modifier,
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
             )
             .onFocusChanged { focused = it.isFocused }
             // clickable already maps DPAD_CENTER/ENTER to a click on key-UP, so
@@ -839,7 +850,7 @@ private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
         Icon(
             imageVector = if (watched) Lucide.Check else Lucide.Eye,
             contentDescription = if (watched) "Mark episode as unwatched" else "Mark episode as watched",
-            tint = if (focused) Color.Black else if (watched) Color.White else Color(0xFF8B949E),
+            tint = if (focused) Color.Black else if (watched) Color.White else ChinoMuted,
             modifier = Modifier.size(18.dp),
         )
     }
@@ -859,11 +870,11 @@ private fun MetaRow(year: Int?, durationMs: Long?, rating: Double?, kind: String
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         year?.let {
-            Text(text = it.toString(), color = Color(0xFFC9D1D9), fontSize = 14.sp)
+            Text(text = it.toString(), color = ChinoText, fontSize = 14.sp)
         }
         runtimeText?.let {
             if (year != null) Bullet()
-            Text(text = it, color = Color(0xFFC9D1D9), fontSize = 14.sp)
+            Text(text = it, color = ChinoText, fontSize = 14.sp)
         }
         rating?.let { r ->
             if (year != null || runtimeText != null) Bullet()
@@ -874,16 +885,16 @@ private fun MetaRow(year: Int?, durationMs: Long?, rating: Double?, kind: String
                 Icon(
                     imageVector = Lucide.Star,
                     contentDescription = null,
-                    tint = Color(0xFF58A6FF),
+                    tint = ChinoAccent,
                     modifier = Modifier.size(16.dp),
                 )
-                Text(text = String.format("%.1f", r), color = Color(0xFFC9D1D9), fontSize = 14.sp)
+                Text(text = String.format("%.1f", r), color = ChinoText, fontSize = 14.sp)
             }
         }
         kind?.takeIf { it.isNotBlank() }?.let { k ->
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
+                    .clip(RectangleShape)
                     .background(Color.White.copy(alpha = 0.1f))
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             ) {
@@ -900,14 +911,14 @@ private fun MetaRow(year: Int?, durationMs: Long?, rating: Double?, kind: String
 
 @Composable
 private fun Bullet() {
-    Text("•", color = Color(0xFF8B949E))
+    Text("•", color = ChinoMuted)
 }
 
 @Composable
 private fun greenButtonColors() = ButtonDefaults.colors(
-    containerColor = Color(0xFF2EA043),
+    containerColor = ChinoSignalGreen,
     contentColor = Color.White,
-    focusedContainerColor = Color(0xFF2EA043),
+    focusedContainerColor = ChinoSignalGreen,
     focusedContentColor = Color.White,
 )
 
@@ -923,12 +934,12 @@ private fun GenreChips(genres: List<String>) {
         genres.forEach { genre ->
             Box(
                 modifier = Modifier
-                    .clip(RoundedCornerShape(999.dp))
-                    .background(Color(0xFF21262D))
-                    .border(BorderStroke(1.dp, Color(0xFF30363D)), RoundedCornerShape(999.dp))
+                    .clip(RectangleShape)
+                    .background(ChinoBorderHi)
+                    .border(BorderStroke(1.dp, ChinoBorder), RectangleShape)
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             ) {
-                Text(text = genre, color = Color(0xFFC9D1D9), fontSize = 12.sp)
+                Text(text = genre, color = ChinoText, fontSize = 12.sp)
             }
         }
     }
@@ -961,10 +972,10 @@ private fun FooterGrid(item: Item) {
 @Composable
 private fun FooterColumn(header: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(text = header, color = Color(0xFF8B949E), fontSize = 14.sp)
+        Text(text = header, color = ChinoMuted, fontSize = 14.sp)
         Text(
             text = value,
-            color = Color(0xFFC9D1D9),
+            color = ChinoText,
             fontSize = 14.sp,
             maxLines = 2,
             overflow = TextOverflow.Ellipsis,
@@ -1010,16 +1021,17 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
     Card(
         onClick = onClick,
         scale = CardDefaults.scale(focusedScale = 1.05f),
+        shape = CardDefaults.shape(shape = RectangleShape),
         modifier = Modifier
             .width(180.dp)
-            .clip(RoundedCornerShape(8.dp)),
+            .clip(RectangleShape),
     ) {
-        Column(modifier = Modifier.background(Color(0xFF161B22))) {
+        Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(270.dp)
-                    .background(Color(0xFF0D1117)),
+                    .background(ChinoBg),
             ) {
                 AsyncImage(
                     model = posterUrl,
@@ -1031,7 +1043,7 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = item.title,
-                    color = Color(0xFFC9D1D9),
+                    color = ChinoText,
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -1043,10 +1055,10 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = Color(0xFF8B949E), fontSize = 12.sp) }
+                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 12.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = Color(0xFF8B949E), fontSize = 12.sp)
-                            Text(it, color = Color(0xFF58A6FF), fontSize = 12.sp)
+                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 12.sp)
+                            Text(it, color = ChinoAccent, fontSize = 12.sp)
                         }
                     }
                 }
@@ -1113,7 +1125,7 @@ private fun CastCard(
     Column(
         modifier = Modifier
             .width(120.dp)
-            .clip(RoundedCornerShape(8.dp))
+            .clip(RectangleShape)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
             // OK opens the Person surface, but only when chino-api gave us a
@@ -1131,7 +1143,7 @@ private fun CastCard(
                     }
                 } else Modifier,
             )
-            .background(if (focused) Color(0xFF21262D) else Color.Transparent)
+            .background(if (focused) ChinoBorderHi else Color.Transparent)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(8.dp),
@@ -1139,16 +1151,16 @@ private fun CastCard(
         Box(
             modifier = Modifier
                 .size(72.dp)
-                .clip(CircleShape)
-                .background(Color(0xFF161B22))
+                .clip(RectangleShape)
+                .background(ChinoSurface)
                 .then(
-                    if (focused) Modifier.border(2.dp, Color(0xFF58A6FF), CircleShape) else Modifier,
+                    if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
                 ),
             contentAlignment = Alignment.Center,
         ) {
             Text(
                 text = initialsOf(member.name),
-                color = Color(0xFFC9D1D9),
+                color = ChinoText,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 22.sp,
             )
@@ -1164,7 +1176,7 @@ private fun CastCard(
         )
         Text(
             text = roleLabel,
-            color = Color(0xFF8B949E),
+            color = ChinoMuted,
             fontSize = 11.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

@@ -11,9 +11,6 @@ val ciVersionCode = System.getenv("VERSION_CODE")?.toIntOrNull()
 // Release signing: CI decodes a base64 upload keystore to SIGNING_KEYSTORE_FILE.
 // Absent locally -> release stays unsigned (fine for dev; Play needs the key).
 val releaseKeystore = System.getenv("SIGNING_KEYSTORE_FILE")?.takeIf { it.isNotBlank() && file(it).exists() }
-// Point the prod flavor at the beta backend until the prod backend is live.
-// CI passes -PprodPointsToBeta=true; source default stays prod -> prod.
-val prodPointsToBeta = (project.findProperty("prodPointsToBeta") as? String) == "true"
 
 // --- Server defaults (neutral by default; overridable) ---
 // This is a bring-your-own-server client: the real server is supplied at
@@ -22,11 +19,10 @@ val prodPointsToBeta = (project.findProperty("prodPointsToBeta") as? String) == 
 // before a server is connected — no UI surfaces them. The committed defaults
 // are intentionally EMPTY so the public source leaks no host. Operators who
 // build their own distribution can inject real values without editing source,
-// e.g. -PoidcIssuer=... -PbetaApiBaseUrl=... -PprodApiBaseUrl=...
-// -PserverPreset=... (or in gradle.properties / a local properties file).
+// e.g. -PoidcIssuer=... -PapiBaseUrl=... -PserverPreset=... (or in
+// gradle.properties / a local properties file).
 val oidcIssuer = (project.findProperty("oidcIssuer") as? String) ?: ""
-val betaApiBaseUrl = (project.findProperty("betaApiBaseUrl") as? String) ?: ""
-val prodApiBaseUrl = (project.findProperty("prodApiBaseUrl") as? String) ?: ""
+val apiBaseUrl = (project.findProperty("apiBaseUrl") as? String) ?: ""
 // Add-Server one-tap preset. Empty everywhere by default (neutral); an operator
 // build can prefill it. SERVER_PRESET stays "" in committed source.
 val serverPreset = (project.findProperty("serverPreset") as? String) ?: ""
@@ -43,7 +39,9 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        // applicationId set per flavor.
+        // Single unified app id — no product flavors. Forks override via
+        // -PchinoAppId; debug builds append ".debug" (see buildTypes below).
+        applicationId = chinoAppId
         minSdk = 21
         targetSdk = 35
         // Unified Play app (io.github.zaentrum.chino): the TV AAB shares one listing
@@ -54,52 +52,20 @@ android {
         // not by versionCode.
         versionCode = (ciVersionCode ?: 4) + 2_000_000
         versionName = "0.1.3"
+        resValue("string", "app_name", "Chino")
 
-        // Internal non-UI fallback issuer. Empty by default; the connected
-        // server's OIDC discovery supplies the real issuer at runtime.
+        // Neutral bring-your-own-server client: everything below is an internal,
+        // non-UI fallback only (empty by default). The connected server's
+        // /api/config + OIDC discovery supplies the real values at runtime.
         buildConfigField("String", "OIDC_ISSUER", "\"$oidcIssuer\"")
-    }
-
-    flavorDimensions += "env"
-    productFlavors {
-        create("beta") {
-            dimension = "env"
-            applicationId = "$chinoAppId.tv.beta"
-            resValue("string", "app_name", "Chino Beta")
-            buildConfigField("String", "FLAVOR_NAME", "\"beta\"")
-            // Internal non-UI fallback base URL. Empty by default; the
-            // Add-Server flow provides the real origin at runtime.
-            buildConfigField("String", "API_BASE_URL", "\"$betaApiBaseUrl\"")
-            // Add-Server prefill: BLANK on every flavor so beta + prod behave
-            // identically — neutral self-host client, empty field + generic
-            // placeholder, no baked operator URL.
-            buildConfigField("String", "SERVER_PRESET", "\"$serverPreset\"")
-            buildConfigField("String", "OIDC_CLIENT_ID", "\"chino-tv-beta\"")
-            buildConfigField("String", "OIDC_AUDIENCE", "\"chino-web-beta\"")
-        }
-        create("prod") {
-            dimension = "env"
-            // Unified Play listing id, shared with chino-mobile's prod AAB.
-            applicationId = chinoAppId
-            resValue("string", "app_name", "Chino")
-            buildConfigField("String", "FLAVOR_NAME", "\"prod\"")
-            // With -PprodPointsToBeta=true the prod app talks to the beta
-            // backend + beta OIDC client (prod backend not live yet). Both
-            // base URLs are empty unless an operator injects them via Gradle
-            // properties; the runtime Add-Server flow is the real source.
-            val prodApi = if (prodPointsToBeta) betaApiBaseUrl else prodApiBaseUrl
-            val prodClient = if (prodPointsToBeta) "chino-tv-beta" else "chino"
-            val prodAudience = if (prodPointsToBeta) "chino-web-beta" else "chino-web"
-            buildConfigField("String", "API_BASE_URL", "\"$prodApi\"")
-            // Neutral store client: ship with NO pre-typed operator URL on ANY
-            // flavor (beta == prod). The Add-Server field starts empty with a
-            // generic placeholder and no "Use <preset>" suggestion, regardless
-            // of -PprodPointsToBeta. API_BASE_URL above stays as the internal
-            // non-UI fallback only.
-            buildConfigField("String", "SERVER_PRESET", "\"$serverPreset\"")
-            buildConfigField("String", "OIDC_CLIENT_ID", "\"$prodClient\"")
-            buildConfigField("String", "OIDC_AUDIENCE", "\"$prodAudience\"")
-        }
+        buildConfigField("String", "API_BASE_URL", "\"$apiBaseUrl\"")
+        // Add-Server prefill: blank (neutral) — empty field, generic placeholder,
+        // no baked operator URL.
+        buildConfigField("String", "SERVER_PRESET", "\"$serverPreset\"")
+        buildConfigField("String", "OIDC_CLIENT_ID", "\"chino\"")
+        buildConfigField("String", "OIDC_AUDIENCE", "\"chino-web\"")
+        // No flavors anymore; kept as a stable tag for telemetry / bug reports.
+        buildConfigField("String", "FLAVOR_NAME", "\"prod\"")
     }
 
     signingConfigs {
