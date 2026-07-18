@@ -192,8 +192,13 @@ class PlayerViewModel(
                         info = infoDef.await(),
                     )
                 }
-                val title = item?.title.orEmpty()
                 val parentSeriesId = item?.parentId
+                // Episode title compose (web parity): "{Series} — S01E02 · {Episode}".
+                // Only for episodes (parentId present + a season/episode number).
+                // The series title isn't on the episode payload, so fetch the
+                // parent series item for it; while unknown, fall back to
+                // "S01E02 · {Episode}". Movies / non-episodes: the bare title.
+                val title = composeTitle(item, parentSeriesId)
                 val resolvedQuality = quality ?: info?.defaultQuality ?: "high"
                 // Binge entry: pre-skip the intro/recap chain ONLY when it
                 // begins right at the head (small tolerance for analyzer
@@ -294,6 +299,32 @@ class PlayerViewModel(
                 PlayerUiState.Error(e.message ?: e::class.java.simpleName)
             }
         }
+    }
+
+    /**
+     * Builds the player title. For an episode (has a parentId AND a
+     * season/episode number) compose "{Series} — S01E02 · {Episode}" with
+     * 2-digit zero-padded season/episode, matching chino-web. The series
+     * title isn't carried on the episode payload, so resolve it by fetching
+     * the parent series item; while that's unknown (fetch failed / blank) fall
+     * back to "S01E02 · {Episode}". Movies and non-episode items keep their
+     * plain title.
+     */
+    private suspend fun composeTitle(
+        item: cloud.nalet.chino.tv.data.model.Item?,
+        parentSeriesId: String?,
+    ): String {
+        val epTitle = item?.title.orEmpty()
+        val season = item?.seasonNumber
+        val episode = item?.episodeNumber
+        if (parentSeriesId == null || season == null || episode == null) return epTitle
+        val code = "S%02dE%02d".format(season, episode)
+        val prefix = if (epTitle.isNotBlank()) "$code · $epTitle" else code
+        val seriesTitle = runCatching { api.getItem(parentSeriesId).title }
+            .getOrNull()
+            ?.takeIf { it.isNotBlank() }
+            ?: return prefix
+        return "$seriesTitle — $prefix"
     }
 
     private data class PrepareBundle(

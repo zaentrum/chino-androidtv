@@ -1,7 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
-import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +32,7 @@ import com.composables.icons.lucide.Captions
 import com.composables.icons.lucide.ChevronLeft
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Gauge
+import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pause
@@ -227,9 +227,12 @@ internal fun PlayerBottomChrome(
 @Composable
 internal fun PlayerTopChrome(
     title: String,
-    badge: String?,
     onBack: () -> Unit,
     onUserInteraction: () -> Unit,
+    // Pops to the library/home root. Full-screen playback has no persistent nav
+    // rail, so the player carries its own explicit Home affordance next to Back
+    // (chino-web parity). Null hides the button. Back is unchanged.
+    onHome: (() -> Unit)? = null,
 ) {
     Row(
         modifier = Modifier
@@ -249,6 +252,13 @@ internal fun PlayerTopChrome(
             contentDescription = "Back",
             onClick = { onUserInteraction(); onBack() },
         )
+        if (onHome != null) {
+            ControlIconButton(
+                icon = Lucide.House,
+                contentDescription = "Home",
+                onClick = { onUserInteraction(); onHome() },
+            )
+        }
         Text(
             text = title,
             color = Color.White,
@@ -258,20 +268,6 @@ internal fun PlayerTopChrome(
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.weight(1f),
         )
-        if (badge != null) {
-            Box(
-                modifier = Modifier
-                    .clip(RectangleShape)
-                    .background(Color(0xCC1F1F1F))
-                    .padding(horizontal = 12.dp, vertical = 6.dp),
-            ) {
-                Text(
-                    text = badge,
-                    color = ChinoText,
-                    fontSize = 13.sp,
-                )
-            }
-        }
     }
 }
 

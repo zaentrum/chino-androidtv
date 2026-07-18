@@ -27,6 +27,12 @@ sealed interface DetailUiState {
         val seasons: List<Season>,
         /** "More like this" recommendations; empty when none scored. */
         val similar: List<Item> = emptyList(),
+        /** When this detail was opened on an EPISODE id, we transparently load
+         *  the parent SERIES here and set this to the originating episode id so
+         *  DetailScreen expands its season and lands DPAD focus on that row —
+         *  instead of a standalone episode page (chino-web parity). Null for a
+         *  plain series / movie / person entry. */
+        val focusEpisodeId: String? = null,
     ) : DetailUiState
     data class Error(val message: String) : DetailUiState
 }
@@ -49,6 +55,14 @@ class DetailViewModel(
     /** The user's named lists (default first) for the add-to-list picker. */
     val lists: StateFlow<List<cloud.nalet.chino.tv.data.api.Watchlist>> = userFlags.lists
     val likes: StateFlow<Set<String>> = userFlags.likes
+
+    /** The id of the item currently RENDERED — the parent SERIES after an
+     *  episode→series redirect (see [load]), otherwise the entry [itemId].
+     *  Item-level controls (watchlist / like / watched / add-to-list) must
+     *  target THIS so an episode entry acts on the series, not the originating
+     *  episode. Per-EPISODE controls (toggleEpisodeWatched) keep their own ids. */
+    val displayItemId: String
+        get() = (_state.value as? DetailUiState.Ready)?.item?.id ?: itemId
 
     init {
         telemetry.event("screen_view", itemId = itemId, extra = mapOf("screen" to "detail"))
@@ -73,10 +87,24 @@ class DetailViewModel(
                 val similarDef = async {
                     runCatching { api.similar(itemId).items }.getOrDefault(emptyList())
                 }
-                val item = itemDef.await()
+                val requested = itemDef.await()
                 val resumeSec = progressDef.await()
+                // Episode entry: an episode has no season overview of its own, so
+                // transparently load its PARENT SERIES (item + season list) and
+                // remember the originating episode id — DetailScreen then expands
+                // that season and focus-highlights the row (chino-web parity),
+                // rather than showing a lonely episode page. Falls back to the
+                // episode item itself if the parent can't be resolved.
+                val focusEpisodeId = requested.takeIf { it.kind == "episode" && it.parentId != null }?.id
+                val parentId = requested.parentId
+                val item = if (focusEpisodeId != null && parentId != null) {
+                    runCatching { api.getItem(parentId) }.getOrDefault(requested)
+                } else requested
+                // The id whose season list we render — the parent series for an
+                // episode entry, otherwise the item itself.
+                val seasonsId = item.id
                 val seasons = if (item.kind == "series") {
-                    runCatching { api.seriesEpisodes(itemId).seasons }.getOrDefault(emptyList())
+                    runCatching { api.seriesEpisodes(seasonsId).seasons }.getOrDefault(emptyList())
                 } else emptyList()
                 _state.value = DetailUiState.Ready(
                     item = item,
@@ -85,6 +113,11 @@ class DetailViewModel(
                     streamToken = streamTokens.valid(),
                     seasons = seasons,
                     similar = similarDef.await(),
+                    // Only keep the focus target if we actually landed on the
+                    // series overview (found the parent + it is a series with
+                    // seasons); otherwise there's no row to focus.
+                    focusEpisodeId = focusEpisodeId
+                        ?.takeIf { item.kind == "series" && seasons.isNotEmpty() },
                 )
                 // Speculative pre-warm of chino-stream's transcode pipeline.
                 // Hitting /play/info on the resolved play target now means the
@@ -124,8 +157,11 @@ class DetailViewModel(
      */
     suspend fun resolvePlayTarget(): String {
         val ready = _state.value as? DetailUiState.Ready ?: return itemId
+        // Episode entry (we redirected to the parent series): Play the episode
+        // the user navigated to, not the series' next-up.
+        ready.focusEpisodeId?.let { return it }
         if (ready.item.kind != "series") return itemId
-        val next = runCatching { api.nextEpisode(itemId).id }.getOrNull()
+        val next = runCatching { api.nextEpisode(ready.item.id).id }.getOrNull()
         if (!next.isNullOrBlank()) return next
         val firstEpisode = ready.seasons.firstOrNull()?.episodes?.firstOrNull()?.id
         return firstEpisode ?: itemId
@@ -135,47 +171,50 @@ class DetailViewModel(
      *  or (when already saved) remove it from every list. The specific-list
      *  picker is reached separately via [setItemInList]. */
     fun toggleWatchlist(present: Boolean) {
+        val id = displayItemId
         telemetry.event(
             "watchlist_toggle",
-            itemId = itemId,
+            itemId = id,
             extra = mapOf("present" to present.toString()),
         )
         if (present) {
-            userFlags.setWatchlist(itemId, true)
+            userFlags.setWatchlist(id, true)
         } else {
             // The item is in >=1 list and the user pressed the filled icon —
             // clear it from all of them so the icon empties (web parity: the
             // plain toggle removes the "saved" state).
-            val current = memberships.value[itemId].orEmpty()
-            if (current.isEmpty()) userFlags.setWatchlist(itemId, false)
-            else current.forEach { listId -> userFlags.setItemInList(listId, itemId, false) }
+            val current = memberships.value[id].orEmpty()
+            if (current.isEmpty()) userFlags.setWatchlist(id, false)
+            else current.forEach { listId -> userFlags.setItemInList(listId, id, false) }
         }
     }
 
     /** Toggle the item's membership in a specific named list (picker checkbox). */
     fun setItemInList(listId: String, present: Boolean) {
+        val id = displayItemId
         telemetry.event(
             "watchlist_list_toggle",
-            itemId = itemId,
+            itemId = id,
             extra = mapOf("list" to listId, "present" to present.toString()),
         )
-        userFlags.setItemInList(listId, itemId, present)
+        userFlags.setItemInList(listId, id, present)
     }
 
     /** Create a new named list, and on success add the current item to it.
      *  Returns true when both succeeded. */
     suspend fun createListAndAdd(name: String): Boolean {
         val created = userFlags.createList(name) ?: return false
-        userFlags.setItemInList(created.id, itemId, true)
+        userFlags.setItemInList(created.id, displayItemId, true)
         return true
     }
     fun toggleLike(present: Boolean) {
+        val id = displayItemId
         telemetry.event(
             "like_toggle",
-            itemId = itemId,
+            itemId = id,
             extra = mapOf("present" to present.toString()),
         )
-        userFlags.setLike(itemId, present)
+        userFlags.setLike(id, present)
     }
     fun reportTrailerLaunch() = telemetry.event("trailer_launch", itemId = itemId)
 
@@ -187,15 +226,16 @@ class DetailViewModel(
      *  (web swallows the same — a stale view resolves on the next load). */
     fun toggleWatched() {
         val ready = _state.value as? DetailUiState.Ready ?: return
+        val id = ready.item.id
         val next = ready.item.watchedAt == null
         telemetry.event(
             "watched_toggle",
-            itemId = itemId,
+            itemId = id,
             extra = mapOf("watched" to next.toString()),
         )
         _state.value = ready.copy(item = ready.item.copy(watchedAt = if (next) "now" else null))
         viewModelScope.launch {
-            runCatching { if (next) api.postWatched(itemId) else api.deleteWatched(itemId) }
+            runCatching { if (next) api.postWatched(id) else api.deleteWatched(id) }
         }
     }
 

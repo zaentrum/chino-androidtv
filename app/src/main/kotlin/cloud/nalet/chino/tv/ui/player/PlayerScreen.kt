@@ -134,6 +134,11 @@ private val SKIPPABLE_MANUAL_KINDS = setOf("intro", "recap", "credits")
 fun PlayerScreen(
     viewModel: PlayerViewModel,
     onPlayNext: ((String) -> Unit)? = null,
+    // Pops the player and lands on the library/home root. Full-screen playback
+    // hides the persistent nav rail, so the chrome carries its own explicit
+    // Home affordance next to Back (chino-web parity). Optional so existing
+    // call sites / previews compile; when null the Home button is hidden.
+    onHome: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsState()
     when (val s = state) {
@@ -146,7 +151,7 @@ fun PlayerScreen(
                 onReport = viewModel::fileTerminalErrorBug,
             )
         }
-        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext)
+        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext, onHome)
     }
 }
 
@@ -223,6 +228,7 @@ private fun ExoPlayback(
     ready: PlayerUiState.Ready,
     viewModel: PlayerViewModel,
     onPlayNext: ((String) -> Unit)?,
+    onHome: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     // Key the ExoPlayer factory on (masterUrl + reloadKey) so switchQuality
@@ -1035,20 +1041,18 @@ private fun ExoPlayback(
             }
         }
         // Custom Compose chrome — replaces the default PlayerControlView.
-        // Layout mirrors chino-web's PlayerPage: top bar (back + title +
-        // codec badge), bottom bar (scrubber row + button row). Auto-hides
-        // after the grace period set in `lastInteractionTs` above.
-        // Mode badge — matches chino-web / chino-mobile (composeModeBadge):
-        // passthrough → none; remux → "Remux {container}"; transcode →
-        // "{SRC} → H.264 · {qualityLabel}". NOT the old codec•size•q string.
-        val badge = composeModeBadge(ready.playInfo, ready.currentQuality)
+        // Layout mirrors chino-web's PlayerPage: top bar (back + home + title),
+        // bottom bar (scrubber row + button row). Auto-hides after the grace
+        // period set in `lastInteractionTs` above. The mode badge was removed
+        // from the chrome — the Mode/encoder detail now lives only in the
+        // Playback-info overlay (Info button), matching chino-web.
         PlayerChromeOverlay(
             visible = controllerVisible,
             top = {
                 PlayerTopChrome(
                     title = ready.title,
-                    badge = badge,
                     onBack = { backDispatcher?.onBackPressedDispatcher?.onBackPressed() },
+                    onHome = onHome,
                     onUserInteraction = noteInteraction,
                 )
             },
@@ -1259,31 +1263,6 @@ fun defaultRungs(): List<cloud.nalet.chino.tv.data.api.QualityRung> = listOf(
     cloud.nalet.chino.tv.data.api.QualityRung("medium", "Medium"),
     cloud.nalet.chino.tv.data.api.QualityRung("low", "Low"),
 )
-
-/** Top-bar mode badge — ported from chino-web / chino-mobile composeModeBadge.
- *  passthrough → no badge; remux → "Remux {container}"; transcode →
- *  "{SRC} → H.264 · {qualityLabel}". Replaces the old codec•size•q string so
- *  TV reads identically to web (e.g. "Remux matroska,webm"). */
-private fun composeModeBadge(info: cloud.nalet.chino.tv.data.api.PlayInfo?, quality: String): String? {
-    val mode = info?.mode ?: return null
-    return when (mode.lowercase()) {
-        "passthrough" -> null
-        "remux" -> info.container?.takeIf { it.isNotBlank() }?.let { "Remux $it" } ?: "Remux"
-        "transcode" -> {
-            val codec = info.videoCodec?.uppercase()?.takeIf { it.isNotBlank() } ?: "Source"
-            "$codec → H.264 · ${labelForQuality(quality)}"
-        }
-        else -> mode.replaceFirstChar { it.uppercase() }
-    }
-}
-
-private fun labelForQuality(q: String): String = when (q.lowercase()) {
-    "high" -> "1080p"
-    "medium" -> "720p"
-    "low" -> "480p"
-    "source" -> "Source"
-    else -> q
-}
 
 /* ─────────────────────────  web-style menu popovers  ─────────────────────
  * Subtitle / Audio / Speed / Quality pickers render as compact popovers

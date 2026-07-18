@@ -492,6 +492,15 @@ fun ChinoTvNavHost(container: AppContainer) {
             )
             PlayerScreen(
                 viewModel = vm,
+                // Explicit Home affordance in the full-screen player chrome
+                // (no persistent rail there). Pops the whole player/detail
+                // stack and lands on the library root, matching the home-nav
+                // used by the other screens' rail buttons.
+                onHome = {
+                    navController.navigate(Routes.LIBRARY) {
+                        popUpTo(Routes.LIBRARY) { inclusive = true }
+                    }
+                },
                 onPlayNext = { nextId ->
                     // Auto-chain into the next episode in binge mode so the
                     // VM pre-skips its intro. Manual prev/next buttons in the

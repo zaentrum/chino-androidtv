@@ -135,8 +135,8 @@ fun DetailScreen(
             is DetailUiState.Error -> Centered("Could not load item: ${s.message}", isError = true)
             is DetailUiState.Ready -> DetailContent(
                 s = s,
-                inWatchlist = viewModel.itemId in savedItems,
-                liked = viewModel.itemId in likes,
+                inWatchlist = viewModel.displayItemId in savedItems,
+                liked = viewModel.displayItemId in likes,
                 isResolvingPlay = resolving,
                 onPlay = playResolved,
                 onToggleWatchlist = { viewModel.toggleWatchlist(it) },
@@ -155,7 +155,7 @@ fun DetailScreen(
         if (showListPicker && state is DetailUiState.Ready) {
             AddToListPanel(
                 lists = lists,
-                memberItemId = viewModel.itemId,
+                memberItemId = viewModel.displayItemId,
                 memberships = memberships,
                 onToggle = { listId, present -> viewModel.setItemInList(listId, present) },
                 onCreate = { name -> scope.launch { viewModel.createListAndAdd(name) } },
@@ -305,6 +305,7 @@ private fun DetailContent(
                     seasons = s.seasons,
                     baseUrl = s.baseUrl,
                     streamToken = s.streamToken,
+                    focusEpisodeId = s.focusEpisodeId,
                     onPlayEpisode = onPlayEpisode,
                     onToggleEpisodeWatched = onToggleEpisodeWatched,
                 )
@@ -643,6 +644,7 @@ private fun EpisodesBlock(
     seasons: List<Season>,
     baseUrl: String,
     streamToken: String,
+    focusEpisodeId: String?,
     onPlayEpisode: (String) -> Unit,
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
 ) {
@@ -650,6 +652,13 @@ private fun EpisodesBlock(
     // heading, then one collapsible season card per season expanding into a
     // stacked list of full-width episode rows (16:9 thumb + label + title +
     // runtime + 2-line synopsis, separated by 1dp dividers).
+    //
+    // When we arrived from an episode entry (focusEpisodeId set), find the
+    // season containing that episode so it — not season 0 — starts expanded and
+    // its row can grab DPAD focus below.
+    val focusSeasonIndex = focusEpisodeId?.let { id ->
+        seasons.indexOfFirst { season -> season.episodes.any { it.id == id } }
+    }?.takeIf { it >= 0 }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -667,7 +676,9 @@ private fun EpisodesBlock(
                 season = season,
                 baseUrl = baseUrl,
                 streamToken = streamToken,
-                initiallyExpanded = index == 0,
+                // Expand the target season on an episode entry, else season 0.
+                initiallyExpanded = if (focusSeasonIndex != null) index == focusSeasonIndex else index == 0,
+                focusEpisodeId = focusEpisodeId?.takeIf { index == focusSeasonIndex },
                 onPlayEpisode = onPlayEpisode,
                 onToggleEpisodeWatched = onToggleEpisodeWatched,
             )
@@ -681,11 +692,20 @@ private fun SeasonSection(
     baseUrl: String,
     streamToken: String,
     initiallyExpanded: Boolean,
+    focusEpisodeId: String?,
     onPlayEpisode: (String) -> Unit,
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     var headerFocused by remember { mutableStateOf(false) }
+    // On an episode entry, land DPAD focus on the targeted row once the season
+    // is expanded (the parent already expanded it via initiallyExpanded).
+    val targetRowFocus = remember(focusEpisodeId) { FocusRequester() }
+    LaunchedEffect(focusEpisodeId, expanded) {
+        if (focusEpisodeId != null && expanded) {
+            runCatching { targetRowFocus.requestFocus() }
+        }
+    }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -732,9 +752,12 @@ private fun SeasonSection(
                             .background(ChinoBorderHi),
                     )
                 }
+                val isTarget = focusEpisodeId != null && ep.id == focusEpisodeId
                 EpisodeRow(
                     episode = ep,
                     backdropUrl = "$baseUrl/v1/items/${ep.id}/backdrop?stream=$streamToken",
+                    selected = isTarget,
+                    focusRequester = targetRowFocus.takeIf { isTarget },
                     onClick = { onPlayEpisode(ep.id) },
                     onToggleWatched = { onToggleEpisodeWatched(ep.id, ep.watchedAt == null) },
                 )
@@ -749,16 +772,30 @@ private fun EpisodeRow(
     backdropUrl: String,
     onClick: () -> Unit,
     onToggleWatched: () -> Unit,
+    // Set when this row is the episode the detail was navigated to (episode
+    // entry): a persistent ChinoAccent ring + tint marks it as the target even
+    // before/without focus. focusRequester lands DPAD focus here on entry.
+    selected: Boolean = false,
+    focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     val watched = episode.watchedAt != null
+    val rowBg = when {
+        focused -> ChinoBorderHi
+        selected -> ChinoAccent.copy(alpha = 0.18f)
+        else -> Color.Transparent
+    }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .clickable(onClick = onClick)
             .onFocusChanged { focused = it.isFocused }
             .focusable()
-            .background(if (focused) ChinoBorderHi else Color.Transparent)
+            .background(rowBg)
+            // Selected-target ring — the ChinoAccent highlight that survives
+            // while the row isn't the focused element.
+            .then(if (selected && !focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
