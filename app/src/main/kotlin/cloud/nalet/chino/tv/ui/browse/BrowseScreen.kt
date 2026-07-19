@@ -286,6 +286,11 @@ internal fun PosterGridCard(
     // Hold-OK (long-press CENTER) opens the card actions menu. No-op default so
     // surfaces that don't host the menu (the Watchlist grid) keep plain cards.
     onLongPress: (() -> Unit)? = null,
+    // "SxxEyy" overline for EPISODE entries saved to a list (watchlist hub +
+    // MORE grid) — mirrors the Library CW card's episode composition so a
+    // saved episode doesn't read as a bare series poster. Null (the default,
+    // and every non-episode) hides the line.
+    episodeBadge: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Card(
@@ -354,6 +359,16 @@ internal fun PosterGridCard(
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                 )
+                // Episode marker line — accent "SxxEyy" under the title, the
+                // same composition the Library CW card uses for episodes.
+                episodeBadge?.let {
+                    Text(
+                        text = it,
+                        color = ChinoAccent,
+                        fontSize = 14.sp,
+                        fontWeight = FontWeight.SemiBold,
+                    )
+                }
                 val ratingText = item.rating?.let { String.format("%.1f", it) }
                 if (item.year != null || ratingText != null) {
                     Row(

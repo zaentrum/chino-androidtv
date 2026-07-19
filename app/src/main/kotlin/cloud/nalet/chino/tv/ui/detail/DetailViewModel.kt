@@ -17,6 +17,13 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 
+/** In-progress playback state for one episode row, extracted from the
+ *  continue-watching feed. Only built for entries that are genuinely
+ *  mid-watch (>30s in, not finished, not a substituted up-next row).
+ *  durationSec can be 0 (unknown) — the episode row then falls back to the
+ *  catalogue runtime (durationMs/1000) for the bar + remaining label. */
+data class EpisodeResume(val positionSec: Int, val durationSec: Int)
+
 sealed interface DetailUiState {
     data object Loading : DetailUiState
     data class Ready(
@@ -25,6 +32,10 @@ sealed interface DetailUiState {
         val baseUrl: String,
         val streamToken: String,
         val seasons: List<Season>,
+        /** episode id → in-progress position for the series episode rows —
+         *  drives the thumbnail progress bar + "Resume · Xm left" hint.
+         *  Best-effort (empty on fetch failure) and empty for movies. */
+        val episodeResume: Map<String, EpisodeResume> = emptyMap(),
         /** "More like this" recommendations; empty when none scored. */
         val similar: List<Item> = emptyList(),
         /** When this detail was opened on an EPISODE id, we transparently load
@@ -103,15 +114,28 @@ class DetailViewModel(
                 // The id whose season list we render — the parent series for an
                 // episode entry, otherwise the item itself.
                 val seasonsId = item.id
-                val seasons = if (item.kind == "series") {
-                    runCatching { api.seriesEpisodes(seasonsId).seasons }.getOrDefault(emptyList())
-                } else emptyList()
+                // Seasons + the continue-watching feed are independent reads —
+                // fetched concurrently once the kind is known so the CW call
+                // no longer serially delays Ready behind the seasons fetch.
+                val seasonsDef = async {
+                    if (item.kind == "series") {
+                        runCatching { api.seriesEpisodes(seasonsId).seasons }.getOrDefault(emptyList())
+                    } else emptyList()
+                }
+                val episodeResumeDef = async {
+                    if (item.kind == "series") {
+                        runCatching { fetchEpisodeResume() }.getOrDefault(emptyMap())
+                    } else emptyMap()
+                }
+                val seasons = seasonsDef.await()
+                val episodeResume = episodeResumeDef.await()
                 _state.value = DetailUiState.Ready(
                     item = item,
                     resumeSec = resumeSec,
                     baseUrl = baseUrl,
                     streamToken = streamTokens.valid(),
                     seasons = seasons,
+                    episodeResume = episodeResume,
                     similar = similarDef.await(),
                     // Only keep the focus target if we actually landed on the
                     // series overview (found the parent + it is a series with
@@ -130,6 +154,51 @@ class DetailViewModel(
             } catch (e: Exception) {
                 _state.value = DetailUiState.Error(e.message ?: e::class.java.simpleName)
             }
+        }
+    }
+
+    /** Continue-watching feed → per-episode resume map. Canonical cross-client
+     *  predicate — a row is mid-watch iff it wasn't substituted as "up next",
+     *  has >30s of progress (matches the detail hero's own canResume
+     *  threshold), and isn't within 60s of the end (finished). Rows with an
+     *  unknown duration (durationSec <= 0) are KEPT — the episode row falls
+     *  back to the catalogue runtime for the bar + remaining label. Throws on
+     *  fetch failure; callers wrap in runCatching with their own fallback. */
+    private suspend fun fetchEpisodeResume(): Map<String, EpisodeResume> =
+        api.continueWatching().items
+            .filter {
+                !it.upNext && it.positionSec > 30 &&
+                    (it.durationSec <= 0 || it.positionSec < it.durationSec - 60)
+            }
+            .associate { it.id to EpisodeResume(it.positionSec, it.durationSec) }
+
+    // True once the first screen ON_RESUME after VM construction has been
+    // consumed. init{} already runs a full load(), so that first (synthetic,
+    // delivered on observer registration) resume must not double-fetch. The
+    // flag lives HERE — not in the composition — because DetailScreen leaves
+    // composition while the Player sits on top and is recreated on BACK,
+    // while this VM survives on the nav entry; a composition-local flag would
+    // re-arm and swallow the "user came back" resume (the same stale-shelf
+    // bug LibraryViewModel.firstResumeConsumed documents).
+    private var firstResumeConsumed = false
+
+    /** Screen-level ON_RESUME hook (NavBackStackEntry lifecycle). Skips the
+     *  very first resume after construction (init's load covers it), then
+     *  re-fetches the continue-watching feed on every later resume so the
+     *  episode progress bars aren't stale after play → BACK (web self-heals
+     *  via its query gen; TV mirrors its own Library shelf pattern).
+     *  Best-effort: on failure we keep whatever's already on screen. */
+    fun onScreenResumed() {
+        if (!firstResumeConsumed) {
+            firstResumeConsumed = true
+            return
+        }
+        val ready = _state.value as? DetailUiState.Ready ?: return
+        if (ready.item.kind != "series") return
+        viewModelScope.launch {
+            val fresh = runCatching { fetchEpisodeResume() }.getOrNull() ?: return@launch
+            val current = _state.value as? DetailUiState.Ready ?: return@launch
+            _state.value = current.copy(episodeResume = fresh)
         }
     }
 
@@ -189,22 +258,24 @@ class DetailViewModel(
         }
     }
 
-    /** Toggle the item's membership in a specific named list (picker checkbox). */
-    fun setItemInList(listId: String, present: Boolean) {
-        val id = displayItemId
+    /** Toggle membership in a specific named list (picker checkbox).
+     *  [targetItemId] defaults to the rendered item (series action-row caret)
+     *  but the per-episode "+" affordance passes the EPISODE id instead. */
+    fun setItemInList(listId: String, present: Boolean, targetItemId: String = displayItemId) {
         telemetry.event(
             "watchlist_list_toggle",
-            itemId = id,
+            itemId = targetItemId,
             extra = mapOf("list" to listId, "present" to present.toString()),
         )
-        userFlags.setItemInList(listId, id, present)
+        userFlags.setItemInList(listId, targetItemId, present)
     }
 
-    /** Create a new named list, and on success add the current item to it.
+    /** Create a new named list, and on success add [targetItemId] to it
+     *  (defaults to the rendered item; episodes pass their own id).
      *  Returns true when both succeeded. */
-    suspend fun createListAndAdd(name: String): Boolean {
+    suspend fun createListAndAdd(name: String, targetItemId: String = displayItemId): Boolean {
         val created = userFlags.createList(name) ?: return false
-        userFlags.setItemInList(created.id, displayItemId, true)
+        userFlags.setItemInList(created.id, targetItemId, true)
         return true
     }
     fun toggleLike(present: Boolean) {

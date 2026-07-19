@@ -108,10 +108,32 @@ fun DetailScreen(
     val lists by viewModel.lists.collectAsState()
     val memberships by viewModel.memberships.collectAsState()
     val likes by viewModel.likes.collectAsState()
+    // Refresh the per-episode resume map whenever this screen comes back to
+    // the foreground — covers "user played an episode and pressed BACK"
+    // (LocalLifecycleOwner here is the NavBackStackEntry, which returns to
+    // RESUMED on pop) and app background→foreground. Same nav-entry-scoped
+    // idiom as LibraryScreen: the skip-the-redundant-first-resume decision
+    // lives in the VIEWMODEL (onScreenResumed), because this destination
+    // leaves composition while the Player sits on top, so this
+    // DisposableEffect is recreated on every return — a composition-local
+    // flag would swallow the catch-up ON_RESUME delivered on observer
+    // re-registration (the very event that means "user came back").
+    val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
+                viewModel.onScreenResumed()
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
-    // When true, the add-to-list picker overlays the page. Opened by the caret
-    // next to the "+" icon; BACK closes it.
-    var showListPicker by remember { mutableStateOf(false) }
+    // Non-null while the add-to-list picker overlays the page; the value is
+    // the item id the panel edits — the rendered SERIES/MOVIE (displayItemId)
+    // when opened from the action-row caret, or one EPISODE id when opened
+    // from an episode row's "+" affordance. BACK closes it.
+    var listPickerTarget by remember { mutableStateOf<String?>(null) }
     // resolving=true while resolvePlayTarget is in flight. Drives the Play
     // CTA's "Loading…" label and gates re-clicks so the user can't queue
     // multiple navigations during the ~50-500ms /next-episode round-trip.
@@ -140,10 +162,11 @@ fun DetailScreen(
                 isResolvingPlay = resolving,
                 onPlay = playResolved,
                 onToggleWatchlist = { viewModel.toggleWatchlist(it) },
-                onOpenListPicker = { showListPicker = true },
+                onOpenListPicker = { listPickerTarget = viewModel.displayItemId },
                 onToggleLike = { viewModel.toggleLike(it) },
                 onToggleWatched = { viewModel.toggleWatched() },
                 onToggleEpisodeWatched = { id, watched -> viewModel.toggleEpisodeWatched(id, watched) },
+                onAddEpisodeToList = { episodeId -> listPickerTarget = episodeId },
                 onTrailerLaunch = { viewModel.reportTrailerLaunch() },
                 onPlayEpisode = onPlayEpisode,
                 onSimilarSelected = onSimilarSelected,
@@ -152,14 +175,16 @@ fun DetailScreen(
         }
         // Add-to-list picker — floats over the page (player MenuPopover idiom).
         // BACK closes it; toggling a row calls PUT/DELETE items optimistically.
-        if (showListPicker && state is DetailUiState.Ready) {
+        // Targets pickerTarget: the series/movie OR a single episode.
+        val pickerTarget = listPickerTarget
+        if (pickerTarget != null && state is DetailUiState.Ready) {
             AddToListPanel(
                 lists = lists,
-                memberItemId = viewModel.displayItemId,
+                memberItemId = pickerTarget,
                 memberships = memberships,
-                onToggle = { listId, present -> viewModel.setItemInList(listId, present) },
-                onCreate = { name -> scope.launch { viewModel.createListAndAdd(name) } },
-                onDismiss = { showListPicker = false },
+                onToggle = { listId, present -> viewModel.setItemInList(listId, present, pickerTarget) },
+                onCreate = { name -> scope.launch { viewModel.createListAndAdd(name, pickerTarget) } },
+                onDismiss = { listPickerTarget = null },
             )
         }
     }
@@ -177,6 +202,7 @@ private fun DetailContent(
     onToggleLike: (Boolean) -> Unit,
     onToggleWatched: () -> Unit,
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onAddEpisodeToList: (String) -> Unit,
     onTrailerLaunch: () -> Unit,
     onPlayEpisode: (String) -> Unit,
     onSimilarSelected: (String) -> Unit,
@@ -306,8 +332,10 @@ private fun DetailContent(
                     baseUrl = s.baseUrl,
                     streamToken = s.streamToken,
                     focusEpisodeId = s.focusEpisodeId,
+                    episodeResume = s.episodeResume,
                     onPlayEpisode = onPlayEpisode,
                     onToggleEpisodeWatched = onToggleEpisodeWatched,
+                    onAddEpisodeToList = onAddEpisodeToList,
                 )
             }
             // "More like this" — katalog recommendations. Focusable poster
@@ -645,8 +673,10 @@ private fun EpisodesBlock(
     baseUrl: String,
     streamToken: String,
     focusEpisodeId: String?,
+    episodeResume: Map<String, EpisodeResume>,
     onPlayEpisode: (String) -> Unit,
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onAddEpisodeToList: (String) -> Unit,
 ) {
     // Vertical accordion matching chino-web's EpisodesList: an "Episodes"
     // heading, then one collapsible season card per season expanding into a
@@ -679,8 +709,10 @@ private fun EpisodesBlock(
                 // Expand the target season on an episode entry, else season 0.
                 initiallyExpanded = if (focusSeasonIndex != null) index == focusSeasonIndex else index == 0,
                 focusEpisodeId = focusEpisodeId?.takeIf { index == focusSeasonIndex },
+                episodeResume = episodeResume,
                 onPlayEpisode = onPlayEpisode,
                 onToggleEpisodeWatched = onToggleEpisodeWatched,
+                onAddEpisodeToList = onAddEpisodeToList,
             )
         }
     }
@@ -693,8 +725,10 @@ private fun SeasonSection(
     streamToken: String,
     initiallyExpanded: Boolean,
     focusEpisodeId: String?,
+    episodeResume: Map<String, EpisodeResume>,
     onPlayEpisode: (String) -> Unit,
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onAddEpisodeToList: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     var headerFocused by remember { mutableStateOf(false) }
@@ -756,10 +790,12 @@ private fun SeasonSection(
                 EpisodeRow(
                     episode = ep,
                     backdropUrl = "$baseUrl/v1/items/${ep.id}/backdrop?stream=$streamToken",
+                    resume = episodeResume[ep.id],
                     selected = isTarget,
                     focusRequester = targetRowFocus.takeIf { isTarget },
                     onClick = { onPlayEpisode(ep.id) },
                     onToggleWatched = { onToggleEpisodeWatched(ep.id, ep.watchedAt == null) },
+                    onAddToList = { onAddEpisodeToList(ep.id) },
                 )
             }
         }
@@ -770,8 +806,14 @@ private fun SeasonSection(
 private fun EpisodeRow(
     episode: Episode,
     backdropUrl: String,
+    // Non-null when the continue-watching feed says this episode is mid-watch:
+    // draws the thin accent progress bar on the thumbnail + the "Resume ·
+    // Xm left" hint. Click behaviour is unchanged — the player already
+    // fetches the saved position and auto-resumes.
+    resume: EpisodeResume?,
     onClick: () -> Unit,
     onToggleWatched: () -> Unit,
+    onAddToList: () -> Unit,
     // Set when this row is the episode the detail was navigated to (episode
     // entry): a persistent ChinoAccent ring + tint marks it as the target even
     // before/without focus. focusRequester lands DPAD focus here on entry.
@@ -780,6 +822,12 @@ private fun EpisodeRow(
 ) {
     var focused by remember { mutableStateOf(false) }
     val watched = episode.watchedAt != null
+    // Effective duration for the resume bar + remaining label: the CW row's
+    // durationSec when known, else the episode's catalogue runtime
+    // (canonical durationSec<=0 fallback). 0 when both are unknown — the
+    // fill + remaining label then stay hidden.
+    val resumeDurSec = if (resume != null && resume.durationSec > 0) resume.durationSec
+        else ((episode.durationMs ?: 0L) / 1000L).toInt()
     val rowBg = when {
         focused -> ChinoBorderHi
         selected -> ChinoAccent.copy(alpha = 0.18f)
@@ -813,6 +861,29 @@ private fun EpisodeRow(
                 contentScale = ContentScale.Crop,
                 modifier = Modifier.fillMaxSize(),
             )
+            // In-progress marker: accent bar along the thumbnail's bottom edge
+            // over a full-width track. Canonical cross-client spec: height
+            // 4dp, ChinoBorder track, ChinoAccent fill, fraction coerced 0..1.
+            if (resume != null) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .height(4.dp)
+                        .background(ChinoBorder),
+                )
+                if (resumeDurSec > 0) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth(
+                                (resume.positionSec.toFloat() / resumeDurSec).coerceIn(0f, 1f),
+                            )
+                            .height(4.dp)
+                            .background(ChinoAccent),
+                    )
+                }
+            }
         }
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -839,6 +910,21 @@ private fun EpisodeRow(
                 episode.durationMs?.let { (it / 60_000L).toInt() }?.takeIf { it > 0 }?.let {
                     Text(text = "${it}m", color = ChinoMuted, style = MaterialTheme.typography.bodySmall)
                 }
+                if (resume != null) {
+                    // Canonical remaining label: CEIL((dur - pos) / 60),
+                    // floored at 1m. resumeDurSec already folds in the
+                    // catalogue-runtime fallback; when even that's unknown
+                    // there is no remaining to compute — plain "Resume".
+                    val remainingMin = if (resumeDurSec > 0) {
+                        ((resumeDurSec - resume.positionSec + 59) / 60).coerceAtLeast(1)
+                    } else null
+                    Text(
+                        text = remainingMin?.let { "Resume · ${it}m left" } ?: "Resume",
+                        color = ChinoAccent,
+                        style = MaterialTheme.typography.bodySmall,
+                        fontWeight = FontWeight.Medium,
+                    )
+                }
             }
             episode.overview?.takeIf { it.isNotBlank() }?.let {
                 Text(
@@ -857,6 +943,38 @@ private fun EpisodeRow(
         // hover button over the still; on TV a focusable trailing circle reads
         // better at 10ft and stays in the remote's focus order.
         EpisodeWatchedToggle(watched = watched, onToggle = onToggleWatched)
+        // Per-episode ADD-TO-LIST — a second trailing focus target (RIGHT past
+        // the watched toggle reaches it; LEFT returns). CENTER opens the
+        // AddToList picker targeting THIS episode id. Same square focus-ring
+        // idiom as the watched toggle so the row's trailing controls read as
+        // one family; the row body's click-to-play is untouched.
+        EpisodeAddToListButton(onClick = onAddToList)
+    }
+}
+
+@Composable
+private fun EpisodeAddToListButton(onClick: () -> Unit) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .size(40.dp)
+            .clip(RectangleShape)
+            .background(if (focused) Color.White else Color.White.copy(alpha = 0.1f))
+            .then(
+                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            // clickable maps DPAD_CENTER/ENTER to a click on key-UP — same
+            // single-activation reasoning as EpisodeWatchedToggle above.
+            .clickable(onClick = onClick),
+        contentAlignment = Alignment.Center,
+    ) {
+        Icon(
+            imageVector = Lucide.Plus,
+            contentDescription = "Add episode to a list",
+            tint = if (focused) Color.Black else ChinoMuted,
+            modifier = Modifier.size(18.dp),
+        )
     }
 }
 

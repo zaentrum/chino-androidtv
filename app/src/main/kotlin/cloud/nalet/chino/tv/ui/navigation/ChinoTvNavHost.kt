@@ -76,6 +76,10 @@ object Routes {
         "player/$itemId?fromStart=$fromStart&fromBinge=$fromBinge&resume=$resumeSec"
 }
 
+/** Idle-reset threshold: backgrounded shorter than this resumes in place;
+ *  longer (or equal) reopens at the Library root. 30 minutes. */
+private const val IDLE_RESET_AFTER_MS = 30L * 60L * 1000L
+
 /** Boot-time snapshot: the account state plus whether a server is configured
  *  (post-migration), resolved together off the main thread so the NavHost
  *  start destination is locked on the first real frame. */
@@ -127,6 +131,82 @@ fun ChinoTvNavHost(container: AppContainer) {
     val navController = rememberNavController()
     val accounts by container.accountStore.accounts.collectAsState(initial = snapshot.accounts)
     val activeAccount by container.accountStore.activeAccount.collectAsState(initial = snapshot.activeAccount)
+
+    // ── Idle reset to Home ────────────────────────────────────────────────
+    // Android restores the task wherever it was, so reopening the app hours
+    // later would land on the last-watched title's screen. Standard TV-app
+    // behavior instead: stamp a monotonic clock when the activity leaves the
+    // foreground; on ON_START, if the app sat in the background for >= 30
+    // minutes, reset navigation to the LIBRARY root (back stack cleared) so
+    // the session starts fresh at home — the Library's own ON_RESUME
+    // continue-watching refresh then repopulates the rows. Deliberately NOT
+    // clearTaskOnLaunch (that resets even on a 30-second hop away).
+    // ON_START-only means a foregrounded app is never interrupted; short hops
+    // (quick HOME press, assistant overlay) stay under the threshold and
+    // resume exactly where the user was. elapsedRealtime, not
+    // currentTimeMillis: monotonic + counts device sleep, immune to
+    // NTP/wall-clock jumps overnight.
+    //
+    // The stamp lives in rememberSaveable, NOT a plain remember: on a long
+    // idle Android usually KILLS the process and later recreates the activity
+    // while restoring the nav stack from saved instance state — the most
+    // common case this reset exists for. An in-memory stamp comes back null
+    // there and the reset silently no-ops; saving it keeps the stamp paired
+    // with the very nav state it guards (on recreation the restored stamp is
+    // delivered to the observer via the synthetic catch-up ON_START). Saved
+    // instance state does NOT survive a reboot, so a post-reboot
+    // elapsedRealtime restarting at zero can never meet a stale stamp — no
+    // false resets. A null stamp still doubles as the first-launch guard.
+    //
+    // Stamped on ON_PAUSE *and* ON_STOP (not ON_STOP alone): rememberSaveable
+    // values are captured at onSaveInstanceState time, and on pre-API-28
+    // devices that runs BEFORE/at onStop — an ON_STOP-only write could miss
+    // the bundle in exactly the scenario we save it for. onPause always
+    // precedes the state save, so the ON_PAUSE write guarantees the bundle
+    // carries the stamp; the ON_STOP write merely refreshes it on API 28+
+    // where saving happens after stop. Safe: every ON_START is preceded by a
+    // fresh ON_PAUSE/ON_STOP rewrite, and a pause-only blip that resumes
+    // without stopping never reaches the ON_START check at all.
+    val backgroundedAtMs = androidx.compose.runtime.saveable.rememberSaveable {
+        androidx.compose.runtime.mutableStateOf<Long?>(null)
+    }
+    val activityLifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
+    androidx.compose.runtime.DisposableEffect(activityLifecycleOwner, navController) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            when (event) {
+                androidx.lifecycle.Lifecycle.Event.ON_PAUSE,
+                androidx.lifecycle.Lifecycle.Event.ON_STOP ->
+                    backgroundedAtMs.value = android.os.SystemClock.elapsedRealtime()
+                androidx.lifecycle.Lifecycle.Event.ON_START -> {
+                    val since = backgroundedAtMs.value
+                    backgroundedAtMs.value = null
+                    if (since != null &&
+                        android.os.SystemClock.elapsedRealtime() - since >= IDLE_RESET_AFTER_MS
+                    ) {
+                        val route = navController.currentDestination?.route
+                        // Never reset out of the onboarding/identity surfaces —
+                        // kicking a user parked on server-setup / sign-in / the
+                        // profile picker over to LIBRARY would skip required
+                        // steps. Already at the Library root → nothing to do
+                        // (avoids a pointless pop+recreate flash).
+                        val onOnboarding = route == Routes.SERVER || route == Routes.SERVER_CHANGE ||
+                            route == Routes.AUTH || route == Routes.PICKER
+                        val atHomeRoot = route == Routes.LIBRARY &&
+                            navController.previousBackStackEntry == null
+                        if (route != null && !onOnboarding && !atHomeRoot) {
+                            navController.navigate(Routes.LIBRARY) {
+                                popUpTo(0) // wipe the entire back stack — fresh session
+                                launchSingleTop = true
+                            }
+                        }
+                    }
+                }
+                else -> Unit
+            }
+        }
+        activityLifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { activityLifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     // Start-destination decision:
     //  - 0 accounts                              → AUTH (first-run sign-in)

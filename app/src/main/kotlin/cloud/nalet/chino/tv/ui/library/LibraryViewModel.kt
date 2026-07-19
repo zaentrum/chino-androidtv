@@ -254,6 +254,27 @@ class LibraryViewModel(
         applyFilter(BrowseFilter()) // clears an active filter; no-op otherwise
     }
 
+    // True once the first screen ON_RESUME after VM construction has been
+    // consumed. init{} already runs a FULL refresh, so that first (synthetic,
+    // delivered on observer registration) resume must not double-fetch. The
+    // flag lives HERE — not in the composition — because the Home composable
+    // is torn down and recreated on every back-navigation while this VM
+    // survives on the nav entry; a composition-local flag would re-arm and
+    // swallow the "user came back" resume instead (the stale-shelf bug).
+    private var firstResumeConsumed = false
+
+    /** Screen-level ON_RESUME hook (NavBackStackEntry lifecycle). Skips the
+     *  very first resume after construction (init's full refresh covers it),
+     *  then re-fetches the continue-watching shelf on every later resume —
+     *  both in-app BACK from Detail/Player and app background→foreground. */
+    fun onScreenResumed() {
+        if (!firstResumeConsumed) {
+            firstResumeConsumed = true
+            return
+        }
+        refreshContinueWatching()
+    }
+
     /** Re-fetch just the continue-watching shelf. Called on ON_RESUME so
      *  finishing a movie / closing the player updates the row without a full
      *  grid reload (which would flicker the hero and reset scroll position).

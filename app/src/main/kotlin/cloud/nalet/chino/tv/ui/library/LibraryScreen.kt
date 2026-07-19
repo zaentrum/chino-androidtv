@@ -114,16 +114,21 @@ fun LibraryScreen(
     val homeEntryNonce by viewModel.homeEntryNonce.collectAsState()
     // Refresh the continue-watching shelf whenever the screen comes back to
     // the foreground — covers "user finished an episode and pressed BACK"
-    // (NavBackStackEntry transitions library back to RESUMED) and "user
-    // pressed HOME mid-watch and reopened the app" (activity ON_RESUME). The
-    // first event is skipped because init() already kicked off a full refresh
-    // when the VM was constructed; doing it again would be a redundant HTTP.
+    // (LocalLifecycleOwner here is the NavBackStackEntry, which returns to
+    // RESUMED on pop) and "user pressed HOME mid-watch and reopened the app"
+    // (activity ON_RESUME propagates into the entry). The skip-the-redundant-
+    // first-refresh decision lives in the VIEWMODEL (onScreenResumed), not in
+    // a composition-local flag: this destination leaves composition while
+    // Detail/Player sits on top, so this DisposableEffect is recreated on
+    // every return — a local `skipFirst = true` here swallowed the catch-up
+    // ON_RESUME delivered on observer re-registration (the very event that
+    // means "user came back"), while the surviving nav-entry-scoped VM never
+    // re-ran init(); net effect: the shelf never refreshed on in-app BACK.
     val lifecycleOwner = androidx.lifecycle.compose.LocalLifecycleOwner.current
     androidx.compose.runtime.DisposableEffect(lifecycleOwner) {
-        var skipFirst = true
         val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
             if (event == androidx.lifecycle.Lifecycle.Event.ON_RESUME) {
-                if (skipFirst) skipFirst = false else viewModel.refreshContinueWatching()
+                viewModel.onScreenResumed()
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)

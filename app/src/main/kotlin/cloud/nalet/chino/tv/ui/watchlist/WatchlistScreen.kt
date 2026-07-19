@@ -176,6 +176,14 @@ fun WatchlistScreen(
     }
 }
 
+/** "SxxEyy" (2-digit padded) for EPISODE items saved to a list — the same
+ *  composition the Library CW card uses. Null for movies/series or when the
+ *  numbers are missing, which hides the card's episode line. */
+private fun episodeBadgeFor(item: Item): String? =
+    if (item.kind == "episode" && item.seasonNumber != null && item.episodeNumber != null) {
+        "S%02dE%02d".format(item.seasonNumber, item.episodeNumber)
+    } else null
+
 /** The modal shown over the lists surface. */
 private sealed interface ListOverlay {
     data object Create : ListOverlay
@@ -229,6 +237,10 @@ private fun HubContent(
                             posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
                             onClick = { onItemSelected(item.id) },
                             saved = true, // everything on a watchlist shelf is saved by definition
+                            // Saved EPISODES get the SxxEyy line under the title
+                            // (Library CW card parity) so they don't read as the
+                            // whole series.
+                            episodeBadge = episodeBadgeFor(item),
                             // Fixed shelf-card width (matches the home-rail PosterCard);
                             // a LazyRow gives no width bound, so the grid card's
                             // fillMaxWidth would otherwise blow up to full screen.
@@ -356,6 +368,10 @@ private fun MoreContent(
                         posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
                         onClick = { onItemSelected(item.id) },
                         saved = item.id in savedItems,
+                        // Saved EPISODES get the SxxEyy line under the title
+                        // (Library CW card parity) so they don't read as the
+                        // whole series.
+                        episodeBadge = episodeBadgeFor(item),
                     )
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
