@@ -7,11 +7,14 @@ import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.CodecCaps
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.ContinueWatchingItem
+import cloud.nalet.chino.tv.data.api.NextEpisodeResponse
 import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.data.model.Item
 import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -44,6 +47,11 @@ sealed interface DetailUiState {
          *  instead of a standalone episode page (chino-web parity). Null for a
          *  plain series / movie / person entry. */
         val focusEpisodeId: String? = null,
+        /** What Play starts on a series opened as a series: the episode the
+         *  viewer is in the middle of, else the next one (see SeriesPlay.kt).
+         *  Null for movies, for an episode entry (Play plays that episode)
+         *  and when no episode could be found. */
+        val seriesPlay: SeriesPlayTarget? = null,
     ) : DetailUiState
     data class Error(val message: String) : DetailUiState
 }
@@ -114,21 +122,31 @@ class DetailViewModel(
                 // The id whose season list we render — the parent series for an
                 // episode entry, otherwise the item itself.
                 val seasonsId = item.id
-                // Seasons + the continue-watching feed are independent reads —
-                // fetched concurrently once the kind is known so the CW call
-                // no longer serially delays Ready behind the seasons fetch.
+                val isSeries = item.kind == "series"
+                // Play on a series opened as a series picks its episode from
+                // the continue-watching feed, else from next-episode; an
+                // episode entry plays that episode and needs neither.
+                val wantsSeriesPlay = isSeries && focusEpisodeId == null
+                // Seasons, the continue-watching feed and next-episode are
+                // independent reads — fetched concurrently once the kind is
+                // known so none of them serially delays Ready.
                 val seasonsDef = async {
-                    if (item.kind == "series") {
+                    if (isSeries) {
                         runCatching { api.seriesEpisodes(seasonsId).seasons }.getOrDefault(emptyList())
                     } else emptyList()
                 }
-                val episodeResumeDef = async {
-                    if (item.kind == "series") {
-                        runCatching { fetchEpisodeResume() }.getOrDefault(emptyMap())
-                    } else emptyMap()
+                val continueWatchingDef = async {
+                    if (isSeries) runCatching { api.continueWatching().items }.getOrNull() else null
+                }
+                val nextEpisodeDef = async {
+                    if (wantsSeriesPlay) runCatching { api.nextEpisode(seasonsId) }.getOrNull() else null
                 }
                 val seasons = seasonsDef.await()
-                val episodeResume = episodeResumeDef.await()
+                val continueWatching = continueWatchingDef.await()
+                val episodeResume = continueWatching?.let(::episodeResumeOf).orEmpty()
+                val seriesPlay = if (wantsSeriesPlay) {
+                    seriesPlayFor(seasonsId, seasons, continueWatching.orEmpty(), nextEpisodeDef.await())
+                } else null
                 _state.value = DetailUiState.Ready(
                     item = item,
                     resumeSec = resumeSec,
@@ -142,6 +160,7 @@ class DetailViewModel(
                     // seasons); otherwise there's no row to focus.
                     focusEpisodeId = focusEpisodeId
                         ?.takeIf { item.kind == "series" && seasons.isNotEmpty() },
+                    seriesPlay = seriesPlay,
                 )
                 // Speculative pre-warm of chino-stream's transcode pipeline.
                 // Hitting /play/info on the resolved play target now means the
@@ -158,19 +177,31 @@ class DetailViewModel(
     }
 
     /** Continue-watching feed → per-episode resume map. Canonical cross-client
-     *  predicate — a row is mid-watch iff it wasn't substituted as "up next",
-     *  has >30s of progress (matches the detail hero's own canResume
-     *  threshold), and isn't within 60s of the end (finished). Rows with an
-     *  unknown duration (durationSec <= 0) are KEPT — the episode row falls
-     *  back to the catalogue runtime for the bar + remaining label. Throws on
-     *  fetch failure; callers wrap in runCatching with their own fallback. */
-    private suspend fun fetchEpisodeResume(): Map<String, EpisodeResume> =
-        api.continueWatching().items
-            .filter {
-                !it.upNext && it.positionSec > 30 &&
-                    (it.durationSec <= 0 || it.positionSec < it.durationSec - 60)
-            }
+     *  predicate ([isMidWatch]) — a row is mid-watch iff it wasn't substituted
+     *  as "up next", has >30s of progress (matches the detail hero's own
+     *  canResume threshold), and isn't within 60s of the end (finished). Rows
+     *  with an unknown duration (durationSec <= 0) are KEPT — the episode row
+     *  falls back to the catalogue runtime for the bar + remaining label. */
+    private fun episodeResumeOf(rows: List<ContinueWatchingItem>): Map<String, EpisodeResume> =
+        rows.filter { !it.upNext && isMidWatch(it.positionSec, it.durationSec) }
             .associate { it.id to EpisodeResume(it.positionSec, it.durationSec) }
+
+    /** Play's episode for series [seriesId]: its continue-watching row when it
+     *  has one, else from [next] (next-episode without `after`) and the saved
+     *  position of the episode that answer went from — fetched only here,
+     *  when the feed does not have the series. */
+    private suspend fun seriesPlayFor(
+        seriesId: String,
+        seasons: List<Season>,
+        continueWatching: List<ContinueWatchingItem>,
+        next: NextEpisodeResponse?,
+    ): SeriesPlayTarget? {
+        continueWatchingTarget(seriesId, continueWatching)?.let { return it }
+        val lastTouched = lastTouchedEpisodeId(next, seasons)?.let { id ->
+            LastTouched(id, runCatching { api.getProgress(id).positionSec }.getOrDefault(0))
+        }
+        return nextTarget(seasons, lastTouched, next?.next)
+    }
 
     // True once the first screen ON_RESUME after VM construction has been
     // consumed. init{} already runs a full load(), so that first (synthetic,
@@ -184,8 +215,9 @@ class DetailViewModel(
 
     /** Screen-level ON_RESUME hook (NavBackStackEntry lifecycle). Skips the
      *  very first resume after construction (init's load covers it), then
-     *  re-fetches the continue-watching feed on every later resume so the
-     *  episode progress bars aren't stale after play → BACK (web self-heals
+     *  re-fetches the continue-watching feed and the episode list on every
+     *  later resume so the episode progress bars, the watched checks and the
+     *  series' Play episode aren't stale after play → BACK (web self-heals
      *  via its query gen; TV mirrors its own Library shelf pattern).
      *  Best-effort: on failure we keep whatever's already on screen. */
     fun onScreenResumed() {
@@ -195,45 +227,59 @@ class DetailViewModel(
         }
         val ready = _state.value as? DetailUiState.Ready ?: return
         if (ready.item.kind != "series") return
+        val seriesId = ready.item.id
+        val wantsSeriesPlay = ready.focusEpisodeId == null
         viewModelScope.launch {
-            val fresh = runCatching { fetchEpisodeResume() }.getOrNull() ?: return@launch
+            val (continueWatching, seasons, next) = coroutineScope {
+                val cw = async { runCatching { api.continueWatching().items }.getOrNull() }
+                val eps = async { runCatching { api.seriesEpisodes(seriesId).seasons }.getOrNull() }
+                val nx = async {
+                    if (wantsSeriesPlay) runCatching { api.nextEpisode(seriesId) }.getOrNull() else null
+                }
+                Triple(cw.await(), eps.await(), nx.await())
+            }
+            val freshSeasons = seasons?.takeIf { it.isNotEmpty() }
+            val seriesPlay = if (wantsSeriesPlay && continueWatching != null) {
+                seriesPlayFor(seriesId, freshSeasons ?: ready.seasons, continueWatching, next)
+            } else null
             val current = _state.value as? DetailUiState.Ready ?: return@launch
-            _state.value = current.copy(episodeResume = fresh)
+            _state.value = current.copy(
+                seasons = freshSeasons ?: current.seasons,
+                episodeResume = continueWatching?.let(::episodeResumeOf) ?: current.episodeResume,
+                seriesPlay = seriesPlay ?: current.seriesPlay,
+            )
         }
     }
 
     private suspend fun prewarmPipeline() {
         runCatching {
-            val target = resolvePlayTarget()
+            val target = playTarget()
             val caps = CodecCaps.queryParam.ifEmpty { null }
             api.playInfo(target, caps = caps)
         }
     }
 
     /**
-     * Returns the catalogue id we should actually open the player on.
+     * The catalogue id the player opens on.
      *
      *  - Movies → the item itself (chino-stream has playable HLS for the id).
-     *  - Series → ask /v1/series/{id}/next-episode for the next-up episode;
-     *    fall back to the first episode in the loaded seasons; finally fall
-     *    back to the series id (will 404 in chino-stream — surfaces the
-     *    "no playable content" problem cleanly instead of silently doing
-     *    nothing).
+     *  - An episode entry → that episode.
+     *  - Series → [DetailUiState.Ready.seriesPlay], worked out on load: the
+     *    episode the viewer is in the middle of, else the next one. Without
+     *    one, the series id — it 404s in chino-stream, which surfaces the
+     *    "no playable content" problem cleanly instead of doing nothing.
      *
-     * Reason: series root ids don't have a master.m3u8; only episode ids do
-     * (web's DetailPage routes the same way). Calling Play on a series id
-     * used to 404 chino-stream and stall the player at black.
+     * Reason: series root ids don't have a master.m3u8; only episode ids do.
+     * Calling Play on a series id used to 404 chino-stream and stall the
+     * player at black.
      */
-    suspend fun resolvePlayTarget(): String {
+    fun playTarget(): String {
         val ready = _state.value as? DetailUiState.Ready ?: return itemId
         // Episode entry (we redirected to the parent series): Play the episode
         // the user navigated to, not the series' next-up.
         ready.focusEpisodeId?.let { return it }
         if (ready.item.kind != "series") return itemId
-        val next = runCatching { api.nextEpisode(ready.item.id).id }.getOrNull()
-        if (!next.isNullOrBlank()) return next
-        val firstEpisode = ready.seasons.firstOrNull()?.episodes?.firstOrNull()?.id
-        return firstEpisode ?: itemId
+        return ready.seriesPlay?.episodeId ?: itemId
     }
 
     /** Plain "+"-press: add the item to the DEFAULT list when it's in no list,

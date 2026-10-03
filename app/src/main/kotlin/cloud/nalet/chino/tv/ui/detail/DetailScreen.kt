@@ -134,23 +134,10 @@ fun DetailScreen(
     // when opened from the action-row caret, or one EPISODE id when opened
     // from an episode row's "+" affordance. BACK closes it.
     var listPickerTarget by remember { mutableStateOf<String?>(null) }
-    // resolving=true while resolvePlayTarget is in flight. Drives the Play
-    // CTA's "Loading…" label and gates re-clicks so the user can't queue
-    // multiple navigations during the ~50-500ms /next-episode round-trip.
-    var resolving by remember { mutableStateOf(false) }
-    val playResolved: (Boolean) -> Unit = { resume ->
-        if (!resolving) {
-            resolving = true
-            scope.launch {
-                try {
-                    val target = viewModel.resolvePlayTarget()
-                    onPlay(target, resume)
-                } finally {
-                    resolving = false
-                }
-            }
-        }
-    }
+    // The play target is worked out on load (a series' episode included), so
+    // Play navigates at once; launchSingleTop on the route absorbs a doubled
+    // DPAD_CENTER.
+    val play: (Boolean) -> Unit = { resume -> onPlay(viewModel.playTarget(), resume) }
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
@@ -159,8 +146,7 @@ fun DetailScreen(
                 s = s,
                 inWatchlist = viewModel.displayItemId in savedItems,
                 liked = viewModel.displayItemId in likes,
-                isResolvingPlay = resolving,
-                onPlay = playResolved,
+                onPlay = play,
                 onToggleWatchlist = { viewModel.toggleWatchlist(it) },
                 onOpenListPicker = { listPickerTarget = viewModel.displayItemId },
                 onToggleLike = { viewModel.toggleLike(it) },
@@ -195,7 +181,6 @@ private fun DetailContent(
     s: DetailUiState.Ready,
     inWatchlist: Boolean,
     liked: Boolean,
-    isResolvingPlay: Boolean,
     onPlay: (resume: Boolean) -> Unit,
     onToggleWatchlist: (Boolean) -> Unit,
     onOpenListPicker: () -> Unit,
@@ -209,7 +194,17 @@ private fun DetailContent(
     onPersonSelected: (String) -> Unit,
 ) {
     val backdropUrl = "${s.baseUrl}/v1/items/${s.item.id}/backdrop?stream=${s.streamToken}"
-    val canResume = s.resumeSec > 30
+    // A series opened as a series plays the episode the viewer is in (Resume
+    // S02E03) or the next one (Play S02E04); a movie or an episode entry
+    // resumes its own saved position.
+    val seriesPlay = s.seriesPlay?.takeIf { s.item.kind == "series" && s.focusEpisodeId == null }
+    val canResume = seriesPlay?.resumes ?: (s.resumeSec > 30)
+    val primaryLabel = when {
+        seriesPlay != null ->
+            listOfNotNull(if (seriesPlay.resumes) "Resume" else "Play", seriesPlay.code).joinToString(" ")
+        canResume -> "Resume ${formatHM(s.resumeSec)}"
+        else -> "Play"
+    }
     Box(modifier = Modifier.fillMaxSize().background(ChinoBg)) {
         // Backdrop: top 60% of the screen with a gradient that fades into the
         // page background. Matches chino-web DetailPage's aspect-[21/9] hero +
@@ -293,9 +288,8 @@ private fun DetailContent(
                 // title → meta → genres → actions → overview → cast.
                 DetailActions(
                     item = s.item,
+                    primaryLabel = primaryLabel,
                     canResume = canResume,
-                    resumeSec = s.resumeSec,
-                    isResolvingPlay = isResolvingPlay,
                     inWatchlist = inWatchlist,
                     liked = liked,
                     onPlay = onPlay,
@@ -358,9 +352,10 @@ private fun DetailContent(
 @Composable
 private fun DetailActions(
     item: Item,
+    /** "Play", "Resume 12:34", "Resume S02E03", "Play S02E04". */
+    primaryLabel: String,
+    /** The primary resumes a saved position — "Start over" is offered too. */
     canResume: Boolean,
-    resumeSec: Int,
-    isResolvingPlay: Boolean,
     inWatchlist: Boolean,
     liked: Boolean,
     onPlay: (resume: Boolean) -> Unit,
@@ -376,12 +371,10 @@ private fun DetailActions(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        val primaryLabel = when {
-            isResolvingPlay -> "Loading…"
-            canResume -> "Resume ${formatHM(resumeSec)}"
-            else -> "Play"
-        }
         Button(
+            // Without a position to resume (a series' next episode included)
+            // the player starts at 0:00 rather than at a finished episode's
+            // last saved second.
             onClick = { onPlay(canResume) },
             colors = ButtonDefaults.colors(
                 containerColor = MaterialTheme.colorScheme.primary,
@@ -396,9 +389,10 @@ private fun DetailActions(
             Text(text = primaryLabel, fontWeight = FontWeight.SemiBold)
         }
         // "Start over" — secondary CTA shown only when there's a saved position
-        // (so the primary reads "Resume"). Plays from the beginning via
-        // onPlay(false); the player distinguishes resume vs fromStart. Sits
-        // second in the D-pad order (Resume first, Start over next).
+        // (so the primary reads "Resume"; for a series, the episode it
+        // resumes). Plays from the beginning via onPlay(false); the player
+        // distinguishes resume vs fromStart. Sits second in the D-pad order
+        // (Resume first, Start over next).
         if (canResume) {
             Button(onClick = { onPlay(false) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))

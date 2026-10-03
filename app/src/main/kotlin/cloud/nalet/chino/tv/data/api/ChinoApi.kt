@@ -203,9 +203,16 @@ interface ChinoApi {
     @GET("v1/series/{id}/episodes")
     suspend fun seriesEpisodes(@Path("id") id: String): SeriesEpisodes
 
-    /** Picks the episode chino-api thinks should play next after `id`. */
+    /**
+     * The episode of series [id] after [after]; without [after], after the
+     * episode of the series the user last touched (its newest progress row),
+     * or the series' first episode when they touched none.
+     */
     @GET("v1/series/{id}/next-episode")
-    suspend fun nextEpisode(@Path("id") id: String): NextEpisode
+    suspend fun nextEpisode(
+        @Path("id") id: String,
+        @Query("after") after: String? = null,
+    ): NextEpisodeResponse
 
     /** Analyzer-detected segments (intro / credits / etc.) keyed by start/end ms. */
     @GET("v1/items/{id}/segments")
@@ -342,12 +349,21 @@ data class SeriesEpisodes(
     val seasons: List<Season> = emptyList(),
 )
 
+/**
+ * GET /v1/series/{id}/next-episode. The episode is wrapped in `next` — the
+ * client used to read an `id` at the top level, which is never there, so it
+ * always fell back to the first episode. chino-api answers one of:
+ *  - `{ next, anchor }` — the episode after `anchor`, the one it went from;
+ *  - `{ next: null, reason: "end_of_series" }` — the anchor was the last
+ *    episode (its id is left out);
+ *  - `{ next }` — no anchor: the user touched no episode, `next` is the
+ *    series' first (specials, season 0, sort first).
+ */
 @Serializable
-data class NextEpisode(
-    val id: String? = null,
-    val title: String? = null,
-    @SerialName("season_number") val seasonNumber: Int? = null,
-    @SerialName("episode_number") val episodeNumber: Int? = null,
+data class NextEpisodeResponse(
+    val next: Item? = null,
+    val anchor: String? = null,
+    val reason: String? = null,
 )
 
 @Serializable
@@ -523,6 +539,8 @@ data class ContinueWatchingItem(
     @SerialName("series_title") val seriesTitle: String? = null,
     @SerialName("season_number") val seasonNumber: Int? = null,
     @SerialName("episode_number") val episodeNumber: Int? = null,
+    /** The series of an episode row — what ties a row to a series' Play. */
+    @SerialName("parent_id") val parentId: String? = null,
     val type: String? = null,
     // The server embeds the full catalog item in each continue-watching row,
     // so `year` + `rating` are already in the JSON — parsed here so the card

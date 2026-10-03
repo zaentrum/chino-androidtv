@@ -347,10 +347,10 @@ class PlayerViewModel(
     }
 
     /**
-     * Resolves the next episode id. For an episode, asks chino-api for the
-     * next-episode after the parent series; for a series-level item, asks
-     * for the next-episode directly. Returns null for movies (no series to
-     * chain from) and when chino-api has nothing queued.
+     * Resolves the next episode id: chino-api's next-episode of the parent
+     * series after THIS episode (`?after=`, as chino-web's player asks — not
+     * the episode the user last touched, which can be another one). Returns
+     * null for movies (no series to chain from) and at the end of a series.
      *
      * Defensive on null parentSeriesId: if the current item is an episode
      * whose Episode record didn't carry parent_id, we ALSO try its series
@@ -361,7 +361,7 @@ class PlayerViewModel(
     suspend fun resolveNextEpisode(): String? {
         val ready = _state.value as? PlayerUiState.Ready ?: return null
         val lookupId = ready.parentSeriesId ?: itemId
-        val viaApi = runCatching { api.nextEpisode(lookupId).id }.getOrNull()
+        val viaApi = runCatching { api.nextEpisode(lookupId, after = itemId).next?.id }.getOrNull()
         if (!viaApi.isNullOrBlank()) return viaApi
         // Fallback: when /next-episode returns nothing (e.g. season ended),
         // fetch episodes for the parent series and pick the next-index
