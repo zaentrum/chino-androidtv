@@ -71,6 +71,8 @@ import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.data.streamArtworkUrl
+import cloud.nalet.chino.tv.ui.person.PersonPortrait
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 
@@ -236,6 +238,8 @@ private fun ResultsGrid(
             item(span = { GridItemSpan(maxLineSpan) }) {
                 PeopleSection(
                     people = s.people,
+                    baseUrl = s.baseUrl,
+                    streamToken = s.streamToken,
                     onPersonSelected = onPersonSelected,
                     firstChipFocus = firstCardFocus,
                 )
@@ -274,12 +278,14 @@ private fun ResultsGrid(
 }
 
 /** Search "Cast & crew" people row — server-ranked matching people above the
- *  title grid. Each entry is a focusable chip: an initials-avatar placeholder
- *  (no person photos exist), the name, and "· N titles". OK opens the Person
+ *  title grid. Each entry is a focusable chip: the person's portrait (their
+ *  initials without one), the name, and "· N titles". OK opens the Person
  *  surface. Fixed-width cards in a LazyRow so DPAD focus stays sane. */
 @Composable
 private fun PeopleSection(
     people: List<cloud.nalet.chino.tv.data.api.Person>,
+    baseUrl: String,
+    streamToken: String,
     onPersonSelected: (String) -> Unit,
     firstChipFocus: FocusRequester? = null,
 ) {
@@ -304,6 +310,10 @@ private fun PeopleSection(
             ) { idx, person ->
                 PersonChip(
                     person = person,
+                    // The portrait route loads with the stream token, as posters do.
+                    portraitUrl = person.profileUrl
+                        ?.takeIf { person.hasProfile }
+                        ?.let { streamArtworkUrl(baseUrl, it, streamToken) },
                     onClick = { onPersonSelected(person.id) },
                     focusRequester = firstChipFocus.takeIf { idx == 0 },
                 )
@@ -312,10 +322,11 @@ private fun PeopleSection(
     }
 }
 
-/** One focusable person chip: initials avatar + name + "· N titles". */
+/** One focusable person chip: portrait (or initials) + name + "· N titles". */
 @Composable
 private fun PersonChip(
     person: cloud.nalet.chino.tv.data.api.Person,
+    portraitUrl: String?,
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
 ) {
@@ -345,20 +356,12 @@ private fun PersonChip(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .size(48.dp)
-                .clip(RectangleShape)
-                .background(ChinoBg),
-            contentAlignment = Alignment.Center,
-        ) {
-            Text(
-                text = peopleInitialsOf(person.name),
-                color = ChinoText,
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 16.sp,
-            )
-        }
+        PersonPortrait(
+            name = person.name,
+            url = portraitUrl,
+            initialsSize = 16.sp,
+            modifier = Modifier.size(48.dp),
+        )
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = person.name,
@@ -377,15 +380,6 @@ private fun PersonChip(
             )
         }
     }
-}
-
-/** Up to two initials from a person's name, e.g. "Greta Gerwig" -> "GG". */
-private fun peopleInitialsOf(name: String): String {
-    val parts = name.trim().split(Regex("\\s+")).filter { it.isNotBlank() }
-    if (parts.isEmpty()) return "?"
-    val first = parts.first().firstOrNull()?.uppercaseChar()?.toString().orEmpty()
-    val last = if (parts.size > 1) parts.last().firstOrNull()?.uppercaseChar()?.toString().orEmpty() else ""
-    return (first + last).ifBlank { "?" }
 }
 
 @Composable
