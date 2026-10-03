@@ -91,6 +91,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default also installs the legacy 'tools' package, which
+          # the SDK repository no longer offers; the build needs platform-tools
+          # only (Gradle fetches the platform and build tools it declares).
+          packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
@@ -146,6 +151,11 @@ jobs:
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # The action's default also installs the legacy 'tools' package, which
+          # the SDK repository no longer offers; the build needs platform-tools
+          # only (Gradle fetches the platform and build tools it declares).
+          packages: platform-tools
 
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
