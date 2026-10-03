@@ -51,25 +51,23 @@ You'll need:
 - Android SDK with platform 35 + build-tools 35.x
 - Android Studio (Ladybug or newer) or the Gradle CLI
 
-There are two product flavors (`beta` and `prod`) that install side by side, and
-debug builds get an extra `.debug` suffix so a local build never overwrites a
-release you installed.
+There is one app id; debug builds get an extra `.debug` suffix so a local build
+never overwrites a release you installed.
 
 ```bash
 # Day-to-day development build:
-./gradlew :app:assembleBetaDebug
-# APK: app/build/outputs/apk/beta/debug/app-beta-debug.apk
+./gradlew :app:assembleDebug
+# APK: app/build/outputs/apk/debug/app-debug.apk
 
-# Prod-flavor debug build:
-./gradlew :app:assembleProdDebug
-# APK: app/build/outputs/apk/prod/debug/app-prod-debug.apk
+# JVM unit tests (paging, credits, people, series resume, the API contract):
+./gradlew :app:testDebugUnitTest
 ```
 
 Install on a real Android TV device (or an "Android TV" emulator AVD):
 
 ```bash
 adb connect <tv-ip>:5555
-adb install -r app/build/outputs/apk/beta/debug/app-beta-debug.apk
+adb install -r app/build/outputs/apk/debug/app-debug.apk
 ```
 
 ### Optional build overrides
