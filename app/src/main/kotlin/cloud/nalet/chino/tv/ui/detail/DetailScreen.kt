@@ -1256,7 +1256,10 @@ private fun CastCrewSection(
             contentPadding = PaddingValues(end = 32.dp, top = 4.dp, bottom = 4.dp),
             modifier = Modifier.fillMaxWidth(),
         ) {
-            items(ordered, key = { "${it.role}:${it.name}" }) { member ->
+            // The catalog credits a person once per role, so role + person id
+            // keys a card uniquely; a name does not (two actors can share one,
+            // and a duplicate key crashes the row).
+            items(ordered, key = { "${it.role}:${it.personId ?: it.name}" }) { member ->
                 CastCard(
                     member = member,
                     onClick = member.personId?.let { id -> { onPersonSelected(id) } },
