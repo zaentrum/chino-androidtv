@@ -71,16 +71,30 @@ data class SegSummary(
     @SerialName("has_recap") val hasRecap: Boolean = false,
 )
 
+/** One credit, as chino-api passes katalog-api's cast through: role by role
+ *  (actor, creator, director, writer, producer, composer, cinematographer,
+ *  editor, then any other role), billing order within a role, at most 20
+ *  actors and 10 people of every other role. Optional fields are omitted
+ *  when unknown. ui/detail/Credits.kt groups them for the detail page. */
 @Serializable
 data class CastMember(
     val name: String,
-    /** "director", "actor", or null. */
+    /** An open role token ("actor", "director", "sound-designer"); blank
+     *  or absent means an actor (catalogs from before roles were sent). */
     val role: String? = null,
     /** Stable katalog person id. Non-null once chino-api enriches cast with
      *  people rows; when present the Detail cast chip becomes a tap target into
      *  the Person surface. Older payloads (or unmatched names) leave it null —
      *  the chip then stays display-only. */
     @SerialName("person_id") val personId: String? = null,
+    /** The job within the role ("Screenplay"). */
+    val job: String? = null,
+    /** The part an actor plays. */
+    val character: String? = null,
+    /** Billing order within the role, 0 first. */
+    val order: Int? = null,
+    /** How many episodes of a series the credit covers. */
+    @SerialName("episode_count") val episodeCount: Int? = null,
 )
 
 @Serializable

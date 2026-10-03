@@ -80,6 +80,7 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.api.Season
+import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.Trailer
 import coil.compose.AsyncImage
@@ -310,13 +311,12 @@ private fun DetailContent(
                 FooterGrid(s.item)
             }
             }
-            // Cast & crew — directors first, then actors. A horizontal,
-            // DPAD-focusable shelf of avatar+name+role cards so the credits are
-            // remote-navigable (web + mobile show the same people as a static
-            // text line; on a 10-ft TV a focusable row reads better and matches
-            // the rest of the app's shelf interaction model). Hidden when
-            // chino-api hasn't populated cast for the item.
-            CastCrewSection(cast = s.item.cast, onPersonSelected = onPersonSelected)
+            // Credits — "Starring" (the actors in billing order, with their
+            // characters), then the crew role by role (Created by, Director,
+            // Writers, Music, …), as chino-web's detail page lists them. Every
+            // name is a DPAD focus target so the credits are remote-navigable;
+            // hidden when chino-api hasn't populated cast for the item.
+            CreditsSection(cast = s.item.cast, onPersonSelected = onPersonSelected)
             // Episodes block — only rendered for series with at least one
             // season. Sits below the action row inside the scrollable column
             // so the user can DPAD_DOWN past the buttons into the list.
@@ -1217,89 +1217,78 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
     }
 }
 
-/** Cast & crew shelf — directors first (web shows directors above actors),
- *  then actors. Each entry is a focusable card: an initials avatar circle
- *  (chino-api carries no profile photo URL, web/mobile show none either), the
- *  name, and the role. When chino-api carries a person_id for the entry the
- *  card becomes a TAP TARGET — OK opens the Person / Filmography surface;
- *  entries without a person_id stay display-only but still hold focus so the
- *  row stays browsable with the remote. */
+/**
+ * The title's credits, as chino-web's detail page lists them (groupCredits):
+ * "Starring" — the actors in billing order, each card with the character
+ * beneath the name — then the crew, one line per role ("Created by",
+ * "Director", "Writers", "Music", …), the label beside a row of names. On a
+ * 10-ft TV every name is its own DPAD focus target: DOWN walks from the
+ * Starring row through the crew lines, LEFT/RIGHT along one. A credit with a
+ * person id opens the Person / Filmography surface on OK; one without stays
+ * display-only but still holds focus, so a row stays browsable with the
+ * remote. The cast carries no portrait flag (only a person does), so the
+ * cards show initials, as the web shows names only.
+ */
 @Composable
-private fun CastCrewSection(
-    cast: List<cloud.nalet.chino.tv.data.model.CastMember>,
+private fun CreditsSection(
+    cast: List<CastMember>,
     onPersonSelected: (String) -> Unit,
 ) {
-    val directors = cast.filter { it.role.equals("director", ignoreCase = true) }
-    val actors = cast.filter { it.role == null || it.role.equals("actor", ignoreCase = true) }
-    // Directors first so the head of the row is the credited director(s); then
-    // actors. Preserves chino-api's ordering within each group.
-    val ordered = directors + actors
-    if (ordered.isEmpty()) return
+    val credits = remember(cast) { groupCredits(cast) }
+    if (credits.actors.isEmpty() && credits.crew.isEmpty()) return
     Column(
         modifier = Modifier.padding(top = 40.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(
-            text = "Cast & crew",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.SemiBold,
-            color = Color.White,
-        )
-        LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(end = 32.dp, top = 4.dp, bottom = 4.dp),
-            modifier = Modifier.fillMaxWidth(),
-        ) {
-            // The catalog credits a person once per role, so role + person id
-            // keys a card uniquely; a name does not (two actors can share one,
-            // and a duplicate key crashes the row).
-            items(ordered, key = { "${it.role}:${it.personId ?: it.name}" }) { member ->
-                CastCard(
-                    member = member,
-                    onClick = member.personId?.let { id -> { onPersonSelected(id) } },
-                )
+        if (credits.actors.isNotEmpty()) {
+            Text(
+                text = "Starring",
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White,
+            )
+            LazyRow(
+                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                contentPadding = PaddingValues(end = 32.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                // groupCredits lists a person once per role, so role + person
+                // id (else name) keys a card uniquely; a name alone does not
+                // (two actors can share one, and a duplicate key crashes the row).
+                items(credits.actors, key = ::creditKey) { actor ->
+                    ActorCard(
+                        actor = actor,
+                        onClick = actor.personId?.let { id -> { onPersonSelected(id) } },
+                    )
+                }
+            }
+        }
+        if (credits.crew.isNotEmpty()) {
+            Column(
+                modifier = Modifier.padding(top = 8.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp),
+            ) {
+                credits.crew.forEach { group -> CrewLine(group, onPersonSelected) }
             }
         }
     }
 }
 
+/** An actor: initials, name, and the character beneath it ("Old Thom /
+ *  Narrator" when the catalog credits two). */
 @Composable
-private fun CastCard(
-    member: cloud.nalet.chino.tv.data.model.CastMember,
-    onClick: (() -> Unit)? = null,
-) {
+private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
     var focused by remember { mutableStateOf(false) }
-    val roleLabel = when {
-        member.role.equals("director", ignoreCase = true) -> "Director"
-        member.role.equals("actor", ignoreCase = true) -> "Actor"
-        member.role.isNullOrBlank() -> "Cast"
-        else -> member.role.replaceFirstChar { it.uppercase() }
-    }
     Column(
         modifier = Modifier
-            .width(120.dp)
+            .width(128.dp)
             .clip(RectangleShape)
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
-            // OK opens the Person surface, but only when chino-api gave us a
-            // person_id (onClick non-null). onKeyEvent (not clickable) so a
-            // display-only chip with no target simply doesn't react to CENTER.
-            .then(
-                if (onClick != null) {
-                    Modifier.onKeyEvent { e ->
-                        if (e.type == KeyEventType.KeyDown &&
-                            (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                                e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)
-                        ) {
-                            onClick(); true
-                        } else false
-                    }
-                } else Modifier,
-            )
             .background(if (focused) ChinoBorderHi else Color.Transparent)
+            .onFocusChanged { focused = it.isFocused }
+            .creditTarget(onClick)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Box(
             modifier = Modifier
@@ -1312,14 +1301,14 @@ private fun CastCard(
             contentAlignment = Alignment.Center,
         ) {
             Text(
-                text = initialsOf(member.name),
+                text = initialsOf(actor.name),
                 color = ChinoText,
                 fontWeight = FontWeight.SemiBold,
                 fontSize = 22.sp,
             )
         }
         Text(
-            text = member.name,
+            text = actor.name,
             color = Color.White,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
@@ -1327,15 +1316,77 @@ private fun CastCard(
             overflow = TextOverflow.Ellipsis,
             textAlign = androidx.compose.ui.text.style.TextAlign.Center,
         )
+        actor.character?.takeIf { it.isNotBlank() }?.let { character ->
+            Text(
+                text = character,
+                color = ChinoMuted,
+                fontSize = 11.sp,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            )
+        }
+    }
+}
+
+/** One crew role: its label ("Writers") beside a scrollable row of names. */
+@Composable
+private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
+    Row(verticalAlignment = Alignment.CenterVertically) {
         Text(
-            text = roleLabel,
+            text = group.label,
             color = ChinoMuted,
-            fontSize = 11.sp,
+            fontSize = 14.sp,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            modifier = Modifier.width(160.dp),
+        )
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            contentPadding = PaddingValues(end = 32.dp, top = 2.dp, bottom = 2.dp),
+            modifier = Modifier.weight(1f),
+        ) {
+            items(group.people, key = ::creditKey) { person ->
+                CrewName(
+                    name = person.name,
+                    onClick = person.personId?.let { id -> { onPersonSelected(id) } },
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun CrewName(name: String, onClick: (() -> Unit)?) {
+    var focused by remember { mutableStateOf(false) }
+    Box(
+        modifier = Modifier
+            .clip(RectangleShape)
+            .background(if (focused) ChinoBorderHi else ChinoSurface)
+            .border(
+                width = if (focused) 2.dp else 1.dp,
+                color = if (focused) ChinoAccent else ChinoBorder,
+                shape = RectangleShape,
+            )
+            .onFocusChanged { focused = it.isFocused }
+            .creditTarget(onClick)
+            .padding(horizontal = 12.dp, vertical = 6.dp),
+    ) {
+        Text(
+            text = name,
+            color = if (focused) Color.White else ChinoText,
+            fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
         )
     }
 }
+
+/** A credit's single focus target: clickable (OK fires once, on key-up) when
+ *  it opens a person, else merely focusable, so a name without a person id
+ *  holds focus without reacting to OK. */
+private fun Modifier.creditTarget(onClick: (() -> Unit)?): Modifier =
+    if (onClick != null) clickable(onClick = onClick) else focusable()
 
 /** Up to two initials from a person's name, e.g. "Greta Gerwig" -> "GG". */
 private fun initialsOf(name: String): String {
