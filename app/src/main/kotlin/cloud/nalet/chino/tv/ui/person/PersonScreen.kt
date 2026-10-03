@@ -13,6 +13,8 @@ import androidx.compose.foundation.gestures.animateScrollBy
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.aspectRatio
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -226,11 +229,7 @@ private fun PersonHeader(
                 )
                 Text(text = creditLabel(s.credits), color = ChinoMuted, fontSize = 16.sp)
             }
-            if (s.facts.isNotEmpty()) {
-                Row(horizontalArrangement = Arrangement.spacedBy(40.dp)) {
-                    s.facts.forEach { fact -> FactColumn(fact) }
-                }
-            }
+            if (s.facts.isNotEmpty()) FactsRow(s.facts)
             s.biography?.let { text ->
                 Biography(text = text, readMoreFocus = readMoreFocus, onReadMore = onReadBiography)
             }
@@ -238,10 +237,26 @@ private fun PersonHeader(
     }
 }
 
+/** The facts side by side, wrapping onto a second line rather than running
+ *  past the header when a birthplace is long. Display-only: no focus. */
+@OptIn(ExperimentalLayoutApi::class)
+@Composable
+private fun FactsRow(facts: List<PersonFact>) {
+    FlowRow(
+        horizontalArrangement = Arrangement.spacedBy(40.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+    ) {
+        facts.forEach { fact -> FactColumn(fact) }
+    }
+}
+
 /** One fact: its label over its lines ("Born" over the date and the place). */
 @Composable
 private fun FactColumn(fact: PersonFact) {
-    Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+    Column(
+        modifier = Modifier.widthIn(max = 320.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
         Text(text = fact.label, color = ChinoMuted, fontSize = 14.sp)
         fact.lines.forEach { line ->
             Text(text = line, color = ChinoText, fontSize = 16.sp, maxLines = 2, overflow = TextOverflow.Ellipsis)
