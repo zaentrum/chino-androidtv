@@ -6,9 +6,24 @@ import android.media.MediaFormat
 import android.os.Build
 
 /**
- * Comma-separated codec-token list chino-stream's ParseCaps consumes
- * (`avc` / `hvc` / `av1`). Computed once per process; the hardware
- * MediaCodec list doesn't change at runtime.
+ * Comma-separated codec-token list chino-stream's ParseCaps consumes —
+ * video `avc` / `hvc` / `av1`, audio `aac` / `mp3` / `opus` / `ac3` /
+ * `eac3`. Computed once per process; the MediaCodec list doesn't change at
+ * runtime.
+ *
+ * Audio tokens matter as much as video ones: once a client sends caps,
+ * ParseCaps starts from an EMPTY audio set, so a caps string with video
+ * tokens only made every source's audio "not in the client's decoder set".
+ * DecideWith then never chose passthrough — every non-packaged title went
+ * through a remux that re-encoded its audio to stereo AAC, even AAC the TV
+ * plays as is. Each audio token is advertised when MediaCodecList has a
+ * decoder for it: AAC, MP3 and Opus come with the platform; AC-3 / E-AC-3
+ * only where the device ships a Dolby decoder (most TVs), and passthrough to
+ * an HDMI receiver isn't counted — without a decoder the server's stereo
+ * AAC is the safe answer. ExoPlayer reads the real codec from the copied
+ * segments (the copy master always says mp4a.40.2) and opens the matching
+ * decoder. `vorbis` is not sent: Vorbis copied into fragmented MP4 is
+ * non-standard and untried on TV, while the remux to AAC always plays.
  *
  * Each VIDEO token may carry an optional `:maxHeight` suffix = the
  * largest frame HEIGHT a HARDWARE decoder advertises for that codec
@@ -83,12 +98,30 @@ object CodecCaps {
             return if (h != null) "$name:$h" else name
         }
 
+        // Any decoder (hardware or software) for an audio MIME: audio decode
+        // is cheap enough that a software decoder plays it fine.
+        fun hasAudioDecoder(mime: String): Boolean = infos.any { info ->
+            !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
+        }
+
         val out = mutableListOf<String>()
         if (has("video/avc")) out += token("avc", "video/avc")
         if (has("video/hevc")) out += token("hvc", "video/hevc")
         if (has("video/av01")) out += token("av1", "video/av01")
+        for ((name, mime) in AUDIO_TOKENS) {
+            if (hasAudioDecoder(mime)) out += name
+        }
         out
     }
+
+    /** ParseCaps audio token → the decoder MIME type that backs it. */
+    private val AUDIO_TOKENS = listOf(
+        "aac" to "audio/mp4a-latm",
+        "mp3" to "audio/mpeg",
+        "opus" to "audio/opus",
+        "ac3" to "audio/ac3",
+        "eac3" to "audio/eac3",
+    )
 
     /** Comma-joined for the ?caps= query parameter; empty string when nothing supported. */
     val queryParam: String get() = tokens.joinToString(",")
