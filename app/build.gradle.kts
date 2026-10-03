@@ -183,4 +183,8 @@ dependencies {
 
     implementation(libs.zxing.core)
     implementation(libs.androidx.security.crypto)
+
+    // JVM unit tests for the pure logic (paging, credits, people, series
+    // resume): no Android framework in them, so no Robolectric.
+    testImplementation(libs.junit)
 }

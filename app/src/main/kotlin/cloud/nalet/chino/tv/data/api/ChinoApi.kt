@@ -26,9 +26,15 @@ import retrofit2.http.Streaming
  * if the API gets codegen later, drop this interface for the generated one.
  */
 interface ChinoApi {
+    /**
+     * One page of a catalog list. chino-api pages by `offset` + `limit`
+     * (default 50, at most 200) and answers `{ items }` with no cursor or
+     * total: a page shorter than `limit` is the last.
+     * [cloud.nalet.chino.tv.data.OffsetPager] walks it.
+     */
     @GET("v1/items")
     suspend fun listItems(
-        @Query("page_token") pageToken: String? = null,
+        @Query("offset") offset: Int? = null,
         @Query("limit") limit: Int? = null,
         @Query("q") q: String? = null,
         @Query("type") type: String? = null,

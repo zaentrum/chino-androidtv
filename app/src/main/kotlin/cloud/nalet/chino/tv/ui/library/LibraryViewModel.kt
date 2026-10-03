@@ -39,9 +39,6 @@ sealed interface LibraryUiState {
         val continueWatching: List<cloud.nalet.chino.tv.data.api.ContinueWatchingItem>,
         val baseUrl: String,
         val streamToken: String,
-        val moviesHasMore: Boolean,
-        val seriesHasMore: Boolean,
-        val loadingMore: Boolean,
         val genres: List<String>,
         val filter: BrowseFilter,
         // Curated rotation pool for the hero banner — top-rated items, picked
@@ -75,9 +72,6 @@ class LibraryViewModel(
     private val _homeEntryNonce = MutableStateFlow(0)
     val homeEntryNonce: StateFlow<Int> = _homeEntryNonce.asStateFlow()
 
-    private var moviesNextToken: String? = null
-    private var seriesNextToken: String? = null
-    private var loadingMore = false
     private var cachedGenres: List<String> = emptyList()
     private var cachedHeroPool: List<Item> = emptyList()
     private var cachedTopRated: List<Item> = emptyList()
@@ -109,8 +103,6 @@ class LibraryViewModel(
 
     fun refresh() {
         _state.value = LibraryUiState.Loading
-        moviesNextToken = null
-        seriesNextToken = null
         viewModelScope.launch {
             _state.value = try {
                 // Fan out: fetch movies + series pages in parallel when the user
@@ -152,8 +144,6 @@ class LibraryViewModel(
                     }
                     mDef.await() to sDef.await()
                 }
-                moviesNextToken = moviesPage.nextPageToken
-                seriesNextToken = seriesPage.nextPageToken
                 // continue-watching is best-effort — empty list on failure (chino-api
                 // can return an empty body if the table has no rows for this user).
                 val cw = runCatching { api.continueWatching().items }.getOrDefault(emptyList())
@@ -220,9 +210,6 @@ class LibraryViewModel(
                     continueWatching = cw,
                     baseUrl = baseUrl,
                     streamToken = token,
-                    moviesHasMore = moviesPage.nextPageToken != null,
-                    seriesHasMore = seriesPage.nextPageToken != null,
-                    loadingMore = false,
                     genres = cachedGenres,
                     filter = currentFilter,
                     heroPool = poolFallback,
@@ -377,58 +364,14 @@ class LibraryViewModel(
         refresh()
     }
 
-    /** Called by the movies shelf when focus gets within a screen of the end. */
-    fun loadMoreMovies() = loadMore(isSeries = false)
-
-    /** Called by the series shelf when focus gets within a screen of the end. */
-    fun loadMoreSeries() = loadMore(isSeries = true)
-
-    private fun loadMore(isSeries: Boolean) {
-        if (loadingMore) return
-        val token = (if (isSeries) seriesNextToken else moviesNextToken) ?: return
-        val ready = _state.value as? LibraryUiState.Ready ?: return
-        loadingMore = true
-        _state.value = ready.copy(loadingMore = true)
-        viewModelScope.launch {
-            try {
-                val page = api.listItems(
-                    pageToken = token,
-                    limit = LIBRARY_PAGE_SIZE,
-                    genre = currentFilter.genre,
-                    yearMin = currentFilter.yearMin,
-                    yearMax = currentFilter.yearMax,
-                    ratingMin = currentFilter.ratingMin,
-                    type = if (isSeries) "series" else "movie",
-                    sort = "newest",
-                )
-                if (isSeries) seriesNextToken = page.nextPageToken
-                else moviesNextToken = page.nextPageToken
-                val current = _state.value as? LibraryUiState.Ready ?: return@launch
-                _state.value = if (isSeries) current.copy(
-                    series = current.series + page.items,
-                    seriesHasMore = page.nextPageToken != null,
-                    loadingMore = false,
-                ) else current.copy(
-                    movies = current.movies + page.items,
-                    moviesHasMore = page.nextPageToken != null,
-                    loadingMore = false,
-                )
-            } catch (_: Exception) {
-                val current = _state.value as? LibraryUiState.Ready ?: return@launch
-                _state.value = if (isSeries) current.copy(loadingMore = false, seriesHasMore = false)
-                    else current.copy(loadingMore = false, moviesHasMore = false)
-            } finally {
-                loadingMore = false
-            }
-        }
-    }
-
     companion object {
         // Home rails are capped at HOME_RAIL_SIZE per #150 — 20 items + a
         // "See All" tile that jumps to the full Movies/Series overview. The
         // previous 60-per-page + infinite onLoadMore paging made each shelf
         // grow without end as the user D-padded right, which read as an
-        // infinitely-looping rail. Full paging now lives on the BrowseScreen.
+        // infinitely-looping rail. Full paging lives on the BrowseScreen; the
+        // rails ask for unwatched=true, where chino-api backfills past the
+        // finished titles, so an offset could not page them anyway.
         private const val HOME_RAIL_SIZE = 20
         private const val LIBRARY_PAGE_SIZE = HOME_RAIL_SIZE
         // 8-item hero pool (mobile parity) — small enough that the hero

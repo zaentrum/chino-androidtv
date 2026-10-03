@@ -90,8 +90,9 @@ data class Trailer(
     val title: String? = null,
 )
 
+/** A list response: GET /v1/items, /v1/items/{id}/similar, /v1/me/watched.
+ *  There is no cursor in it — chino-api pages by offset (see OffsetPager). */
 @Serializable
 data class ItemsPage(
     val items: List<Item> = emptyList(),
-    @SerialName("next_page_token") val nextPageToken: String? = null,
 )

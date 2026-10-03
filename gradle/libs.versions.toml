@@ -19,6 +19,7 @@ media3 = "1.5.1"
 zxing = "3.5.3"
 securityCrypto = "1.1.0-alpha06"
 lucide = "2.2.1"
+junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -57,6 +58,8 @@ media3-database = { module = "androidx.media3:media3-database", version.ref = "m
 zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
+
+junit = { module = "junit:junit", version.ref = "junit" }
 
 # Lucide icons (Android variant). Matches chino-web's lucide-react family
 # glyph-for-glyph (House, Film, Tv, Settings, Search, Bell, User, Play,

@@ -4,12 +4,15 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
+import cloud.nalet.chino.tv.data.OffsetPager
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -62,7 +65,9 @@ sealed interface BrowseUiState {
 /**
  * Dedicated Movies / Shows browse page backing model. Paged listItems for a
  * single [type] with genre / decade / rating / sort filters, matching the
- * chino-mobile BrowseScreen.
+ * chino-mobile BrowseScreen. Pages by offset through [OffsetPager]; a filter
+ * change starts a new pager and cancels the load still running for the old
+ * filters, so a late page never lands in the new grid.
  */
 class BrowseViewModel(
     private val api: ChinoApi,
@@ -81,9 +86,10 @@ class BrowseViewModel(
 
     private var filters = BrowseFilters()
     private var genres: List<String> = emptyList()
-    private var nextToken: String? = null
+    private var pager: OffsetPager<Item>? = null
+    /** The first-page or next-page load in flight, if any. */
+    private var loadJob: Job? = null
     private var token: String = ""
-    private var loadingMore = false
 
     init {
         telemetry.event("screen_view", extra = mapOf("screen" to "browse", "type" to type))
@@ -104,33 +110,45 @@ class BrowseViewModel(
     }
 
     private fun reload(f: BrowseFilters) {
+        loadJob?.cancel()
         _state.value = BrowseUiState.Loading
-        nextToken = null
-        viewModelScope.launch {
+        val p = pagerFor(f)
+        pager = p
+        loadJob = viewModelScope.launch {
             try {
-                val page = api.listItems(
-                    limit = PAGE_SIZE,
-                    type = type,
-                    genre = f.genre,
-                    yearMin = f.decade?.min,
-                    yearMax = f.decade?.max,
-                    ratingMin = f.ratingMin,
-                    sort = f.sort,
-                )
-                nextToken = page.nextPageToken
+                val items = p.next()
                 _state.value = BrowseUiState.Ready(
-                    items = page.items,
+                    items = items,
                     filters = f,
                     genres = genres,
                     baseUrl = baseUrl,
                     streamToken = token,
                     loadingMore = false,
-                    hasMore = page.nextPageToken != null,
+                    hasMore = p.hasMore,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.value = BrowseUiState.Error(e.message ?: e::class.java.simpleName)
             }
         }
+    }
+
+    /** A pager over this page's type with [f]'s filters applied. */
+    private fun pagerFor(f: BrowseFilters) = OffsetPager(
+        pageSize = PAGE_SIZE,
+        keyOf = Item::id,
+    ) { offset, limit ->
+        api.listItems(
+            offset = offset.takeIf { it > 0 },
+            limit = limit,
+            type = type,
+            genre = f.genre,
+            yearMin = f.decade?.min,
+            yearMax = f.decade?.max,
+            ratingMin = f.ratingMin,
+            sort = f.sort,
+        ).items
     }
 
     /** Card-action watched toggle (web parity: useWatchedToggle on the card
@@ -158,35 +176,26 @@ class BrowseViewModel(
     }
 
     fun loadMore() {
-        if (loadingMore) return
-        val tk = nextToken ?: return
+        val p = pager ?: return
+        if (loadJob?.isActive == true || !p.hasMore) return
         val current = _state.value as? BrowseUiState.Ready ?: return
-        loadingMore = true
         _state.value = current.copy(loadingMore = true)
-        viewModelScope.launch {
+        loadJob = viewModelScope.launch {
             try {
-                val page = api.listItems(
-                    pageToken = tk,
-                    limit = PAGE_SIZE,
-                    type = type,
-                    genre = filters.genre,
-                    yearMin = filters.decade?.min,
-                    yearMax = filters.decade?.max,
-                    ratingMin = filters.ratingMin,
-                    sort = filters.sort,
-                )
-                nextToken = page.nextPageToken
+                val more = p.next()
                 val now = _state.value as? BrowseUiState.Ready ?: return@launch
+                // Appended to what is on screen, not rebuilt from the pager,
+                // so a watched toggle made meanwhile keeps its badge.
                 _state.value = now.copy(
-                    items = now.items + page.items,
-                    hasMore = page.nextPageToken != null,
+                    items = now.items + more,
+                    hasMore = p.hasMore,
                     loadingMore = false,
                 )
+            } catch (e: CancellationException) {
+                throw e
             } catch (_: Exception) {
                 val now = _state.value as? BrowseUiState.Ready ?: return@launch
                 _state.value = now.copy(loadingMore = false, hasMore = false)
-            } finally {
-                loadingMore = false
             }
         }
     }
