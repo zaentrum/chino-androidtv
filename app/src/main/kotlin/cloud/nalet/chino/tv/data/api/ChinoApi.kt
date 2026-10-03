@@ -12,6 +12,7 @@ import okhttp3.RequestBody.Companion.toRequestBody
 import retrofit2.http.Body
 import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.Header
 import retrofit2.http.Multipart
 import retrofit2.http.PATCH
 import retrofit2.http.POST
@@ -73,15 +74,18 @@ interface ChinoApi {
     ): PeopleResponse
 
     /**
-     * A person's filmography — header (name + credit count) plus the standard
-     * Item objects they're credited on (each carries poster_url/backdrop_url/
-     * watched_at, so the existing poster card renders them unchanged). 404 when
-     * the id is unknown. Reached from the Search people row + tappable cast chips.
+     * A person: what the catalog knows about them (portrait flag, birth and
+     * death, birthplace, known for, biography) and their filmography — the
+     * standard Item objects they're credited on, each with their roles on it.
+     * The biography comes in the first of [acceptLanguage]'s languages the
+     * catalog has it in, else English, else any. 404 when the id is unknown.
+     * Reached from the Search people row + tappable cast chips.
      */
     @GET("v1/people/{id}")
     suspend fun getPerson(
         @Path("id") id: String,
         @Query("limit") limit: Int? = null,
+        @Header("Accept-Language") acceptLanguage: String? = null,
     ): PersonDetail
 
     @GET("v1/me")
@@ -466,13 +470,17 @@ data class MembershipsResponse(
 data class GenresResponse(val genres: List<String> = emptyList())
 
 /** A person row in the Search "Cast & crew" results. `credits` is the count of
- *  titles they're credited on (rendered "· N titles"). No profile photo exists,
- *  so the UI shows an initials-avatar placeholder. */
+ *  titles they're credited on (rendered "· N titles"), left out when 0.
+ *  `profile_url` — chino-api's portrait route, set only when `has_profile` —
+ *  loads with the stream token, as posters do; without one the UI shows an
+ *  initials avatar. */
 @Serializable
 data class Person(
     val id: String,
     val name: String,
     val credits: Int = 0,
+    @SerialName("has_profile") val hasProfile: Boolean = false,
+    @SerialName("profile_url") val profileUrl: String? = null,
 )
 
 @Serializable
@@ -481,12 +489,25 @@ data class PeopleResponse(
     val total: Int = 0,
 )
 
-/** Person surface payload: header (name + credit count) + the standard catalog
- *  Items they're credited on, rendered with the existing poster card. */
+/** Person surface payload: the person, what the catalog knows about them —
+ *  each field omitted when unknown, dates YYYY-MM-DD — and the standard
+ *  catalog Items they're credited on (each with its `roles`), rendered with
+ *  the existing poster card. */
 @Serializable
 data class PersonDetail(
     val id: String,
     val name: String,
+    @SerialName("has_profile") val hasProfile: Boolean = false,
+    /** /api/v1/people/{id}/profile, set only when [hasProfile]. */
+    @SerialName("profile_url") val profileUrl: String? = null,
+    @SerialName("birth_date") val birthDate: String? = null,
+    @SerialName("death_date") val deathDate: String? = null,
+    val birthplace: String? = null,
+    /** "Acting", "Directing", "Writing", … */
+    @SerialName("known_for_department") val knownForDepartment: String? = null,
+    val biography: String? = null,
+    /** The biography's language, a primary subtag ("en"). */
+    @SerialName("biography_lang") val biographyLang: String? = null,
     val items: List<Item> = emptyList(),
 )
 

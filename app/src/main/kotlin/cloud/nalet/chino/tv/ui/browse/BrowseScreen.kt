@@ -291,6 +291,10 @@ internal fun PosterGridCard(
     // saved episode doesn't read as a bare series poster. Null (the default,
     // and every non-episode) hides the line.
     episodeBadge: String? = null,
+    // A muted line under the year/rating naming someone's credit on the
+    // title ("Director · Writer") — the Person filmography (web MediaCard's
+    // `credit`). Null hides it.
+    credit: String? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
     Card(
@@ -381,6 +385,15 @@ internal fun PosterGridCard(
                             Text(it, color = ChinoAccent, fontSize = 14.sp)
                         }
                     }
+                }
+                credit?.let {
+                    Text(
+                        text = it,
+                        color = ChinoMuted,
+                        fontSize = 13.sp,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
                 }
                 // Long-press discoverability hint — only on the focused card and
                 // only where the menu is wired (Browse), so the hold-OK actions

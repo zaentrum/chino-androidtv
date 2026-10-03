@@ -52,6 +52,9 @@ data class Item(
     @SerialName("parent_id") val parentId: String? = null,
     @SerialName("season_number") val seasonNumber: Int? = null,
     @SerialName("episode_number") val episodeNumber: Int? = null,
+    /** On a person's filmography only: their roles on this title, in
+     *  katalog-api's credit order (["director", "writer"]). */
+    val roles: List<String> = emptyList(),
 )
 
 @Serializable
