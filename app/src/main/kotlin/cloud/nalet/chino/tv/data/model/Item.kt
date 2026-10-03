@@ -4,9 +4,12 @@ import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
 /**
- * Catalogue item returned by chino-api. The beta /v1/items endpoint is still a stub
- * — fields here track what we expect once katalog is wired in (id, title, kind,
- * artwork URL). Unknown fields are tolerated (Json{ignoreUnknownKeys=true}).
+ * Catalogue item returned by chino-api (chino-api/internal/katalog/client.go
+ * Item). Unknown fields are tolerated (Json{ignoreUnknownKeys=true}); a field
+ * chino-api leaves out when empty takes the default here. Artwork isn't read
+ * from the item: its poster_url / backdrop_url name chino-api's
+ * /v1/items/{id}/poster and /backdrop routes, which the UI addresses directly
+ * with the stream token.
  */
 @Serializable
 data class Item(
@@ -19,7 +22,6 @@ data class Item(
      * (Item.kind == "series" etc.) don't have to change.
      */
     @SerialName("type") val kind: String? = null,
-    @SerialName("artwork_url") val artworkUrl: String? = null,
     val year: Int? = null,
     // chino-api/katalog emits the synopsis as JSON `description` (see
     // katalog/client.go Item `json:"description"`), on BOTH list and detail

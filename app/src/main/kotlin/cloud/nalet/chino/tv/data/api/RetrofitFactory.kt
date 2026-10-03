@@ -13,7 +13,9 @@ import retrofit2.Retrofit
 import java.util.concurrent.TimeUnit
 
 object RetrofitFactory {
-    private val json = Json {
+    /** How every chino-api response is decoded (internal: the DTO contract
+     *  test decodes with exactly this). */
+    internal val json = Json {
         ignoreUnknownKeys = true
         explicitNulls = false
         coerceInputValues = true

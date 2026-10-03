@@ -386,7 +386,10 @@ data class SegmentsResponse(
 @Serializable
 data class SidecarSubtitle(
     val id: String,
-    val label: String,
+    // chino-api leaves `label` out when the catalog has none (omitempty). As a
+    // required field, one unlabelled track failed the whole list's decode —
+    // and with it every sidecar subtitle of the title.
+    val label: String = "",
     val lang: String,
     val url: String,
     val default: Boolean? = null,
@@ -511,11 +514,11 @@ data class PersonDetail(
     val items: List<Item> = emptyList(),
 )
 
+/** GET /v1/me echoes the caller's OIDC subject and nothing else; name and
+ *  email come from the IdP's userinfo (OidcDeviceClient.UserInfo). */
 @Serializable
 data class Me(
     val sub: String,
-    val email: String? = null,
-    val name: String? = null,
 )
 
 @Serializable
