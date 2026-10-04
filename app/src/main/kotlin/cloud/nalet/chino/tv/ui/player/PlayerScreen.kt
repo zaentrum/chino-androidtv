@@ -338,8 +338,16 @@ private fun ExoPlayback(
         // subs (the existing WebVTT sidecars, and PGS) never appeared on TV. The
         // factory applies the same OkHttp data source + 404 retry policy to the
         // HLS source AND the per-subtitle SingleSampleMediaSources it creates.
+        // The sidecars are the subtitles: the master reaches Media3 without the
+        // SUBTITLES renditions they already have, and without forced ones
+        // (withoutDuplicateSubtitles), so no language is listed twice and no
+        // forced rendition switches itself on.
+        val sidecars = ready.sidecarSubtitles
+        val playDataSourceFactory = MasterRewritingDataSource.Factory(httpFactory) { master ->
+            withoutDuplicateSubtitles(master, sidecars)
+        }
         val mediaSourceFactory =
-            androidx.media3.exoplayer.source.DefaultMediaSourceFactory(httpFactory)
+            androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playDataSourceFactory)
                 .setLoadErrorHandlingPolicy(retryPolicy)
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)

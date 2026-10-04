@@ -42,6 +42,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.media3.common.C
 import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
@@ -102,6 +103,9 @@ fun ZapScreen(
                 // would take the one with more channels.
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
                     .setMaxAudioChannelCount(2)
+                    // Zap has no subtitles. A FORCED rendition of the master
+                    // in the language of the audio would come on by itself.
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                     .build()
             }
     }
