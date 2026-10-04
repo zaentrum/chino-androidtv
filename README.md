@@ -41,6 +41,8 @@ real values always come from the connected server at runtime.
 - Watchlists (named lists)
 - Zap — a channel-surf discovery mode
 - Multi-account, with an in-app account picker
+- Delete Account (Settings → Account): deletes the signed-in account and what
+  the server keeps of it, after asking, and signs it out on the TV
 - In-app feedback / bug reporting to the connected server
 
 ## Build
@@ -59,7 +61,8 @@ never overwrites a release you installed.
 ./gradlew :app:assembleDebug
 # APK: app/build/outputs/apk/debug/app-debug.apk
 
-# JVM unit tests (paging, credits, people, series resume, the API contract):
+# JVM unit tests (paging, credits, people, series resume, the API contract,
+# account deletion):
 ./gradlew :app:testDebugUnitTest
 ```
 
