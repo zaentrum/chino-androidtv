@@ -538,7 +538,8 @@ private fun ExoPlayback(
                 // fallback and surface the "not available" message immediately.
                 val manifestMissing = httpCause?.responseCode == 404 &&
                     (httpCause.dataSpec.uri.toString().contains(".m3u8"))
-                if (manifestMissing || !viewModel.attemptQualityFallback()) {
+                val atSec = (player.currentPosition / 1000L).toInt()
+                if (manifestMissing || !viewModel.attemptQualityFallback(atSec)) {
                     // Pull HTTP status + failing URL off the cause when the
                     // root error is an HLS segment fetch failure. Mirrors the
                     // hls_fatal beacon in chino-web so a chino-stream 502 spike
@@ -600,7 +601,7 @@ private fun ExoPlayback(
             val since = rebufferSinceMs.value
             if (since > 0L && System.currentTimeMillis() - since >= REBUFFER_FALLBACK_MS) {
                 rebufferFallbackFired = true // claim first: attemptQualityFallback rebuilds the player
-                if (viewModel.attemptQualityFallback()) {
+                if (viewModel.attemptQualityFallback((player.currentPosition / 1000L).toInt())) {
                     viewModel.reportTelemetry(
                         "rebuffer_quality_fallback",
                         mapOf("stall_ms" to (System.currentTimeMillis() - since).toString()),
@@ -1136,12 +1137,13 @@ private fun ExoPlayback(
                 active = ready.currentQuality,
                 onPick = { rung ->
                     showQualityPanel = false
-                    // Persist current position via the existing progress upsert
-                    // so the reload's prepare() finds it as resumePositionSec.
+                    // The reload goes on at this playhead (prepare's atSec);
+                    // the progress save is only the usual one, not what the
+                    // reload reads.
                     val pos = (player.currentPosition / 1000L).toInt()
                     val dur = (player.duration.takeIf { it != C.TIME_UNSET } ?: 0).let { (it / 1000L).toInt() }
                     if (pos > 0) viewModel.reportProgress(pos, dur)
-                    viewModel.switchQuality(rung)
+                    viewModel.switchQuality(rung, atSec = pos)
                 },
                 onDismiss = { showQualityPanel = false },
             )

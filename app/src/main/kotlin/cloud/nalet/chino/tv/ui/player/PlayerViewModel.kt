@@ -154,10 +154,14 @@ class PlayerViewModel(
 
     /**
      * Loads everything we need for playback in parallel. `quality` overrides
-     * the server's default rung; pass null on first prepare and "high" /
-     * "medium" / "low" on a switchQuality reload.
+     * the server's default rung; pass null on first prepare and the q to
+     * reload with on a quality switch or a fallback. [atSec] is where a
+     * reload goes on — the playhead of the player it replaces. Without it the
+     * start is looked up: the Zap handoff, Play from start, else the saved
+     * progress (a reload must not ask for that: the save it would read is
+     * still in flight, and Play from start or a Zap scene would apply again).
      */
-    fun prepare(quality: String?) {
+    fun prepare(quality: String?, atSec: Int? = null) {
         _state.value = PlayerUiState.Preparing
         viewModelScope.launch {
             _state.value = try {
@@ -174,6 +178,7 @@ class PlayerViewModel(
                     // is stale by intent. Saves a round-trip too.
                     val progressDef = async {
                         when {
+                            atSec != null -> atSec.coerceAtLeast(0) // a reload: where the viewer was
                             resumeSec > 0 -> resumeSec        // Zap channel-surf handoff
                             startFromZero -> 0
                             else -> runCatching { api.getProgress(itemId).positionSec }.getOrDefault(0)
@@ -336,14 +341,14 @@ class PlayerViewModel(
     )
 
     /**
-     * Reload the player at a different quality rung. PlayerScreen stashes the
-     * current position so the reload resumes there instead of jumping to head.
+     * Reload the player at a different quality rung, at [atSec] — the
+     * playhead PlayerScreen reads off the player it is about to replace.
      */
-    fun switchQuality(rung: String) {
+    fun switchQuality(rung: String, atSec: Int) {
         val cur = _state.value as? PlayerUiState.Ready ?: return
         if (cur.currentQuality == rung) return
         reportTelemetry("quality_switch", mapOf("from" to cur.currentQuality, "to" to rung))
-        prepare(quality = rung)
+        prepare(quality = rung, atSec = atSec)
     }
 
     /**
@@ -588,9 +593,10 @@ class PlayerViewModel(
      * the lower one is fine" case (transcode pipeline still warming the
      * high ladder while medium has been cached for hours). Returns true if
      * a fallback was kicked off; false when we're already on low and
-     * there's nowhere lower to drop to.
+     * there's nowhere lower to drop to. The reload goes on at [atSec], the
+     * playhead of the failing player.
      */
-    fun attemptQualityFallback(): Boolean {
+    fun attemptQualityFallback(atSec: Int): Boolean {
         val cur = _state.value as? PlayerUiState.Ready ?: return false
         val next = when (cur.currentQuality.lowercase()) {
             "high" -> "medium"
@@ -598,7 +604,7 @@ class PlayerViewModel(
             else -> return false
         }
         telemetry.event("quality_fallback", extra = mapOf("from" to cur.currentQuality, "to" to next))
-        prepare(quality = next)
+        prepare(quality = next, atSec = atSec)
         return true
     }
 
