@@ -92,6 +92,16 @@ interface ChinoApi {
     suspend fun me(): Me
 
     /**
+     * Deletes the signed-in person's data and their account — the app stores
+     * ask every app that makes accounts to offer it. The bearer rides in the
+     * Authorization header, as on every call (chino-api refuses one in the
+     * URL). The raw answer, not a decoded body: every status says something
+     * here, and [cloud.nalet.chino.tv.data.deleteAccount] reads it.
+     */
+    @DELETE("v1/me")
+    suspend fun deleteMe(): retrofit2.Response<okhttp3.ResponseBody>
+
+    /**
      * Mints a 6-hour HMAC-signed token used as `?stream=<token>` on playback URLs.
      * The OIDC bearer rotates on silent renew; the stream token doesn't, so the
      * `<video src>` URL stays stable across renews and the HLS pipeline isn't

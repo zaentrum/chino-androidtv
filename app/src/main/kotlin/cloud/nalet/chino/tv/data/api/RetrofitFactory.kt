@@ -30,11 +30,27 @@ object RetrofitFactory {
         baseUrl: String,
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
-    ): Retrofit {
+    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh).build())
+
+    /** Retrofit over [client], decoding as every chino-api response is decoded. */
+    internal fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
+        Retrofit.Builder()
+            .baseUrl(baseUrl)
+            .client(client)
+            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
+            .build()
+
+    /** The client every chino-api call goes through: the bearer on every
+     *  request, one refresh-and-retry on a 401. Internal: tests answer on
+     *  top of exactly this client. */
+    internal fun httpClient(
+        tokenProvider: () -> String?,
+        forceRefresh: () -> String?,
+    ): OkHttpClient.Builder {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
         }
-        val http = OkHttpClient.Builder()
+        return OkHttpClient.Builder()
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .addInterceptor { chain ->
@@ -60,12 +76,5 @@ object RetrofitFactory {
                 }
             })
             .addInterceptor(logging)
-            .build()
-
-        return Retrofit.Builder()
-            .baseUrl(baseUrl)
-            .client(http)
-            .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
-            .build()
     }
 }
