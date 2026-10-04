@@ -64,10 +64,16 @@ class DeleteAccountViewModel(
         }
         _state.value = DeleteAccountState.Deleting
         appScope.launch {
-            val answer = api.deleteAccountThenSignOut {
-                accounts.remove(target.id)
-                streamTokens.clear()
-                userFlags.clear()
+            // The request carries the active account's bearer: never send it
+            // for another account than the one on screen.
+            val answer = if (accounts.snapshotBlocking().activeAccount?.id != target.id) {
+                AccountDeletion.Failed("Another account is signed in now. Open Delete Account again.")
+            } else {
+                api.deleteAccountThenSignOut {
+                    accounts.remove(target.id)
+                    streamTokens.clear()
+                    userFlags.clear()
+                }
             }
             _state.value = if (answer == AccountDeletion.Deleted) {
                 DeleteAccountState.SignedOut(othersRemain = accounts.snapshotBlocking().accounts.isNotEmpty())
