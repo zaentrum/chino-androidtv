@@ -23,6 +23,13 @@
 #      scripts/check-neutrality.sh --self-test  (the patterns only)
 set -uo pipefail
 
+# Without ripgrep every pattern would look blind to the self-test below, and
+# its message would send people looking in the wrong place: say so first.
+command -v rg >/dev/null 2>&1 || {
+  echo "neutrality guard: needs ripgrep (rg) on PATH" >&2
+  exit 2
+}
+
 # ── the patterns ─────────────────────────────────────────────────────────────
 word() { printf '(^|[^[:alnum:]])(%s)([^[:alnum:]]|$)' "$1"; }
 upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
