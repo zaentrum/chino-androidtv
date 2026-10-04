@@ -25,53 +25,16 @@ jobs:
       - name: Install ripgrep
         run: sudo apt-get update && sudo apt-get install -y ripgrep
 
-      # Patterns are assembled from fragments so the forbidden tokens never
-      # appear verbatim in this file — the tree (including this workflow) stays
-      # literally free of every banned string.
-      - name: No internal hostnames
-        run: |
-          # The internal platform host (and any of its subdomains) must never appear.
-          HOST_RE="nalet\\.${HOST_TLD}"
-          if rg -n -i --hidden -g '!.git/**' "$HOST_RE" .; then
-            echo "::error::Internal hostname found above. This is a public repo." >&2
-            exit 1
-          fi
-          echo "OK: no internal hostnames."
-        env:
-          HOST_TLD: cloud
-
-      - name: No competitor product names
-        run: |
-          # Competitor media-server product names must never appear (incl. comments).
-          NAMES_RE="\\b(jelly${A}|${B}lex|em${C}|${D}odi|${E}flix)\\b"
-          if rg -n -i --hidden -g '!.git/**' "$NAMES_RE" .; then
-            echo "::error::Competitor product name found above." >&2
-            exit 1
-          fi
-          echo "OK: no competitor product names."
-        env:
-          A: fin
-          B: p
-          C: by
-          D: k
-          E: nalet
-
-      - name: No acquisition vocabulary in user-facing text
-        run: |
-          # Acquisition vocabulary must not appear in user-facing surfaces
-          # (Android resources and docs).
-          VOCAB_RE="(index${X}|trac${V}|use${Y}|${Z}|tor${W})"
-          if rg -n -i --hidden -w -g '!.git/**' "$VOCAB_RE" app/src/main/res *.md 2>/dev/null; then
-            echo "::error::Acquisition vocabulary found in user-facing text above." >&2
-            exit 1
-          fi
-          echo "OK: no acquisition vocabulary in user-facing text."
-        env:
-          X: er
-          V: ker
-          Y: net
-          Z: arr
-          W: rent
+      # No internal hostname and no competitor product name anywhere in the
+      # tree (comments included), no acquisition vocabulary in user-facing
+      # surfaces (Android resources and docs). The script holds the patterns,
+      # assembled from fragments so the tree (this workflow and the script
+      # included) stays literally free of every banned string. A name counts
+      # with "_" beside it (FOO_API_URL), which \b and rg -w let through; the
+      # script first checks its patterns against lines they must and must not
+      # flag, and fails when one has gone blind.
+      - name: Neutrality guard
+        run: bash scripts/check-neutrality.sh
 
   # ---------------------------------------------------------------------------
   # Debug builds: always build both flavors so every push is exercised.
