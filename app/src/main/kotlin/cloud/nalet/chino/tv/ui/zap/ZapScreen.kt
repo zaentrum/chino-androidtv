@@ -51,6 +51,7 @@ import androidx.media3.ui.PlayerView
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.ChinoTvApp
+import cloud.nalet.chino.tv.ui.player.firstVariantTrackSelector
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.BookmarkCheck
@@ -86,11 +87,15 @@ fun ZapScreen(
     // source (NOT rebuilding the player) avoids decoder churn while surfing.
     // Plays with sound by default (channel-surf); LEFT toggles mute.
     val player = remember {
-        ExoPlayer.Builder(context).build().apply {
-            volume = 1f
-            playWhenReady = true
-            repeatMode = Player.REPEAT_MODE_OFF
-        }
+        ExoPlayer.Builder(context)
+            // A card starts on the master's first variant: the one the
+            // prefetch and chino-stream warmed.
+            .setTrackSelector(firstVariantTrackSelector(context))
+            .build().apply {
+                volume = 1f
+                playWhenReady = true
+                repeatMode = Player.REPEAT_MODE_OFF
+            }
     }
     // Info overlay + dead-channel guard declared above the listener so it can drive them.
     var overlayVisible by remember { mutableStateOf(true) }

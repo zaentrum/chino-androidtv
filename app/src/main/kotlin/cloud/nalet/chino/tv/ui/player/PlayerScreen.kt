@@ -344,6 +344,9 @@ private fun ExoPlayback(
         ExoPlayer.Builder(context)
             .setMediaSourceFactory(mediaSourceFactory)
             .setLoadControl(loadControl)
+            // A packaged ladder starts on its first variant, the one
+            // chino-stream warmed when the master was fetched.
+            .setTrackSelector(firstVariantTrackSelector(context))
             .build().also {
             it.setMediaItem(mediaItem)
             it.prepare()
