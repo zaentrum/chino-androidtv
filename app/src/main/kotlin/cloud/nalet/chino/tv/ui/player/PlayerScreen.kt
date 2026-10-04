@@ -440,6 +440,9 @@ private fun ExoPlayback(
     }
     var tracks by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
     var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
+    // The picture size of the video format Media3 plays (width to height) —
+    // on Auto, the rung ExoPlayer has stepped to; null until the first frame.
+    var playingSize by remember(player) { mutableStateOf<Pair<Int, Int>?>(null) }
     var controllerVisible by remember { mutableStateOf(true) }
     // Shared with the Player.Listener block below so the preparing/buffering
     // overlay reflects current state in real time. MutableState backing so
@@ -472,6 +475,16 @@ private fun ExoPlayback(
             override fun onTracksChanged(t: Tracks) {
                 tracks = collectSubtitleTracks(t)
                 audioTracks = collectAudioTracks(t)
+            }
+            override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
+                // The selected format's size is the variant's RESOLUTION,
+                // which /play/info's rungs carry; the decoded size else.
+                val format = player.videoFormat
+                playingSize = if (format != null && format.width > 0 && format.height > 0) {
+                    format.width to format.height
+                } else {
+                    (videoSize.width to videoSize.height).takeIf { it.first > 0 && it.second > 0 }
+                }
             }
             override fun onPlaybackStateChanged(state: Int) {
                 when (state) {
@@ -1072,6 +1085,10 @@ private fun ExoPlayback(
                 }
             }
         }
+        // The quality menu /play/info offers (null: nothing to pick) and the
+        // rung that plays, by its menu label — Auto says it: "Auto · 720p".
+        val menu = remember(ready.playInfo) { qualityMenu(ready.playInfo) }
+        val playing = playingSize?.let { (w, h) -> playingLabel(w, h, menu) }
         // Custom Compose chrome — replaces the default PlayerControlView.
         // Layout mirrors chino-web's PlayerPage: top bar (back + home + title),
         // bottom bar (scrubber row + button row). Auto-hides after the grace
@@ -1111,7 +1128,7 @@ private fun ExoPlayback(
                     } else null,
                     onSubtitles = { showSubtitlePanel = true },
                     captionsOn = tracks.any { it.selected },
-                    onQuality = if ((ready.playInfo?.qualities?.size ?: 0) > 1) {
+                    onQuality = if (menu != null) {
                         { showQualityPanel = true }
                     } else null,
                     onSpeed = {
@@ -1162,10 +1179,11 @@ private fun ExoPlayback(
                 onDismiss = { showAudioPanel = false },
             )
         }
-        if (showQualityPanel) {
+        if (showQualityPanel && menu != null) {
             QualityPanel(
-                rungs = ready.playInfo?.qualities ?: cloud.nalet.chino.tv.ui.player.defaultRungs(),
-                active = ready.currentQuality,
+                rungs = menu,
+                active = chosenQuality(menu, ready.currentQuality)?.name,
+                playing = playing,
                 onPick = { rung ->
                     showQualityPanel = false
                     // The reload goes on at this playhead (prepare's atSec);
@@ -1257,7 +1275,7 @@ private fun ExoPlayback(
         if (showInfoOverlay) {
             PlaybackInfoOverlay(
                 info = ready.playInfo,
-                quality = ready.currentQuality,
+                quality = qualityText(menu, ready.currentQuality, playing),
                 onDismiss = { showInfoOverlay = false },
             )
         }
@@ -1289,13 +1307,6 @@ private fun isPostCreditsPreview(seg: Segment, all: List<Segment>): Boolean {
         else -> return false
     }
 }
-
-/** Fallback rungs when /play/info hasn't returned a qualities list. */
-fun defaultRungs(): List<cloud.nalet.chino.tv.data.api.QualityRung> = listOf(
-    cloud.nalet.chino.tv.data.api.QualityRung("high", "High"),
-    cloud.nalet.chino.tv.data.api.QualityRung("medium", "Medium"),
-    cloud.nalet.chino.tv.data.api.QualityRung("low", "Low"),
-)
 
 /* ─────────────────────────  web-style menu popovers  ─────────────────────
  * Subtitle / Audio / Speed / Quality pickers render as compact popovers
@@ -1403,10 +1414,15 @@ private fun splitAudioLabel(label: String): Pair<String, String?> {
     return parts[0] to parts.drop(1).joinToString(" · ").ifBlank { null }
 }
 
+/** The quality menu ([qualityMenu]): Auto and a packaged title's rungs, or
+ *  an on-the-fly transcode's high / medium / low, by the server's labels.
+ *  [active] is the entry the player is on; on Auto, its row names the rung
+ *  that plays ([playing]): "Auto · 720p". */
 @Composable
 private fun QualityPanel(
     rungs: List<cloud.nalet.chino.tv.data.api.QualityRung>,
-    active: String,
+    active: String?,
+    playing: String?,
     onPick: (String) -> Unit,
     onDismiss: () -> Unit,
 ) {
@@ -1416,7 +1432,7 @@ private fun QualityPanel(
         PlayerMenuHeader("QUALITY")
         rungs.forEachIndexed { idx, rung ->
             PlayerMenuRow(
-                label = rung.label.ifEmpty { rung.name.replaceFirstChar { it.uppercase() } },
+                label = if (rung.name == AUTO && active == AUTO) autoLabel(rung.label, playing) else rung.label,
                 selected = rung.name == active,
                 focusRequester = focusRequester.takeIf { idx == 0 },
                 onClick = { onPick(rung.name) },

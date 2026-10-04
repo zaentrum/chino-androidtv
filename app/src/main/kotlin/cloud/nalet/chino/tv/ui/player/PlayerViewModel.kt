@@ -46,7 +46,8 @@ sealed interface PlayerUiState {
         val parentSeriesId: String?,
         /** chino-stream's transcode decision + ladder. Null on pre-probe failure. */
         val playInfo: PlayInfo?,
-        /** Currently-selected rung name ("high" / "medium" / "low"). */
+        /** The q the master is asked with: "auto" or a rung's name ("v1") for
+         *  a packaged title, "high" / "medium" / "low" on the fly. */
         val currentQuality: String,
         /** Scrub-preview thumbnail cues parsed from the trickplay VTT. Empty
          *  when the item isn't packaged (no sprite tree) or the fetch failed —
@@ -187,7 +188,9 @@ class PlayerViewModel(
                     val segDef = async { runCatching { api.itemSegments(itemId).segments }.getOrDefault(emptyList()) }
                     val subDef = async { runCatching { api.itemSubtitles(itemId).subtitles }.getOrDefault(emptyList()) }
                     val infoDef = async {
-                        runCatching { api.playInfo(itemId, caps = capsParam.ifEmpty { null }) }.getOrNull()
+                        runCatching {
+                            api.playInfo(itemId, caps = capsParam.ifEmpty { null }, quality = quality)
+                        }.getOrNull()
                     }
                     PrepareBundle(
                         item = itemDef.await(),
@@ -204,7 +207,9 @@ class PlayerViewModel(
                 // parent series item for it; while unknown, fall back to
                 // "S01E02 · {Episode}". Movies / non-episodes: the bare title.
                 val title = composeTitle(item, parentSeriesId)
-                val resolvedQuality = quality ?: info?.defaultQuality ?: "high"
+                // The server's default on the first prepare; a reload's own q,
+                // but high for a packaged q the title is no longer served for.
+                val resolvedQuality = playQuality(quality, info)
                 // Binge entry: pre-skip the intro/recap chain ONLY when it
                 // begins right at the head (small tolerance for analyzer
                 // drift — segmenters often stamp the start a few hundred ms

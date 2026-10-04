@@ -230,12 +230,14 @@ interface ChinoApi {
      * Pre-playback probe: chino-stream's transcode decision + container/codec
      * metadata + the ladder of qualities the server can serve. Result is
      * dispatched off `caps=` (same vocabulary the master URL uses), so we
-     * pass the same beacon.
+     * pass the same beacon — and the master's `q`, so a packaged title's
+     * video fields are the rung that q starts on.
      */
     @GET("v1/items/{id}/play/info")
     suspend fun playInfo(
         @Path("id") id: String,
         @Query("caps") caps: String? = null,
+        @Query("q") quality: String? = null,
     ): PlayInfo
 
     /** Raw WebVTT trickplay (scrub-preview thumbnail) cue file for a packaged
@@ -406,11 +408,23 @@ data class SubtitlesResponse(
     val subtitles: List<SidecarSubtitle> = emptyList(),
 )
 
+/**
+ * An entry of /play/info's qualities: what ?q= the master is asked with to
+ * get it, and what a menu calls it. A packaged title lists Auto ("auto")
+ * then its rungs ("v1", "720p"), each with its picture size, codec and
+ * bitrate (the variant's BANDWIDTH); an on-the-fly transcode "high" /
+ * "medium" / "low" with labels only.
+ */
 @Serializable
 data class QualityRung(
-    /** "high" / "medium" / "low" — matches chino-stream's ?q= parameter. */
     val name: String,
     val label: String,
+    val id: String? = null,
+    val width: Int? = null,
+    val height: Int? = null,
+    val codec: String? = null,
+    val bitrate: Long? = null,
+    @SerialName("video_range") val videoRange: String? = null,
 )
 
 @Serializable
@@ -428,6 +442,7 @@ data class PlayInfo(
     val reason: String? = null,
     /** "libx264" / "h264_nvenc" when mode=transcode; null otherwise. */
     val encoder: String? = null,
+    /** null (empty here) when there is nothing to pick: see [QualityRung]. */
     val qualities: List<QualityRung> = emptyList(),
     @SerialName("default_quality") val defaultQuality: String? = null,
 )

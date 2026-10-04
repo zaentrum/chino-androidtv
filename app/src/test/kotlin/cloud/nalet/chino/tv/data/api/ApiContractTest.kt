@@ -111,6 +111,33 @@ class ApiContractTest {
     }
 
     @Test
+    fun `a packaged title's play info lists Auto and its rungs`() {
+        val info = decode(
+            PlayInfo.serializer(),
+            """{"mode":"packaged","video_codec":"avc1.64001f","width":1280,"height":720,
+               "default_quality":"auto","qualities":[{"name":"auto","label":"Auto"},
+               {"name":"v1","id":"v1","label":"720p","width":1280,"height":720,"codec":"avc1.64001f",
+                "bitrate":1505267,"video_range":"SDR"},
+               {"name":"v2","id":"v2","label":"480p","width":854,"height":480,"codec":"avc1.64001e",
+                "bitrate":706649,"video_range":"SDR"}],
+               "audio_tracks":[{"index":0,"codec":"mp4a","language":"eng","channels":2}],
+               "subtitle_tracks":[{"id":"s0","language":"eng","format":"webvtt","hls":"hls/s0"}]}""",
+        )
+        assertEquals("auto", info.defaultQuality)
+        assertEquals(listOf("auto", "v1", "v2"), info.qualities.map { it.name })
+        val rung = info.qualities[1]
+        assertEquals("720p", rung.label)
+        assertEquals(1280, rung.width)
+        assertEquals(720, rung.height)
+        assertEquals(1_505_267L, rung.bitrate)
+        assertEquals("SDR", rung.videoRange)
+
+        // A package of one rendition: nothing to pick.
+        val single = decode(PlayInfo.serializer(), """{"mode":"packaged","qualities":null,"default_quality":"auto"}""")
+        assertEquals(emptyList<QualityRung>(), single.qualities)
+    }
+
+    @Test
     fun `a series without episodes answers seasons null`() {
         val eps = decode(SeriesEpisodes.serializer(), """{"series_id":"s","seasons":null,"count":0}""")
         assertEquals(emptyList<Season>(), eps.seasons)
