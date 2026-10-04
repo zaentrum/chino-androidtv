@@ -4,6 +4,7 @@ import android.content.Context
 import android.net.Uri
 import androidx.media3.common.C
 import androidx.media3.common.util.UriUtil
+import androidx.media3.common.util.Util
 import androidx.media3.datasource.DataSourceUtil
 import androidx.media3.datasource.DataSpec
 import androidx.media3.datasource.cache.CacheDataSource
@@ -36,8 +37,10 @@ data class ZapPrefetchTarget(val itemId: String, val masterUrl: String, val seek
  *   1. master.m3u8         (already carries device caps incl. per-codec HW
  *                           height, so the variant it resolves to is the
  *                           per-device-correct one — no hardcoded quality)
- *   2. the chosen variant playlist
- *   3. the init segment (EXT-X-MAP)
+ *   2. the playlists the card starts on ([zapWarmTarget]): the first
+ *      variant's, and the one of the audio rendition it plays — the
+ *      DEFAULT of that variant's group, as chino-stream warms it
+ *   3. their init segments (EXT-X-MAP)
  *   4. ONLY the media segments covering the seek window [seekSec, seekSec +
  *      WINDOW_SEC] — NOT segment 0 (Zap drops into a random mid-scene) and NOT
  *      the whole movie.
@@ -112,27 +115,56 @@ class ZapPrefetcher(
         val masterUri = Uri.parse(target.masterUrl)
         val master = readPlaylist(masterUri) as? HlsMultivariantPlaylist ?: return@coroutineScope
 
-        // 2. Pick the variant ExoPlayer would: the master already encodes the
-        //    device caps, so chino-stream advertises only per-device-correct
-        //    variants. Take the first (single-variant is the common case); a
-        //    multi-variant master leaves ABR to the player at watch time but we
-        //    still warm one ladder rung's window.
-        val variantUri = master.variants.firstOrNull()?.url
-            ?: master.mediaPlaylistUrls.firstOrNull()
-            ?: return@coroutineScope
-        val media = readPlaylist(variantUri) as? HlsMediaPlaylist ?: return@coroutineScope
+        // 2. The playlists the card starts on. The master already encodes the
+        //    device caps, so chino-stream lists only per-device-correct
+        //    variants, the one to start on first — where the card's player
+        //    starts (FirstVariantTrackSelection) — and of the audio the
+        //    rendition the player takes from that variant's group.
+        val start = zapWarmTarget(
+            variants = master.variants.map { v ->
+                MasterVariant(
+                    url = v.url.toString(),
+                    audioGroup = v.audioGroupId,
+                    trickPlay = v.format.roleFlags and C.ROLE_FLAG_TRICK_PLAY != 0,
+                )
+            },
+            audios = master.audios.map { a ->
+                MasterAudio(
+                    url = a.url?.toString(),
+                    group = a.groupId,
+                    language = a.format.language,
+                    isDefault = a.format.selectionFlags and C.SELECTION_FLAG_DEFAULT != 0,
+                )
+            },
+            // The languages Media3's track selector matches renditions against.
+            deviceLanguages = Util.getSystemLanguageCodes().toList(),
+        ) ?: return@coroutineScope
 
-        // 3 + 4. The init segment (shared EXT-X-MAP) and the media segments that
-        //        cover [seekSec, seekSec + WINDOW_SEC] around the mid-scene seek.
+        // 3 + 4. For each: its init segment (EXT-X-MAP) and the media segments
+        //        that cover [seekSec, seekSec + WINDOW_SEC] around the
+        //        mid-scene seek, written into the shared cache, bounded by the
+        //        global semaphore.
+        for (url in listOfNotNull(start.videoUrl, start.audioUrl)) {
+            val media = readPlaylist(Uri.parse(url)) as? HlsMediaPlaylist ?: continue
+            for (spec in windowSpecs(media, target.seekSec)) {
+                launch { gate.withPermit { cacheSpec(spec) } }
+            }
+        }
+    }
+
+    /** The init segment and the media segments of [media] that overlap the
+     *  seek window [seekSec, seekSec + WINDOW_SEC] — NOT segment 0, not the
+     *  whole movie. */
+    private fun windowSpecs(media: HlsMediaPlaylist, seekSec: Int): List<DataSpec> {
         val specs = ArrayList<DataSpec>()
         val seenInit = HashSet<String>()
-        val windowStartUs = target.seekSec * 1_000_000L
+        val windowStartUs = seekSec * 1_000_000L
         val windowEndUs = windowStartUs + WINDOW_SEC * 1_000_000L
 
         for (seg in media.segments) {
             val segStartUs = seg.relativeStartTimeUs
             val segEndUs = segStartUs + seg.durationUs
-            // Overlap test against the seek window (NOT segment 0 / not the whole movie).
+            // Overlap test against the seek window.
             if (segEndUs <= windowStartUs || segStartUs >= windowEndUs) continue
 
             seg.initializationSegment?.let { init ->
@@ -140,13 +172,9 @@ class ZapPrefetcher(
                 if (seenInit.add(initUri)) specs += dataSpecFor(media.baseUri, init)
             }
             specs += dataSpecFor(media.baseUri, seg)
-            if (specs.size >= MAX_SEGMENTS_PER_CARD) break // hard cap per card
+            if (specs.size >= MAX_SEGMENTS_PER_PLAYLIST) break // hard cap per playlist
         }
-
-        // Write each spec into the shared cache, bounded by the global semaphore.
-        for (spec in specs) {
-            launch { gate.withPermit { cacheSpec(spec) } }
-        }
+        return specs
     }
 
     /** Read + parse an HLS playlist THROUGH the cache factory (so the manifest
@@ -196,8 +224,9 @@ class ZapPrefetcher(
         /** Simultaneous segment downloads across all cards (be a good citizen). */
         private const val MAX_CONCURRENT = 2
 
-        /** Belt-and-braces ceiling on segments per card if a variant uses very
-         *  short target durations — the window math should already bound this. */
-        private const val MAX_SEGMENTS_PER_CARD = 8
+        /** Belt-and-braces ceiling on segments per playlist (a card's video and
+         *  its audio) if a rendition uses very short target durations — the
+         *  window math should already bound this. */
+        private const val MAX_SEGMENTS_PER_PLAYLIST = 8
     }
 }

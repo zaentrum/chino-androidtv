@@ -95,6 +95,14 @@ fun ZapScreen(
                 volume = 1f
                 playWhenReady = true
                 repeatMode = Player.REPEAT_MODE_OFF
+                // A card plays in stereo: the DEFAULT rendition of the first
+                // variant's group, the stereo AAC one, which the prefetch and
+                // chino-stream warm. Of that and the 5.1 E-AC-3 group's
+                // DEFAULT a TV that decodes E-AC-3 is also served, Media3
+                // would take the one with more channels.
+                trackSelectionParameters = trackSelectionParameters.buildUpon()
+                    .setMaxAudioChannelCount(2)
+                    .build()
             }
     }
     // Info overlay + dead-channel guard declared above the listener so it can drive them.
