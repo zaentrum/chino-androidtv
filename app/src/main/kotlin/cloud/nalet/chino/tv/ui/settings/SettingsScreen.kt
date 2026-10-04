@@ -55,6 +55,9 @@ fun SettingsScreen(
     /** Opens the Profile + watch-history surface (web/mobile parity). Null
      *  hides the row. */
     onProfile: (() -> Unit)? = null,
+    /** Opens Delete Account (the signed-in account and what the server keeps
+     *  of it, asked first). Null hides the button. */
+    onDeleteAccount: (() -> Unit)? = null,
     /** Opens the prefilled Add-Server flow (clears accounts + restarts on
      *  connect to a different server). Null hides the row. */
     onChangeServer: (() -> Unit)? = null,
@@ -162,11 +165,11 @@ fun SettingsScreen(
                     onChange = viewModel::setPreferredSubLang,
                 )
             }
-            if (onSwitchAccount != null || onProfile != null) {
+            if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
                 Section(
                     title = "Account",
                     subtitle = "View your profile and watch history, sign in as a different " +
-                        "user, or add a new profile.",
+                        "user, add a new profile, or delete your account.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -182,6 +185,13 @@ fun SettingsScreen(
                         if (onSwitchAccount != null) {
                             Button(onClick = onSwitchAccount, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                                 Text("Switch account")
+                            }
+                        }
+                        // Last in the row: a screen of its own asks before
+                        // anything is deleted.
+                        if (onDeleteAccount != null) {
+                            Button(onClick = onDeleteAccount, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                                Text("Delete Account")
                             }
                         }
                     }

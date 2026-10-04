@@ -103,6 +103,20 @@ class UserFlagsRepository(private val api: ChinoApi) {
         watchlistLoaded = true
     }
 
+    /** Forgets the cached lists and likes: the account they belong to is
+     *  signed out. The next [warm] loads them for whoever is signed in then. */
+    suspend fun clear() {
+        mutex.withLock {
+            _lists.value = emptyList()
+            _memberships.value = emptyMap()
+            _savedItems.value = emptySet()
+            _watchlist.value = emptySet()
+            _likes.value = emptySet()
+            watchlistLoaded = false
+            likesLoaded = false
+        }
+    }
+
     /** Force a refresh of the lists + memberships (e.g. after the watchlist
      *  surface mutates lists out-of-band). Safe to call off any screen. */
     fun refreshLists() {

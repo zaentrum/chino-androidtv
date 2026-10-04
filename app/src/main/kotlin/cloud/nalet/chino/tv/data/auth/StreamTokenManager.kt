@@ -48,6 +48,15 @@ class StreamTokenManager(private val api: ChinoApi) {
         }
     }
 
+    /** Forgets the token: the account it was minted for is signed out. The
+     *  next [valid] mints one for whoever is signed in then. */
+    suspend fun clear() {
+        mutex.withLock {
+            _current.value = null
+            expiresAtEpochMillis = 0L
+        }
+    }
+
     companion object {
         private const val SLACK_MS = 5L * 60 * 1000 // refresh 5 min before expiry
     }

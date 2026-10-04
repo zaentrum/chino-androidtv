@@ -55,6 +55,9 @@ object Routes {
     const val SERIES = "series"
     const val SEARCH = "search"
     const val SETTINGS = "settings"
+    /** Settings → Account → Delete Account: asks, then deletes the signed-in
+     *  account on the server and signs it out here. */
+    const val DELETE_ACCOUNT = "delete_account"
     const val PROFILE = "profile"
     const val WATCHLIST = "watchlist"
     const val DETAIL = "detail/{itemId}"
@@ -435,6 +438,9 @@ fun ChinoTvNavHost(container: AppContainer) {
                 // the Account section. launchSingleTop so re-pressing the row
                 // doesn't stack copies.
                 onProfile = { navController.navigate(Routes.PROFILE) { launchSingleTop = true } },
+                onDeleteAccount = if (activeAccount != null) {
+                    { navController.navigate(Routes.DELETE_ACCOUNT) { launchSingleTop = true } }
+                } else null,
                 onChangeServer = { navController.navigate(Routes.SERVER_CHANGE) },
                 serverHost = container.serverConfig.baseUrl
                     .substringAfter("://")
@@ -452,6 +458,23 @@ fun ChinoTvNavHost(container: AppContainer) {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
                 activeAccount = activeAccount,
+            )
+        }
+        composable(Routes.DELETE_ACCOUNT) {
+            val vm: cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel =
+                viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
+            cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
+                viewModel = vm,
+                onCancel = { navController.popBackStack() },
+                // Deleted and signed out: back to the start, the back stack
+                // gone with the account — who's watching when others are
+                // signed in on this TV, else sign-in.
+                onSignedOut = { othersRemain ->
+                    navController.navigate(if (othersRemain) Routes.PICKER else Routes.AUTH) {
+                        popUpTo(0)
+                        launchSingleTop = true
+                    }
+                },
             )
         }
         composable(Routes.PROFILE) {
