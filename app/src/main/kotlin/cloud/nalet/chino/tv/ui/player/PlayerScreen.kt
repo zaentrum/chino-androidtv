@@ -119,11 +119,13 @@ private val LOADING_MESSAGES: List<String> = listOf(
     "Buffering more cinema magic…",
 )
 
-/** How long a mid-stream rebuffer must persist before we proactively drop a
- *  quality rung. The playback buffer is huge (4 min), so entering STATE_BUFFERING
- *  means it fully drained; 12 s of continued stall past that is clearly the
- *  current rung out-running what nas001 can serve under contention — the BRAVIA
- *  4K-high "stutters every few minutes but never errors" case. */
+/** How long a mid-stream rebuffer must persist before the player does something
+ *  about it (PlaybackRecovery: an on-the-fly title drops a quality rung, a
+ *  packaged one is retried in place). The playback buffer is huge (4 min), so
+ *  entering STATE_BUFFERING means it fully drained; 12 s of continued stall past
+ *  that is clearly the current rung out-running what nas001 can serve under
+ *  contention — the BRAVIA 4K-high "stutters every few minutes but never
+ *  errors" case. */
 private const val REBUFFER_FALLBACK_MS = 12_000L
 
 /** Kinds the manual "Skip …" pill handles. Post-credits previews are excluded —
@@ -157,7 +159,8 @@ fun PlayerScreen(
 
 /**
  * Terminal playback failure — shown only after recovery has given up
- * (quality-ladder fallback exhausted / manifest missing) and PlayerViewModel
+ * (the on-the-fly ladder or a packaged title's retries spent / manifest
+ * missing) and PlayerViewModel
  * flipped to [PlayerUiState.Error]. The retry/recovery logic is untouched;
  * this only ADDS chino-web's "Report a bug" affordance from PlayerPage's
  * fatal overlay: a focusable "Report this problem" row that files directly
@@ -435,8 +438,8 @@ private fun ExoPlayback(
     val bufferingState = remember { mutableStateOf(true) }
     // Timestamp a MID-STREAM rebuffer began (0 = not rebuffering). Distinct from
     // the listener's bufferingStartTs (telemetry only) because the sustained-
-    // rebuffer watchdog below reads it from a Compose coroutine to trigger a
-    // proactive quality drop. Reset when the player rebuilds for a new item/rung.
+    // rebuffer watchdog below reads it from a Compose coroutine to start the
+    // stall recovery. Reset when the player rebuilds for a new item/rung.
     val rebufferSinceMs = remember(player) { mutableStateOf(0L) }
     // Set by the listener on STATE_ENDED; a LaunchedEffect below auto-advances
     // to the next episode (series) or the top recommendation (movie). guarded
@@ -518,39 +521,48 @@ private fun ExoPlayback(
                 // swallows every failure and session-throttles repeat
                 // fingerprints). Position is read here on the player's
                 // looper, before the report hops threads. Fires even when
-                // the quality fallback below recovers, so a flaky rung
-                // still lands on the backlog. The recovery logic below is
-                // untouched.
+                // the recovery below gets past it, so a flaky rung still
+                // lands on the backlog.
                 viewModel.reportPlayerErrorBug(
                     code = error.errorCodeName,
                     message = error.message,
                     stack = error.stackTraceToString(),
                     positionSec = player.currentPosition / 1000L,
                 )
-                // Try dropping one rung on the quality ladder before bothering
-                // the user with an error screen — chino-stream's high rung is
-                // often the only one still warming when medium/low have been
-                // cached for hours. Falls back to the friendly error UI only
-                // when we're already on low.
+                // Recover before bothering the viewer with an error screen
+                // (PlaybackRecovery): an on-the-fly title drops a rung of its
+                // ladder — chino-stream's high rung is often the only one
+                // still warming when medium/low have been cached for hours —
+                // and a packaged one is tried again where it stands, then
+                // rebuilt at its quality. The error UI only once that is
+                // spent.
                 val httpCause = error.cause as? androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException
-                // A manifest 404 = the item has no playback asset. Dropping a
-                // quality rung can't fix that (every rung 404s), so skip the
-                // fallback and surface the "not available" message immediately.
+                // A manifest 404 = the item has no playback asset. No retry or
+                // rung can fix that (every rung 404s), so surface the "not
+                // available" message immediately.
                 val manifestMissing = httpCause?.responseCode == 404 &&
                     (httpCause.dataSpec.uri.toString().contains(".m3u8"))
-                val atSec = (player.currentPosition / 1000L).toInt()
-                if (manifestMissing || !viewModel.attemptQualityFallback(atSec)) {
-                    // Pull HTTP status + failing URL off the cause when the
-                    // root error is an HLS segment fetch failure. Mirrors the
-                    // hls_fatal beacon in chino-web so a chino-stream 502 spike
-                    // surfaces as a correlated client-side burst.
-                    viewModel.reportPlaybackError(
-                        code = error.errorCodeName,
-                        message = error.message,
-                        type = error.cause?.javaClass?.simpleName,
-                        httpStatus = httpCause?.responseCode,
-                        failedUrl = httpCause?.dataSpec?.uri?.toString(),
-                    )
+                val recovery = if (manifestMissing) Recovery.GiveUp
+                else viewModel.recoverFromError(player.currentPosition)
+                when (recovery) {
+                    // ExoPlayer keeps the playhead through an error: prepare()
+                    // loads again from there.
+                    Recovery.RetryInPlace -> player.prepare()
+                    // The ViewModel is rebuilding the player at the position.
+                    is Recovery.StepDown, is Recovery.Reload -> Unit
+                    Recovery.GiveUp, Recovery.Wait -> {
+                        // Pull HTTP status + failing URL off the cause when the
+                        // root error is an HLS segment fetch failure. Mirrors the
+                        // hls_fatal beacon in chino-web so a chino-stream 502 spike
+                        // surfaces as a correlated client-side burst.
+                        viewModel.reportPlaybackError(
+                            code = error.errorCodeName,
+                            message = error.message,
+                            type = error.cause?.javaClass?.simpleName,
+                            httpStatus = httpCause?.responseCode,
+                            failedUrl = httpCause?.dataSpec?.uri?.toString(),
+                        )
+                    }
                 }
             }
         }
@@ -582,32 +594,40 @@ private fun ExoPlayback(
         }
     }
 
-    // Sustained-rebuffer → quality fallback watchdog. onPlayerError only covers
-    // a HARD failure (decode error, segment retry exhausted); the BRAVIA's
-    // "stutters every few minutes but keeps recovering" is a SOFT failure — the
-    // 4-min buffer drains, playback stalls in STATE_BUFFERING, and the slow
-    // segment eventually lands so no PlaybackException ever fires. When a
-    // mid-stream rebuffer persists past REBUFFER_FALLBACK_MS we drop a rung
-    // proactively (the same recovery, earlier): smaller segments keep ahead of
-    // nas001 NFS contention. Fires at most once per player instance — the
-    // fallback rebuilds the player (keyed remember resets the flag + timestamp),
-    // so the next-lower rung gets a fresh watchdog; on `low` attemptQualityFallback
-    // returns false and we stop probing.
-    var rebufferFallbackFired by remember(player) { mutableStateOf(false) }
+    // Sustained-rebuffer watchdog. onPlayerError only covers a HARD failure
+    // (decode error, segment retry exhausted); the BRAVIA's "stutters every few
+    // minutes but keeps recovering" is a SOFT failure — the 4-min buffer
+    // drains, playback stalls in STATE_BUFFERING, and the slow segment
+    // eventually lands so no PlaybackException ever fires. When a mid-stream
+    // rebuffer persists past REBUFFER_FALLBACK_MS the player recovers
+    // (PlaybackRecovery): an on-the-fly title drops a rung — smaller segments
+    // keep ahead of nas001 NFS contention — and a packaged one is left to load
+    // while it is fetching, else nudged where it stands (a seek to the
+    // playhead restarts its renderers on what is buffered) and rebuilt at its
+    // quality after that. A drop or a rebuild makes a new player and with it a
+    // new watchdog; otherwise it looks again REBUFFER_FALLBACK_MS later while
+    // the stall lasts.
     LaunchedEffect(player) {
         while (true) {
             delay(1_000)
-            if (rebufferFallbackFired) continue
             val since = rebufferSinceMs.value
-            if (since > 0L && System.currentTimeMillis() - since >= REBUFFER_FALLBACK_MS) {
-                rebufferFallbackFired = true // claim first: attemptQualityFallback rebuilds the player
-                if (viewModel.attemptQualityFallback((player.currentPosition / 1000L).toInt())) {
-                    viewModel.reportTelemetry(
-                        "rebuffer_quality_fallback",
-                        mapOf("stall_ms" to (System.currentTimeMillis() - since).toString()),
-                    )
-                }
+            if (since <= 0L || System.currentTimeMillis() - since < REBUFFER_FALLBACK_MS) continue
+            val pos = player.currentPosition
+            val recovery = viewModel.recoverFromStall(
+                positionMs = pos,
+                loading = player.isLoading,
+                bufferedAheadMs = player.bufferedPosition - pos,
+            )
+            when (recovery) {
+                Recovery.RetryInPlace -> player.seekTo(pos)
+                is Recovery.StepDown -> viewModel.reportTelemetry(
+                    "rebuffer_quality_fallback",
+                    mapOf("stall_ms" to (System.currentTimeMillis() - since).toString()),
+                )
+                is Recovery.Reload, Recovery.Wait, Recovery.GiveUp -> Unit
             }
+            // A seek within BUFFERING reports no state change: re-arm by hand.
+            if (rebufferSinceMs.value > 0L) rebufferSinceMs.value = System.currentTimeMillis()
         }
     }
 

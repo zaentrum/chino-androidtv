@@ -476,8 +476,8 @@ class PlayerViewModel(
     /**
      * Auto bug report for a Media3 player error — separate from
      * [reportPlaybackError] (telemetry + error UI) on purpose: this fires on
-     * EVERY onPlayerError, including ones the quality-ladder fallback
-     * recovers from, so a flaky rung still lands on the backlog even when
+     * EVERY onPlayerError, including ones [recoverFromError] gets past, so a
+     * flaky rung still lands on the backlog even when
      * the user never saw an error screen. BugReporter session-dedups by
      * fingerprint and hard-caps auto reports per process, so a retry storm
      * can't flood the tracker. Fire-and-forget + silent — never touches
@@ -586,26 +586,61 @@ class PlayerViewModel(
         telemetry.event(kind, itemId = itemId, extra = payload)
     }
 
+    /** What has been tried about trouble at the current spot of the title —
+     *  kept across the reloads it starts (see [PlaybackRecovery]). */
+    private val recovery = PlaybackRecovery()
+
     /**
-     * Drop one rung on the quality ladder (high→medium→low) and reload
-     * playback. Called from PlayerScreen's onPlayerError before surfacing
-     * the error UI — covers the "this rendition has a missing segment but
-     * the lower one is fine" case (transcode pipeline still warming the
-     * high ladder while medium has been cached for hours). Returns true if
-     * a fallback was kicked off; false when we're already on low and
-     * there's nowhere lower to drop to. The reload goes on at [atSec], the
-     * playhead of the failing player.
+     * A player error at [positionMs]: what to do about it, by the title's
+     * mode (PlaybackRecovery). An on-the-fly title steps down its ladder
+     * (high→medium→low: the transcode still warming the high rung while
+     * medium has been cached for hours); a packaged one is tried again in
+     * place, then rebuilt at its quality — never put on the on-the-fly
+     * ladder. A step down or a reload is started here and goes on at the
+     * position; retrying in place and giving up are the screen's to do.
      */
-    fun attemptQualityFallback(atSec: Int): Boolean {
-        val cur = _state.value as? PlayerUiState.Ready ?: return false
-        val next = when (cur.currentQuality.lowercase()) {
-            "high" -> "medium"
-            "medium" -> "low"
-            else -> return false
+    fun recoverFromError(positionMs: Long): Recovery {
+        val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.GiveUp
+        val r = recovery.onError(cur.playInfo?.mode, cur.currentQuality, positionMs)
+        carryOut(r, cur, positionMs, cause = "error")
+        return r
+    }
+
+    /**
+     * A mid-stream stall at [positionMs] — buffering for a while without an
+     * error (the BRAVIA's "stutters every few minutes but never errors").
+     * An on-the-fly title steps down as on an error; a packaged one that is
+     * fetching with nothing buffered is left to it, else it is nudged in
+     * place and rebuilt at its quality after that.
+     */
+    fun recoverFromStall(positionMs: Long, loading: Boolean, bufferedAheadMs: Long): Recovery {
+        val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.Wait
+        val r = recovery.onStall(cur.playInfo?.mode, cur.currentQuality, positionMs, loading, bufferedAheadMs)
+        carryOut(r, cur, positionMs, cause = "stall")
+        return r
+    }
+
+    private fun carryOut(r: Recovery, cur: PlayerUiState.Ready, positionMs: Long, cause: String) {
+        val atSec = (positionMs / 1000L).toInt()
+        when (r) {
+            is Recovery.StepDown -> {
+                telemetry.event(
+                    "quality_fallback",
+                    extra = mapOf("from" to cur.currentQuality, "to" to r.quality, "cause" to cause),
+                )
+                prepare(quality = r.quality, atSec = atSec)
+            }
+            is Recovery.Reload -> {
+                reportTelemetry(
+                    "playback_reload",
+                    mapOf("quality" to r.quality, "cause" to cause, "position_sec" to atSec.toString()),
+                )
+                prepare(quality = r.quality, atSec = atSec)
+            }
+            Recovery.RetryInPlace ->
+                reportTelemetry("playback_retry", mapOf("cause" to cause, "position_sec" to atSec.toString()))
+            Recovery.Wait, Recovery.GiveUp -> Unit
         }
-        telemetry.event("quality_fallback", extra = mapOf("from" to cur.currentQuality, "to" to next))
-        prepare(quality = next, atSec = atSec)
-        return true
     }
 
     companion object {
