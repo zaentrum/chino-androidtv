@@ -82,8 +82,9 @@ import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
-import cloud.nalet.chino.tv.data.model.Trailer
 import cloud.nalet.chino.tv.ui.player.languageOrLabel
+import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
+import cloud.nalet.chino.tv.ui.trailer.pickTrailer
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
@@ -404,7 +405,7 @@ private fun DetailActions(
         // Trailer — labeled secondary CTA next to Play (web shows it too).
         pickTrailer(item.trailers)?.let { trailer ->
             val context = androidx.compose.ui.platform.LocalContext.current
-            Button(onClick = { onTrailerLaunch(); launchTrailer(context, trailer) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+            Button(onClick = { onTrailerLaunch(); launchTrailerLink(context, trailer) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
                 Icon(Lucide.Youtube, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Trailer")
@@ -1414,33 +1415,6 @@ private fun Centered(text: String, isError: Boolean = false) {
                     else MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
-}
-
-/** Prefer the most-likely "Official Trailer" YouTube entry; fall back to the first. */
-private fun pickTrailer(trailers: List<Trailer>): Trailer? {
-    if (trailers.isEmpty()) return null
-    val yt = trailers.filter { (it.site ?: "").contains("youtube", ignoreCase = true) }
-    val pool = if (yt.isNotEmpty()) yt else trailers
-    return pool.firstOrNull {
-        val t = it.title.orEmpty()
-        t.contains("official", ignoreCase = true) && t.contains("trailer", ignoreCase = true)
-    } ?: pool.firstOrNull { it.title.orEmpty().contains("trailer", ignoreCase = true) }
-        ?: pool.first()
-}
-
-private fun launchTrailer(context: android.content.Context, trailer: Trailer) {
-    // Pull the YouTube video id out of common URL shapes (?v=…, /embed/…, /shorts/…).
-    val ytId = Regex("""(?:v=|/embed/|youtu\.be/|/shorts/)([A-Za-z0-9_-]{11})""")
-        .find(trailer.url)?.groupValues?.getOrNull(1)
-    val intent = if (ytId != null) {
-        // vnd.youtube: deep-link is the most-reliable on Android TV — the TV
-        // YouTube app picks it up and goes straight to the video.
-        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse("vnd.youtube:$ytId"))
-    } else {
-        android.content.Intent(android.content.Intent.ACTION_VIEW, android.net.Uri.parse(trailer.url))
-    }
-    intent.flags = android.content.Intent.FLAG_ACTIVITY_NEW_TASK
-    runCatching { context.startActivity(intent) }
 }
 
 private fun formatHM(sec: Int): String {
