@@ -5,6 +5,7 @@ import cloud.nalet.chino.tv.data.model.ItemsPage
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonElement
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.MultipartBody
 import okhttp3.RequestBody
@@ -90,6 +91,17 @@ interface ChinoApi {
 
     @GET("v1/me")
     suspend fun me(): Me
+
+    /**
+     * What addons contribute to a named UI slot
+     * ([cloud.nalet.chino.tv.data.SLOT_SEARCH_EMPTY]), read from portal-api's
+     * registry with the bearer: always 200 with an array, empty for a server
+     * with no addon or no portal-api. The JSON as it came — every row is
+     * checked field by field before it is shown
+     * ([cloud.nalet.chino.tv.data.slotButtons]).
+     */
+    @GET("v1/extensions")
+    suspend fun extensions(@Query("slot") slot: String): JsonElement
 
     /**
      * Deletes the signed-in person's data and their account — the app stores

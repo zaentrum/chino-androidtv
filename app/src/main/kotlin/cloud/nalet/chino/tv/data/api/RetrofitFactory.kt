@@ -40,6 +40,18 @@ object RetrofitFactory {
             .addConverterFactory(json.asConverterFactory("application/json".toMediaType()))
             .build()
 
+    /** The client an addon's slot action is sent with
+     *  ([cloud.nalet.chino.tv.data.SlotActions]): the bearer and the refresh
+     *  of every call, but it follows no redirect — one could carry the bearer
+     *  somewhere the URL check never saw. */
+    fun actionClient(
+        tokenProvider: () -> String?,
+        forceRefresh: () -> String?,
+    ): OkHttpClient = httpClient(tokenProvider, forceRefresh)
+        .followRedirects(false)
+        .followSslRedirects(false)
+        .build()
+
     /** The client every chino-api call goes through: the bearer on every
      *  request, one refresh-and-retry on a 401. Internal: tests answer on
      *  top of exactly this client. */
