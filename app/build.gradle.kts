@@ -42,7 +42,9 @@ android {
         // Single unified app id — no product flavors. Forks override via
         // -PchinoAppId; debug builds append ".debug" (see buildTypes below).
         applicationId = chinoAppId
-        minSdk = 21
+        // 24: Play's automatic protection takes no app below it (the phone
+        // app is at 24 too); Android TV 7.0 and later.
+        minSdk = 24
         targetSdk = 35
         // Unified Play app (io.github.zaentrum.chino): the TV AAB shares one listing
         // with chino-mobile's AAB, and every artifact in a listing needs a
