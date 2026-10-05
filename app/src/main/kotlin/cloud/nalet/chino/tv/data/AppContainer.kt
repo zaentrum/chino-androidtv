@@ -133,14 +133,14 @@ class AppContainer(context: Context) {
     }
 
     /** The signed-in person's notices — what addons told them — for the bell
-     *  in every top bar and the Notices screen. Like [telemetry] it asks for
-     *  the API only once a server is configured, and only the bell, on
-     *  screens that exist once signed in, asks it for notices: building it
-     *  (the NavHost hands it to the bell at the first frame, a fresh install
-     *  included) builds no API client. */
+     *  in every top bar and the Notices screen. Like [telemetry] it gets the
+     *  API only [onceConnected], and only the bell, on screens that exist once
+     *  signed in, asks it for notices: building it (the NavHost hands it to
+     *  the bell at the first frame, a fresh install included) builds no API
+     *  client. */
     val notices: NoticesRepository by lazy {
         NoticesRepository(
-            api = { if (serverConfigStore.current()?.isConfigured == true) chinoApi else null },
+            api = { onceConnected(serverConfigStore::current) { chinoApi } },
             activeAccount = { accountStore.snapshotBlocking().activeAccount?.id },
         )
     }
@@ -155,7 +155,7 @@ class AppContainer(context: Context) {
      *  accountStore collector above touches telemetry at the very first boot. */
     val telemetry: cloud.nalet.chino.tv.data.telemetry.Telemetry by lazy {
         cloud.nalet.chino.tv.data.telemetry.Telemetry(appCtx) {
-            if (serverConfigStore.current()?.isConfigured == true) chinoApi else null
+            onceConnected(serverConfigStore::current) { chinoApi }
         }
     }
 

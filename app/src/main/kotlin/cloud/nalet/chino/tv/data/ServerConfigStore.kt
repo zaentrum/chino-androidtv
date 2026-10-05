@@ -33,6 +33,16 @@ data class ServerConfig(
     val isConfigured: Boolean get() = baseUrl.isNotBlank()
 }
 
+/**
+ * [api] once a server is connected — [config] holds one — and null before,
+ * without building it: a fresh install has no server until Add Server, a
+ * release build has no address to build an API client for, and building it
+ * then would also pin the empty config for the rest of the process. What
+ * [AppContainer] hands out the API by to Telemetry and the notices.
+ */
+suspend fun <T> onceConnected(config: suspend () -> ServerConfig?, api: () -> T): T? =
+    if (config()?.isConfigured == true) api() else null
+
 private val Context.serverConfigDataStore by preferencesDataStore(name = "server_config")
 
 class ServerConfigStore(context: Context) {
