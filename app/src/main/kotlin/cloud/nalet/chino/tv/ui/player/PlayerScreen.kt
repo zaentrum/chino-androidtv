@@ -1700,24 +1700,30 @@ data class SubtitleTrack(
     val trackIndex: Int,
 )
 
-private fun collectSubtitleTracks(tracks: Tracks): List<SubtitleTrack> =
-    tracks.groups
+/** The subtitle panel's rows, each labelled by [subtitleLabels]: by its
+ *  language ("German", "No dialogue" for zxx), with what its own label - the
+ *  sidecar's, the rendition's NAME - says beyond that ("English · SDH"); a
+ *  track in no language by its own label, else "Unknown". */
+private fun collectSubtitleTracks(tracks: Tracks): List<SubtitleTrack> {
+    val found = tracks.groups
         .filter { it.type == C.TRACK_TYPE_TEXT }
-        .flatMap { g ->
-            (0 until g.length).map { i ->
-                val fmt = g.getTrackFormat(i)
-                val label = fmt.label
-                    ?: fmt.language
-                    ?: "Track ${i + 1}"
-                SubtitleTrack(
-                    id = "${g.mediaTrackGroup.id}#$i",
-                    label = label,
-                    selected = g.isTrackSelected(i),
-                    group = g,
-                    trackIndex = i,
-                )
-            }
-        }
+        .flatMap { g -> (0 until g.length).map { i -> g to i } }
+    val formats = found.map { (g, i) -> g.getTrackFormat(i) }
+    val labels = subtitleLabels(
+        formats.map { fmt ->
+            SubtitleLabelInput(fmt.language, fmt.label, forced = (fmt.selectionFlags and C.SELECTION_FLAG_FORCED) != 0)
+        },
+    )
+    return found.mapIndexed { k, (g, i) ->
+        SubtitleTrack(
+            id = "${g.mediaTrackGroup.id}#$i",
+            label = labels[k],
+            selected = g.isTrackSelected(i),
+            group = g,
+            trackIndex = i,
+        )
+    }
+}
 
 data class AudioTrack(
     val id: String,
@@ -1727,40 +1733,42 @@ data class AudioTrack(
     val trackIndex: Int,
 )
 
-/** Builds the user-facing label from format metadata: prefer the human label,
- *  fall back to language code, then track index. Append channel count + codec
- *  when present so "EN • 5.1 • ac-3" disambiguates surround vs stereo. */
-private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> =
-    tracks.groups
+/** Builds the user-facing label from format metadata: the language first
+ *  ("German", "No dialogue" for zxx), the NAME where there is none or where
+ *  it tells two apart ([audioLabels]). Appends channel count + codec when
+ *  present so "English • 5.1 • ac-3" disambiguates surround vs stereo. */
+private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
+    val found = tracks.groups
         .filter { it.type == C.TRACK_TYPE_AUDIO }
-        .flatMap { g ->
-            (0 until g.length).map { i ->
-                val fmt = g.getTrackFormat(i)
-                val parts = buildList {
-                    val primary = fmt.label
-                        ?: fmt.language?.takeIf { it.isNotBlank() && it != "und" }
-                        ?: "Track ${i + 1}"
-                    add(primary)
-                    if (fmt.channelCount > 0) {
-                        add(when (fmt.channelCount) {
-                            1 -> "Mono"
-                            2 -> "Stereo"
-                            6 -> "5.1"
-                            8 -> "7.1"
-                            else -> "${fmt.channelCount}ch"
-                        })
-                    }
-                    fmt.codecs?.takeIf { it.isNotBlank() }?.let { add(it) }
+        .flatMap { g -> (0 until g.length).map { i -> g to i } }
+    val formats = found.map { (g, i) -> g.getTrackFormat(i) }
+    val details = formats.map { fmt ->
+        listOfNotNull(
+            fmt.channelCount.takeIf { it > 0 }?.let {
+                when (it) {
+                    1 -> "Mono"
+                    2 -> "Stereo"
+                    6 -> "5.1"
+                    8 -> "7.1"
+                    else -> "${it}ch"
                 }
-                AudioTrack(
-                    id = "${g.mediaTrackGroup.id}#$i",
-                    label = parts.joinToString(" • "),
-                    selected = g.isTrackSelected(i),
-                    group = g,
-                    trackIndex = i,
-                )
-            }
-        }
+            },
+            fmt.codecs?.takeIf { it.isNotBlank() },
+        )
+    }
+    val labels = audioLabels(
+        formats.mapIndexed { k, fmt -> AudioLabelInput(fmt.language, fmt.label, details[k].joinToString(" • ")) },
+    )
+    return found.mapIndexed { k, (g, i) ->
+        AudioTrack(
+            id = "${g.mediaTrackGroup.id}#$i",
+            label = (listOf(labels[k]) + details[k]).joinToString(" • "),
+            selected = g.isTrackSelected(i),
+            group = g,
+            trackIndex = i,
+        )
+    }
+}
 
 private fun applyAudioSelection(player: ExoPlayer, track: AudioTrack): String {
     val params = player.trackSelectionParameters
