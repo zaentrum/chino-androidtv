@@ -43,6 +43,8 @@ import cloud.nalet.chino.tv.ui.search.SearchScreen
 import cloud.nalet.chino.tv.ui.search.SearchViewModel
 import cloud.nalet.chino.tv.ui.settings.SettingsScreen
 import cloud.nalet.chino.tv.ui.settings.SettingsViewModel
+import cloud.nalet.chino.tv.ui.trailer.TrailerScreen
+import cloud.nalet.chino.tv.ui.trailer.TrailerViewModel
 import cloud.nalet.chino.tv.ui.watchlist.WatchlistScreen
 import cloud.nalet.chino.tv.ui.watchlist.WatchlistViewModel
 
@@ -72,8 +74,12 @@ object Routes {
      *  from tappable Detail cast chips. */
     const val PERSON = "person/{personId}"
     const val PLAYER = "player/{itemId}?fromStart={fromStart}&fromBinge={fromBinge}&resume={resume}"
+    /** A title's trailer from this server (one of its extras) — from
+     *  Detail's Trailer button. Plays it and closes; no progress. */
+    const val TRAILER = "trailer/{itemId}/{extraId}"
     fun detail(itemId: String) = "detail/$itemId"
     fun person(personId: String) = "person/$personId"
+    fun trailer(itemId: String, extraId: String) = "trailer/$itemId/$extraId"
     /** fromStart=true forces the player to ignore any saved resume
      *  position and start at 0:00 — used by the "Play from start" CTA on
      *  Detail. fromStart=false (default) honours the user's saved progress.
@@ -582,8 +588,36 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onPlayEpisode = { episodeId ->
                     navController.navigate(Routes.player(episodeId)) { launchSingleTop = true }
                 },
+                // launchSingleTop: a doubled DPAD_CENTER must not stack two.
+                onPlayTrailer = { id, extraId ->
+                    navController.navigate(Routes.trailer(id, extraId)) { launchSingleTop = true }
+                },
                 onSimilarSelected = { id -> navController.navigate(Routes.detail(id)) },
                 onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
+            )
+        }
+        composable(
+            route = Routes.TRAILER,
+            arguments = listOf(
+                navArgument("itemId") { type = NavType.StringType },
+                navArgument("extraId") { type = NavType.StringType },
+            ),
+        ) { backStackEntry ->
+            val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
+            val extraId = backStackEntry.arguments?.getString("extraId").orEmpty()
+            val vm: TrailerViewModel = viewModel(
+                factory = TrailerViewModel.factory(container, itemId, extraId),
+                key = "trailer/$itemId/$extraId",
+            )
+            TrailerScreen(
+                viewModel = vm,
+                // At the trailer's end. Only while it is still the screen on
+                // top: a BACK that came first has popped it already.
+                onClose = {
+                    if (navController.currentBackStackEntry?.id == backStackEntry.id) {
+                        navController.popBackStack()
+                    }
+                },
             )
         }
         composable(

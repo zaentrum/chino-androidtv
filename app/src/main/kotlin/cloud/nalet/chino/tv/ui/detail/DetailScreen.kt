@@ -83,11 +83,13 @@ import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.player.languageOrLabel
+import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
-import cloud.nalet.chino.tv.ui.trailer.pickTrailer
+import cloud.nalet.chino.tv.ui.trailer.trailerChoice
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.Clapperboard
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.Heart
@@ -103,6 +105,8 @@ fun DetailScreen(
     viewModel: DetailViewModel,
     onPlay: (itemId: String, resume: Boolean) -> Unit,
     onPlayEpisode: (String) -> Unit = { id -> onPlay(id, false) },
+    /** Plays the extra extraId of the title itemId: its trailer from this server. */
+    onPlayTrailer: (itemId: String, extraId: String) -> Unit = { _, _ -> },
     onSimilarSelected: (String) -> Unit = {},
     onPersonSelected: (String) -> Unit = {},
 ) {
@@ -157,6 +161,8 @@ fun DetailScreen(
                 onToggleEpisodeWatched = { id, watched -> viewModel.toggleEpisodeWatched(id, watched) },
                 onAddEpisodeToList = { episodeId -> listPickerTarget = episodeId },
                 onTrailerLaunch = { viewModel.reportTrailerLaunch() },
+                // The rendered title's: the series' for an episode entry.
+                onPlayTrailer = { extraId -> onPlayTrailer(s.item.id, extraId) },
                 onPlayEpisode = onPlayEpisode,
                 onSimilarSelected = onSimilarSelected,
                 onPersonSelected = onPersonSelected,
@@ -192,6 +198,7 @@ private fun DetailContent(
     onToggleEpisodeWatched: (String, Boolean) -> Unit,
     onAddEpisodeToList: (String) -> Unit,
     onTrailerLaunch: () -> Unit,
+    onPlayTrailer: (extraId: String) -> Unit,
     onPlayEpisode: (String) -> Unit,
     onSimilarSelected: (String) -> Unit,
     onPersonSelected: (String) -> Unit,
@@ -301,6 +308,7 @@ private fun DetailContent(
                     onToggleLike = onToggleLike,
                     onToggleWatched = onToggleWatched,
                     onTrailerLaunch = onTrailerLaunch,
+                    onPlayTrailer = onPlayTrailer,
                 )
                 s.item.overview?.let { o ->
                     Text(
@@ -366,6 +374,7 @@ private fun DetailActions(
     onToggleLike: (Boolean) -> Unit,
     onToggleWatched: () -> Unit,
     onTrailerLaunch: () -> Unit,
+    onPlayTrailer: (extraId: String) -> Unit,
 ) {
     val watched = item.watchedAt != null
     Row(
@@ -402,11 +411,28 @@ private fun DetailActions(
                 Text(text = "Start over")
             }
         }
-        // Trailer — labeled secondary CTA next to Play (web shows it too).
-        pickTrailer(item.trailers)?.let { trailer ->
+        // Trailer — labeled secondary CTA next to Play (web shows it too): a
+        // trailer this server plays opens the trailer screen, else the
+        // title's link opens in the YouTube app as before (trailerChoice).
+        trailerChoice(item)?.let { choice ->
             val context = androidx.compose.ui.platform.LocalContext.current
-            Button(onClick = { onTrailerLaunch(); launchTrailerLink(context, trailer) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
-                Icon(Lucide.Youtube, contentDescription = null, modifier = Modifier.size(20.dp))
+            Button(
+                onClick = {
+                    when (choice) {
+                        is TrailerChoice.Local -> onPlayTrailer(choice.extra.id)
+                        is TrailerChoice.Link -> {
+                            onTrailerLaunch()
+                            launchTrailerLink(context, choice.trailer)
+                        }
+                    }
+                },
+                shape = ButtonDefaults.shape(shape = RectangleShape),
+            ) {
+                Icon(
+                    if (choice is TrailerChoice.Local) Lucide.Clapperboard else Lucide.Youtube,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp),
+                )
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Trailer")
             }
