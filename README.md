@@ -38,6 +38,10 @@ real values always come from the connected server at runtime.
 
 - Browse, search, and a detail screen with cast/crew
 - Playback with trickplay scrubbing thumbnails
+- Trailers: a trailer your server has plays full screen in the app, from the
+  start with sound, under the remote-driven player controls, and closes at its
+  end; it writes no progress, so Continue Watching is left alone. Without one,
+  the Trailer button opens the title's YouTube link
 - Watchlists (named lists)
 - Zap — a channel-surf discovery mode
 - Multi-account, with an in-app account picker
@@ -68,7 +72,7 @@ never overwrites a release you installed.
 # APK: app/build/outputs/apk/debug/app-debug.apk
 
 # JVM unit tests (paging, credits, people, series resume, the API contract,
-# account deletion, addon slots, notices):
+# account deletion, addon slots, notices, trailers):
 ./gradlew :app:testDebugUnitTest
 ```
 
