@@ -83,6 +83,7 @@ import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.Trailer
+import cloud.nalet.chino.tv.ui.player.languageOrLabel
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
@@ -1097,8 +1098,10 @@ private fun GenreChips(genres: List<String>) {
 
 @Composable
 private fun FooterGrid(item: Item) {
+    // The subtitle languages by name ("German", "No dialogue"), each once; a
+    // track in no language by its label.
     val subtitleLabel = item.subtitles
-        .mapNotNull { it.label?.takeIf { l -> l.isNotBlank() } ?: it.lang.takeIf { l -> l.isNotBlank() } }
+        .mapNotNull { languageOrLabel(it.lang, it.label) }
         .distinct()
         .joinToString(", ")
         .takeIf { it.isNotBlank() }

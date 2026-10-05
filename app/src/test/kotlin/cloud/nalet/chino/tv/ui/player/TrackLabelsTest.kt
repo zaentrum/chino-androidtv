@@ -34,6 +34,16 @@ class TrackLabelsTest {
     }
 
     @Test
+    fun aTitlesSubtitleLanguagesByNameATrackInNoLanguageByItsLabel() {
+        assertEquals("German", languageOrLabel("ger", null))
+        assertEquals("English", languageOrLabel("eng", "English (SDH)"))
+        assertEquals("No dialogue", languageOrLabel("zxx", "zxx"))
+        assertEquals("Signs", languageOrLabel("und", " Signs "))
+        assertEquals(null, languageOrLabel("und", null))
+        assertEquals(null, languageOrLabel("", " "))
+    }
+
+    @Test
     fun audioByItsLanguageFirstNoDialogueForZxxUnknownForNone() {
         assertEquals(
             listOf("English", "No dialogue", "Unknown", "German"),

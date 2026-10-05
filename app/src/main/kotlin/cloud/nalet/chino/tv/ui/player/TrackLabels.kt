@@ -51,6 +51,12 @@ fun languageName(tag: String?): String {
     return if (name.isBlank() || name.equals(key, ignoreCase = true)) tag.orEmpty().trim() else name
 }
 
+/** A track's language by name ("German", "No dialogue" for zxx), else its own
+ *  label for a track in no language; null for neither. What a title's
+ *  subtitle languages are listed as. */
+fun languageOrLabel(tag: String?, label: String?): String? =
+    if (hasLanguage(tag)) languageName(tag) else label?.trim()?.takeIf { it.isNotEmpty() }
+
 private val CODE_LIKE = Regex("^[a-z]{2,3}([-_][a-z0-9]+)*$", RegexOption.IGNORE_CASE)
 
 /** A label that is only a language code: the track's own again ("eng" on
