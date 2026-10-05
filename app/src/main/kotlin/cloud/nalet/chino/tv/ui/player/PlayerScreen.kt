@@ -238,16 +238,10 @@ private fun ExoPlayback(
     // tears down + rebuilds the player with the new ?q= URL. The ViewModel
     // bumps reloadKey on every prepare() that follows a switchQuality call.
     val player = remember(ready.masterUrl, ready.reloadKey) {
-        // OkHttpDataSource (instead of DefaultHttpDataSource) so segment
-        // fetches share the AppContainer's OkHttp client. Connection pool +
-        // TLS sessions are reused across master.m3u8 + every .m4s — first-
-        // segment latency drops from ~300ms (cold TLS handshake per fetch)
-        // to <50ms once the pool is warm. The HttpLoggingInterceptor on the
-        // shared client also surfaces every segment URL + response code in
-        // logcat, so chino-stream 404s are visible during debug.
+        // OkHttp over the AppContainer's stream client, shared with every
+        // segment fetch (streamDataSourceFactory, StreamPlayer.kt).
         val appContainer = (context.applicationContext as cloud.nalet.chino.tv.ChinoTvApp).container
-        val httpFactory = androidx.media3.datasource.okhttp.OkHttpDataSource.Factory(appContainer.streamHttpClient)
-            .setUserAgent("chino-tv/0.1 (Android)")
+        val httpFactory = streamDataSourceFactory(appContainer)
         // Sidecar subs from /v1/items/{id}/subtitles attached as
         // side-loaded tracks. Format drives MIME so Media3 picks the
         // right decoder: TEXT_VTT goes through PgsDecoder etc via the
@@ -273,40 +267,9 @@ private fun ExoPlayback(
                 .setSelectionFlags(if (sub.default == true) C.SELECTION_FLAG_DEFAULT else 0)
                 .build()
         }
-        // Custom retry policy: chino-stream's transcode pipeline can drop a
-        // brief 404 on the first request for an uncached segment (ffmpeg
-        // hasn't finished writing it yet). Default ExoPlayer policy retries
-        // 3× with linear backoff; we bump to 6× and back off exponentially on
-        // 404 specifically so the second viewer of a cold item doesn't see a
-        // fatal error mid-stream. Other failure classes fall back to default.
-        val retryPolicy = object : androidx.media3.exoplayer.upstream.DefaultLoadErrorHandlingPolicy() {
-            override fun getMinimumLoadableRetryCount(dataType: Int): Int = 6
-            override fun getRetryDelayMsFor(
-                info: androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy.LoadErrorInfo,
-            ): Long {
-                val ex = info.exception
-                if (ex is androidx.media3.datasource.HttpDataSource.InvalidResponseCodeException && ex.responseCode == 404) {
-                    // A 404 on the MANIFEST (.m3u8) is permanent — chino-stream
-                    // has no playback asset for this item ("no playback asset"
-                    // / "file missing on filesystem"). Retrying just stalls the
-                    // user ~18s before the same failure, so fail fast.
-                    if (ex.dataSpec.uri.toString().contains(".m3u8")) {
-                        return androidx.media3.common.C.TIME_UNSET
-                    }
-                    // A SEGMENT 404 is transient (ffmpeg hasn't finished writing
-                    // it). Back off + retry: 500ms, 1.5s, 3s, 5s, 8s, then give up.
-                    return when (info.errorCount) {
-                        1 -> 500L
-                        2 -> 1_500L
-                        3 -> 3_000L
-                        4 -> 5_000L
-                        5 -> 8_000L
-                        else -> androidx.media3.common.C.TIME_UNSET
-                    }
-                }
-                return super.getRetryDelayMsFor(info)
-            }
-        }
+        // chino-stream's retry rules: a segment's 404 is retried with a
+        // backoff, a master's fails at once (StreamLoadErrorPolicy).
+        val retryPolicy = StreamLoadErrorPolicy()
         // The HLS master + the side-loaded subtitle tracks on one MediaItem.
         val mediaItem = MediaItem.Builder()
             .setUri(ready.masterUrl)
@@ -349,12 +312,10 @@ private fun ExoPlayback(
         val mediaSourceFactory =
             androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playDataSourceFactory)
                 .setLoadErrorHandlingPolicy(retryPolicy)
-        ExoPlayer.Builder(context)
-            .setMediaSourceFactory(mediaSourceFactory)
+        // A packaged ladder starts on its first variant, the one
+        // chino-stream warmed when the master was fetched (streamPlayerBuilder).
+        streamPlayerBuilder(context, mediaSourceFactory)
             .setLoadControl(loadControl)
-            // A packaged ladder starts on its first variant, the one
-            // chino-stream warmed when the master was fetched.
-            .setTrackSelector(firstVariantTrackSelector(context))
             .build().also {
             it.setMediaItem(mediaItem)
             it.prepare()
