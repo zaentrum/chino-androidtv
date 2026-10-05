@@ -32,7 +32,11 @@ import java.util.UUID
  */
 class Telemetry(
     context: Context,
-    private val api: ChinoApi,
+    /** The API to send through, or null while no server is connected (a
+     *  fresh install before Add-Server). Asked when an event is sent, never
+     *  on construction: building Telemetry must not build the API client,
+     *  which cannot exist without a server address. */
+    private val api: suspend () -> ChinoApi?,
 ) {
     private val app = context.applicationContext
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
@@ -87,7 +91,9 @@ class Telemetry(
         }
         scope.launch {
             runCatching {
-                api.postTelemetry(
+                // No server yet: the event has nowhere to go and is dropped.
+                val client = api() ?: return@launch
+                client.postTelemetry(
                     TelemetryBatch(
                         sessionId = sessionId,
                         events = listOf(

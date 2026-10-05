@@ -123,9 +123,15 @@ class AppContainer(context: Context) {
     /** Per-device playback ergonomics (binge auto-skip, auto-play, countdown). */
     val settings: SettingsStore by lazy { SettingsStore(appCtx) }
 
-    /** Process-wide telemetry funnel — auto-attaches device/app/session/network context. */
+    /** Process-wide telemetry funnel — auto-attaches device/app/session/network context.
+     *  It reaches chinoApi only once a server is connected. Before Add-Server
+     *  the API client cannot be built (no address), and touching it would
+     *  also pin the empty serverConfig for the rest of the process; the
+     *  accountStore collector above touches telemetry at the very first boot. */
     val telemetry: cloud.nalet.chino.tv.data.telemetry.Telemetry by lazy {
-        cloud.nalet.chino.tv.data.telemetry.Telemetry(appCtx, chinoApi)
+        cloud.nalet.chino.tv.data.telemetry.Telemetry(appCtx) {
+            if (serverConfigStore.current()?.isConfigured == true) chinoApi else null
+        }
     }
 
     /** Crash-report queue at filesDir/bug_reports — written SYNCHRONOUSLY by

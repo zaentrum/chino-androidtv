@@ -30,14 +30,9 @@ class ChinoTvApp : Application() {
         // tokenManager → accountStore → tokenStore) materialises off the
         // main thread. The event itself is fire-and-forget either way.
         container.appScope.launch {
-            // A fresh install has no server yet, and the API client cannot be
-            // built for an empty address: telemetry would build it and crash
-            // the app before Add Server. Only an install with a server says
-            // hello. (The store, not the lazy serverConfig, which would pin
-            // the empty default for the rest of the process.)
-            if (container.serverConfigStore.current()?.isConfigured == true) {
-                container.telemetry.event("app_start")
-            }
+            // A fresh install has no server yet: Telemetry drops the event
+            // rather than build the API client for an empty address.
+            container.telemetry.event("app_start")
         }
         // Build the shared Zap on-disk cache off the main thread NOW, so the
         // ZapScreen player path (a main-thread LaunchedEffect) never triggers the
