@@ -103,6 +103,32 @@ interface ChinoApi {
     @GET("v1/extensions")
     suspend fun extensions(@Query("slot") slot: String): JsonElement
 
+    // ── Notices ─────────────────────────────────────────────────────────
+    // What addons tell the signed-in person, kept by portal-api; chino-api
+    // forwards the bearer and keeps nothing. The path parameter is noticeId:
+    // on chino-api's routes {id} is a title's.
+
+    /** The person's notices, newest first, how many are unread, and whether
+     *  portal-api answered (`available`). Always 200: with no portal-api the
+     *  list is empty and available false. The JSON as it came — every notice
+     *  is checked field by field ([cloud.nalet.chino.tv.data.noticeListOf]). */
+    @GET("v1/notices")
+    suspend fun notices(): JsonElement
+
+    /** One of the person's notices, read — once: reading it again keeps when
+     *  it was first read. 404 for a notice they do not have; 502 or 503 when
+     *  portal-api did not change it. */
+    @POST("v1/notices/{noticeId}/read")
+    suspend fun readNotice(@Path("noticeId") noticeId: String): retrofit2.Response<Unit>
+
+    /** Every notice of the person, read. */
+    @POST("v1/notices/read-all")
+    suspend fun readAllNotices(): retrofit2.Response<Unit>
+
+    /** One of the person's notices, deleted: 204. */
+    @DELETE("v1/notices/{noticeId}")
+    suspend fun deleteNotice(@Path("noticeId") noticeId: String): retrofit2.Response<Unit>
+
     /**
      * Deletes the signed-in person's data and their account — the app stores
      * ask every app that makes accounts to offer it. The bearer rides in the
