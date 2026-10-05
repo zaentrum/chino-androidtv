@@ -120,6 +120,18 @@ class AppContainer(context: Context) {
     /** Shared watchlist + likes cache across DetailScreen and any future surfaces. */
     val userFlags: UserFlagsRepository by lazy { UserFlagsRepository(chinoApi) }
 
+    /** Sends the actions addons put in a UI slot: a POST with the bearer that
+     *  follows no redirect (see [SlotActions]). Built on first use, by the
+     *  Search screen — which only exists once an account is signed in. */
+    val slotActions: SlotActions by lazy {
+        SlotActions(
+            RetrofitFactory.actionClient(
+                tokenProvider = tokenManager::validAccessTokenBlocking,
+                forceRefresh = tokenManager::forceRefreshBlocking,
+            ),
+        )
+    }
+
     /** Per-device playback ergonomics (binge auto-skip, auto-play, countdown). */
     val settings: SettingsStore by lazy { SettingsStore(appCtx) }
 

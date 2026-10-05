@@ -73,6 +73,7 @@ import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.streamArtworkUrl
 import cloud.nalet.chino.tv.ui.person.PersonPortrait
+import cloud.nalet.chino.tv.ui.slots.SlotButtons
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
 
@@ -91,10 +92,14 @@ fun SearchScreen(
 ) {
     val q by viewModel.query.collectAsState()
     val state by viewModel.state.collectAsState()
+    val emptySlot by viewModel.emptySlot.collectAsState()
+    val slotActionStates by viewModel.slotActionStates.collectAsState()
     // DOWN from the search field jumps straight to the first result card
     // (not the rail). Wired via focusProperties on the input + a requester on
-    // the first card — only while results are showing.
+    // the first card — only while results are showing. With no results, it
+    // goes to the first of the addons' buttons under the message, if any.
     val firstResultFocus = remember { FocusRequester() }
+    val firstSlotFocus = remember { FocusRequester() }
     // Integrated into the app shell — rail + top bar — with the LIVE search
     // field hosted IN the top bar (web parity: the search input lives in the
     // header), instead of a standalone full-screen page.
@@ -117,7 +122,11 @@ fun SearchScreen(
                         SearchInput(
                             query = q,
                             onChange = viewModel::onQueryChange,
-                            downTarget = firstResultFocus.takeIf { state is SearchUiState.Results },
+                            downTarget = when {
+                                state is SearchUiState.Results -> firstResultFocus
+                                state == SearchUiState.NoMatches && emptySlot.isNotEmpty() -> firstSlotFocus
+                                else -> null
+                            },
                         )
                     },
                 )
@@ -128,7 +137,20 @@ fun SearchScreen(
                             hint = "Type a movie or show title to look it up.",
                         )
                         SearchUiState.Searching -> SearchMessage(headline = "Searching for “$q”…")
-                        SearchUiState.NoMatches -> SearchMessage(headline = "No results for “$q”")
+                        SearchUiState.NoMatches -> SearchMessage(headline = "No results for “$q”") {
+                            // The search.empty slot: what addons offer
+                            // instead, as native buttons. An empty slot (a
+                            // server with no addon) shows nothing.
+                            if (emptySlot.isNotEmpty()) {
+                                SlotButtons(
+                                    buttons = emptySlot,
+                                    actionStates = slotActionStates,
+                                    onAction = viewModel::onSlotAction,
+                                    firstFocus = firstSlotFocus,
+                                    modifier = Modifier.padding(top = 16.dp),
+                                )
+                            }
+                        }
                         is SearchUiState.Error -> SearchMessage(
                             headline = "Search failed",
                             hint = s.message,
@@ -451,7 +473,12 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
 }
 
 @Composable
-private fun SearchMessage(headline: String, hint: String? = null, isError: Boolean = false) {
+private fun SearchMessage(
+    headline: String,
+    hint: String? = null,
+    isError: Boolean = false,
+    below: @Composable () -> Unit = {},
+) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Column(
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -466,6 +493,7 @@ private fun SearchMessage(headline: String, hint: String? = null, isError: Boole
             hint?.let {
                 Text(text = it, color = ChinoMuted, fontSize = 16.sp)
             }
+            below()
         }
     }
 }
