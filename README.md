@@ -43,6 +43,12 @@ real values always come from the connected server at runtime.
 - Multi-account, with an in-app account picker
 - Delete Account (Settings → Account): deletes the signed-in account and what
   the server keeps of it, after asking, and signs it out on the TV
+- Notices: what an addon on your server tells you ("your title is ready").
+  The bell in the top bar counts the unread ones; a notice about a title opens
+  it. Nothing shows on a server whose portal does not answer
+- Addon buttons where a search finds nothing (the `search.empty` slot): an
+  action is sent from the TV; a link shows its address as a QR code to open on
+  your phone, since a TV has no browser
 - In-app feedback / bug reporting to the connected server
 
 ## Build
@@ -62,7 +68,7 @@ never overwrites a release you installed.
 # APK: app/build/outputs/apk/debug/app-debug.apk
 
 # JVM unit tests (paging, credits, people, series resume, the API contract,
-# account deletion):
+# account deletion, addon slots, notices):
 ./gradlew :app:testDebugUnitTest
 ```
 
