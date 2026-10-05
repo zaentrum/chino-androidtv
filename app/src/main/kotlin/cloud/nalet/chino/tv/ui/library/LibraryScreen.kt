@@ -75,7 +75,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
-import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.ChevronRight
 import com.composables.icons.lucide.Eye
@@ -108,6 +107,7 @@ fun LibraryScreen(
     onMoviesNav: () -> Unit = {},
     onSeriesNav: () -> Unit = {},
     onZap: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
 ) {
     val state by viewModel.state.collectAsState()
@@ -166,6 +166,7 @@ fun LibraryScreen(
                     onAccountClick = onAccountClick,
                     onMoviesNav = onMoviesNav,
                     onSeriesNav = onSeriesNav,
+                    noticesBell = noticesBell,
                     activeAccount = activeAccount,
                     onFilterChange = viewModel::applyFilter,
                     onHeroFocusChanged = viewModel::setHeroRotationPaused,
@@ -201,6 +202,7 @@ private fun LibraryContent(
     onAccountClick: () -> Unit,
     onMoviesNav: () -> Unit,
     onSeriesNav: () -> Unit,
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell?,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account?,
     onFilterChange: (BrowseFilter) -> Unit,
     onHeroFocusChanged: (Boolean) -> Unit = {},
@@ -285,7 +287,7 @@ private fun LibraryContent(
         Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
             TvTopBar(
                 onSearch = onSearch,
-                onWatchlist = onWatchlist,
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
                 onAccountClick = onAccountClick,
                 searchFocusRequester = searchFocus,
@@ -556,8 +558,8 @@ internal fun TvSideRail(
                 TvRailButton(icon = Lucide.House, label = "Home", isActive = activeType == null, onClick = onHome)
                 TvRailButton(icon = Lucide.Film, label = "Movies", isActive = activeType == "movie", onClick = onMovies)
                 TvRailButton(icon = Lucide.Tv, label = "Series", isActive = activeType == "series", onClick = onSeries)
-                // Watchlist hub — primary entry (web/mobile parity); the
-                // top-bar bell stays as a secondary entry to the same route.
+                // Watchlist hub — its entry (web/mobile parity). The top-bar
+                // bell is the notices', as on chino-web's header.
                 TvRailButton(icon = Lucide.Bookmark, label = "Watchlist", isActive = watchlistActive, onClick = onWatchlist)
                 TvRailButton(icon = Lucide.Zap, label = "Zap", isActive = zapActive, onClick = onZap)
             }
@@ -618,19 +620,20 @@ private fun TvRailButton(
     }
 }
 
-/** Top bar with inline search field + watchlist bell + account avatar.
+/** Top bar with inline search field + notices bell + account avatar.
  *  Visual parity with chino-web's Header (the bar above the catalogue):
  *  wide cosmetic search input on the left taking all remaining width, then
- *  a Lucide.Bell icon cell for the watchlist, then the user's avatar on
- *  the far right. CENTER on the search field pushes SearchScreen rather
- *  than opening an inline dropdown — DPAD typing through a soft keyboard
- *  is impractical inside a 56dp pill, and the dedicated screen gives the
- *  keyboard the room it needs.
+ *  the Lucide.Bell of the signed-in person's notices with its unread count
+ *  (none at all while the server's portal-api does not answer — see
+ *  NoticesBellCell), then the user's avatar on the far right. CENTER on the
+ *  search field pushes SearchScreen rather than opening an inline
+ *  dropdown — DPAD typing through a soft keyboard is impractical inside a
+ *  56dp pill, and the dedicated screen gives the keyboard the room it needs.
  */
 @Composable
 internal fun TvTopBar(
     onSearch: () -> Unit = {},
-    onWatchlist: () -> Unit,
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account?,
     onAccountClick: () -> Unit,
     searchFocusRequester: FocusRequester? = null,
@@ -672,7 +675,9 @@ internal fun TvTopBar(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(16.dp),
             ) {
-                TvIconCell(icon = Lucide.Bell, contentDescription = "Watchlist", onClick = onWatchlist)
+                if (noticesBell != null && activeAccount != null) {
+                    cloud.nalet.chino.tv.ui.notices.NoticesBellCell(bell = noticesBell, account = activeAccount)
+                }
                 if (activeAccount != null) {
                     AccountAvatarButton(account = activeAccount, onClick = onAccountClick)
                 } else {
@@ -745,9 +750,9 @@ private fun TvSearchBar(
 }
 
 /** Circular icon cell matching chino-mobile's IconCell — focusable, DPAD-
- *  selectable, brand-blue focus ring. Used for the bell (watchlist) slot
- *  in TvTopBar and the Watchlist MORE-view header actions; can host any
- *  single Lucide glyph. */
+ *  selectable, brand-blue focus ring. Used for the notices bell in TvTopBar,
+ *  a notice's Delete and the Watchlist MORE-view header actions; can host
+ *  any single Lucide glyph. */
 @Composable
 internal fun TvIconCell(
     icon: androidx.compose.ui.graphics.vector.ImageVector,

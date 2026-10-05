@@ -69,6 +69,7 @@ fun SettingsScreen(
     onSearch: () -> Unit = {},
     onWatchlist: () -> Unit = {},
     onAccountClick: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
 ) {
     val s by viewModel.state.collectAsState()
@@ -90,7 +91,7 @@ fun SettingsScreen(
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                 cloud.nalet.chino.tv.ui.library.TvTopBar(
                     onSearch = onSearch,
-                    onWatchlist = onWatchlist,
+                    noticesBell = noticesBell,
                     activeAccount = activeAccount,
                     onAccountClick = onAccountClick,
                 )

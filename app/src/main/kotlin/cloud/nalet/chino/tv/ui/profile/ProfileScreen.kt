@@ -78,6 +78,7 @@ fun ProfileScreen(
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
     onAccountClick: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: Account? = null,
 ) {
     val state by viewModel.state.collectAsState()
@@ -95,7 +96,7 @@ fun ProfileScreen(
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                 TvTopBar(
                     onSearch = onSearch,
-                    onWatchlist = onWatchlist,
+                    noticesBell = noticesBell,
                     activeAccount = activeAccount,
                     onAccountClick = onAccountClick,
                 )

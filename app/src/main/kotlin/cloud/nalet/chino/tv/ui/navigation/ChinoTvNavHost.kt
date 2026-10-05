@@ -8,6 +8,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.produceState
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -31,6 +32,9 @@ import cloud.nalet.chino.tv.ui.detail.DetailScreen
 import cloud.nalet.chino.tv.ui.detail.DetailViewModel
 import cloud.nalet.chino.tv.ui.library.LibraryScreen
 import cloud.nalet.chino.tv.ui.library.LibraryViewModel
+import cloud.nalet.chino.tv.ui.notices.NoticesBell
+import cloud.nalet.chino.tv.ui.notices.NoticesScreen
+import cloud.nalet.chino.tv.ui.notices.NoticesViewModel
 import cloud.nalet.chino.tv.ui.person.PersonScreen
 import cloud.nalet.chino.tv.ui.person.PersonViewModel
 import cloud.nalet.chino.tv.ui.player.PlayerScreen
@@ -60,6 +64,9 @@ object Routes {
     const val DELETE_ACCOUNT = "delete_account"
     const val PROFILE = "profile"
     const val WATCHLIST = "watchlist"
+    /** What addons told the signed-in person — reached from the bell in
+     *  every top bar. */
+    const val NOTICES = "notices"
     const val DETAIL = "detail/{itemId}"
     /** Person / Filmography surface — reached from the Search people row and
      *  from tappable Detail cast chips. */
@@ -132,6 +139,14 @@ fun ChinoTvNavHost(container: AppContainer) {
     }
     val snapshot = bootState.accounts
     val navController = rememberNavController()
+    // The bell in every top bar: the person's notices, and the way to them.
+    // Building it builds no API client (AppContainer.notices) — only the
+    // bell, on the screens that exist once signed in, asks for notices.
+    val noticesBell = remember(navController) {
+        NoticesBell(container.notices) {
+            navController.navigate(Routes.NOTICES) { launchSingleTop = true }
+        }
+    }
     val accounts by container.accountStore.accounts.collectAsState(initial = snapshot.accounts)
     val activeAccount by container.accountStore.activeAccount.collectAsState(initial = snapshot.activeAccount)
 
@@ -343,9 +358,9 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onHeroPlay = { itemId -> navController.navigate(Routes.player(itemId)) { launchSingleTop = true } },
                 onSearch = { navController.navigate(Routes.SEARCH) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) {
@@ -355,6 +370,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onMoviesNav = { navController.navigate(Routes.MOVIES) },
                 onSeriesNav = { navController.navigate(Routes.SERIES) },
                 onZap = { navController.navigate(Routes.ZAP) },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -371,13 +387,14 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onSeriesNav = { navController.navigate(Routes.SERIES) { popUpTo(Routes.MOVIES) { inclusive = true } } },
                 onSearch = { navController.navigate(Routes.SEARCH) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -394,13 +411,14 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onSeriesNav = {},
                 onSearch = { navController.navigate(Routes.SEARCH) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -414,11 +432,32 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onSeriesNav = { navController.navigate(Routes.SERIES) },
                 onSearch = { navController.navigate(Routes.SEARCH) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onZapNav = { navController.navigate(Routes.ZAP) },
+                onAccountClick = {
+                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                },
+                noticesBell = noticesBell,
+                activeAccount = activeAccount,
+            )
+        }
+        composable(Routes.NOTICES) {
+            val vm: NoticesViewModel = viewModel(factory = NoticesViewModel.factory(container))
+            NoticesScreen(
+                viewModel = vm,
+                // A notice about a title opens its detail screen. launchSingleTop:
+                // a remote can deliver one OK twice.
+                onItemSelected = { id -> navController.navigate(Routes.detail(id)) { launchSingleTop = true } },
+                noticesBell = noticesBell,
+                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                onSeriesNav = { navController.navigate(Routes.SERIES) },
+                onSearch = { navController.navigate(Routes.SEARCH) },
+                onSettings = { navController.navigate(Routes.SETTINGS) },
+                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
@@ -450,13 +489,14 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onMoviesNav = { navController.navigate(Routes.MOVIES) },
                 onSeriesNav = { navController.navigate(Routes.SERIES) },
                 onSearch = { navController.navigate(Routes.SEARCH) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -492,6 +532,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -505,13 +546,14 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onMoviesNav = { navController.navigate(Routes.MOVIES) },
                 onSeriesNav = { navController.navigate(Routes.SERIES) },
                 onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button + top-bar bell both
-                // route here from every screen — re-pressing either while the
-                // hub is already on top must not stack a second copy.
+                // launchSingleTop: the rail Watchlist button routes here from
+                // every screen — re-pressing it while the hub is already on
+                // top must not stack a second copy.
                 onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }
@@ -565,6 +607,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                 onAccountClick = {
                     navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                 },
+                noticesBell = noticesBell,
                 activeAccount = activeAccount,
             )
         }

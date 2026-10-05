@@ -97,6 +97,7 @@ fun WatchlistScreen(
     onWatchlist: () -> Unit,
     onAccountClick: () -> Unit,
     onZapNav: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: Account? = null,
 ) {
     val state by viewModel.state.collectAsState()
@@ -122,7 +123,7 @@ fun WatchlistScreen(
                 Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                     TvTopBar(
                         onSearch = onSearch,
-                        onWatchlist = onWatchlist,
+                        noticesBell = noticesBell,
                         activeAccount = activeAccount,
                         onAccountClick = onAccountClick,
                     )

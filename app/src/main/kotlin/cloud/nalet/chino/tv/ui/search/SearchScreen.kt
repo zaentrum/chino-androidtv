@@ -88,6 +88,7 @@ fun SearchScreen(
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
     onAccountClick: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
 ) {
     val q by viewModel.query.collectAsState()
@@ -115,7 +116,7 @@ fun SearchScreen(
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                 cloud.nalet.chino.tv.ui.library.TvTopBar(
-                    onWatchlist = onWatchlist,
+                    noticesBell = noticesBell,
                     activeAccount = activeAccount,
                     onAccountClick = onAccountClick,
                     searchSlot = {
