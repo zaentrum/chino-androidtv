@@ -34,6 +34,22 @@ class TrackLabelsTest {
     }
 
     @Test
+    fun mulIsMultipleLanguagesAndMisOtherLanguage() {
+        assertEquals("Multiple languages", languageName("mul"))
+        assertEquals("Multiple languages", languageName("MUL"))
+        assertEquals("Other language", languageName("mis"))
+        assertEquals(
+            listOf("Multiple languages", "Other language", "Multiple languages · Original"),
+            audioLabels(listOf(AudioLabelInput("mul", name = "mul"), AudioLabelInput("mis"), AudioLabelInput("mul", name = "Original"))),
+        )
+        assertEquals(
+            listOf("Multiple languages", "Other language · Signs"),
+            subtitleLabels(listOf(SubtitleLabelInput("mul"), SubtitleLabelInput("mis", title = "Signs"))),
+        )
+        assertEquals("Multiple languages", languageOrLabel("mul", "mul"))
+    }
+
+    @Test
     fun aTitlesSubtitleLanguagesByNameATrackInNoLanguageByItsLabel() {
         assertEquals("German", languageOrLabel("ger", null))
         assertEquals("English", languageOrLabel("eng", "English (SDH)"))

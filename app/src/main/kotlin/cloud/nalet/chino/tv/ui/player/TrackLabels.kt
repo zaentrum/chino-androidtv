@@ -8,7 +8,8 @@ import java.util.Locale
  *
  * A track is named by the language it is tagged with first, in English
  * ("German"): "zxx" - no linguistic content, the audio of a film without
- * dialogue - is "No dialogue", none ("und", nothing) is "Unknown". What the
+ * dialogue - is "No dialogue", "mul" "Multiple languages", "mis" (a language
+ * with no code) "Other language", none ("und", nothing) is "Unknown". What the
  * track calls itself - the rendition's NAME, the sidecar's label - comes
  * after: on a subtitle where it says more than the language ("English ·
  * SDH"), on audio where it tells two of one language apart ("English ·
@@ -27,25 +28,39 @@ const val UNKNOWN_LANGUAGE = "Unknown"
 /** Codes that name no language one could read or listen to. */
 private val NO_LANGUAGE = setOf("und", "zxx", "mul", "mis")
 
+// The codes for no one language that still say what a track is in, and what
+// such a track is called: no dialogue ("zxx"), several languages ("mul"), a
+// language ISO 639 has no code for ("mis").
+private val NOT_ONE_LANGUAGE = mapOf(
+    "zxx" to NO_DIALOGUE,
+    "mul" to "Multiple languages",
+    "mis" to "Other language",
+)
+
 private val PRIMARY = Regex("^[a-z]{2,3}$")
 
+/** The tag's language subtag, lower-cased ("pt" of "PT_br"); "" for none. */
+private fun primarySubtag(tag: String?): String =
+    tag?.trim()?.lowercase()?.split('-', '_')?.firstOrNull().orEmpty()
+
 /** Whether the tag is "zxx": no linguistic content, no dialogue. */
-fun isNoDialogue(tag: String?): Boolean =
-    tag?.trim()?.lowercase()?.split('-', '_')?.firstOrNull() == "zxx"
+fun isNoDialogue(tag: String?): Boolean = primarySubtag(tag) == "zxx"
 
 /** The language a tag names, as [languageKey] has it ("de" of "ger"); null
  *  for none, "und", "zxx" or what is not a code. */
 private fun languageOf(tag: String?): String? =
     languageKey(tag)?.takeIf { PRIMARY.matches(it) && it !in NO_LANGUAGE }
 
-/** Whether the tag says what the track is in: a language, or no dialogue. */
-private fun hasLanguage(tag: String?): Boolean = languageOf(tag) != null || isNoDialogue(tag)
+/** Whether the tag says what the track is in: a language, no dialogue,
+ *  several languages or one with no code. */
+private fun hasLanguage(tag: String?): Boolean =
+    languageOf(tag) != null || primarySubtag(tag) in NOT_ONE_LANGUAGE
 
 /** The language's English name ("ger", "de", "deu" -> "German"); the tag as
- *  it came when there is no name for it; "No dialogue" for "zxx", "Unknown"
- *  for none. */
+ *  it came when there is no name for it; "No dialogue" for "zxx", "Multiple
+ *  languages" for "mul", "Other language" for "mis", "Unknown" for none. */
 fun languageName(tag: String?): String {
-    if (isNoDialogue(tag)) return NO_DIALOGUE
+    NOT_ONE_LANGUAGE[primarySubtag(tag)]?.let { return it }
     val key = languageOf(tag) ?: return UNKNOWN_LANGUAGE
     val name = Locale.forLanguageTag(key).getDisplayLanguage(Locale.ENGLISH)
     return if (name.isBlank() || name.equals(key, ignoreCase = true)) tag.orEmpty().trim() else name
