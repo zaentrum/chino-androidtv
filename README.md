@@ -32,7 +32,7 @@ real values always come from the connected server at runtime.
 - DataStore Preferences for token and server-config persistence
 - Media3 / ExoPlayer (incl. HLS) for playback
 - Coil for poster artwork
-- Min SDK 21, Target SDK 35, Java/JVM target 17
+- Min SDK 24 (the least Play's automatic protection takes), Target SDK 35, Java/JVM target 17
 
 ## Features
 
