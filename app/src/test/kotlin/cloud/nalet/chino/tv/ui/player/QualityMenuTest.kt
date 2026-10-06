@@ -94,6 +94,47 @@ class QualityMenuTest {
     }
 
     @Test
+    fun `a master's own variants make the menu where there is no play info`() {
+        // An extra's ladder as Media3 reads it: 2.39:1 rungs, the 480p listed first.
+        val menu = variantMenu(
+            listOf(
+                VideoVariant(track = 0, width = 854, height = 356, codec = "avc1.64001e", bitrate = 706_649),
+                VideoVariant(track = 1, width = 1280, height = 536, codec = "avc1.64001f", bitrate = 1_505_267),
+            ),
+        )!!
+        assertEquals(listOf("auto", "1", "0"), menu.map { it.name })
+        assertEquals(listOf("Auto", "720p", "480p"), menu.map { it.label })
+        assertEquals(QualityRung("1", "720p", width = 1280, height = 536, codec = "avc1.64001f", bitrate = 1_505_267), menu[1])
+        // It reads as a title's menu does.
+        assertEquals("Auto · 720p", qualityText(menu, "auto", playingLabel(1280, 536, menu)))
+        assertEquals("480p", qualityText(menu, "0", playingLabel(854, 356, menu)))
+        assertEquals("1", chosenQuality(menu, "1")?.name)
+    }
+
+    @Test
+    fun `of a master's variants one per size, and none without a size`() {
+        val menu = variantMenu(
+            listOf(
+                VideoVariant(track = 0, width = 1280, height = 720, bitrate = 3_000_000),
+                VideoVariant(track = 1, width = 1280, height = 720, bitrate = 1_500_000),
+                VideoVariant(track = 2, width = -1, height = -1),
+                VideoVariant(track = 3, width = 640, height = 360),
+            ),
+        )!!
+        assertEquals(listOf("auto", "0", "3"), menu.map { it.name })
+        assertNull(menu[2].bitrate)
+    }
+
+    @Test
+    fun `a master of one size has nothing to pick`() {
+        assertNull(variantMenu(emptyList()))
+        assertNull(variantMenu(listOf(VideoVariant(track = 0, width = 1280, height = 720))))
+        assertNull(
+            variantMenu(listOf(VideoVariant(track = 0, width = 1280, height = 720), VideoVariant(track = 1, width = 1280, height = 720))),
+        )
+    }
+
+    @Test
     fun `the q a prepare asks for`() {
         assertEquals("auto", playQuality(null, ladder))
         assertEquals("high", playQuality(null, transcode))

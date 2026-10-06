@@ -15,6 +15,9 @@ import cloud.nalet.chino.tv.data.api.QualityRung
  * package of one rendition. A pick reloads the master with q=<name>, Auto
  * with q=auto. An on-the-fly transcode offers high, medium and low. chino-web
  * builds its menu the same way (lib/qualities.ts).
+ *
+ * A stream with no /play/info — a title's extra — has the same menu made from
+ * its master's own variants, as the player read them ([variantMenu]).
  */
 
 const val AUTO = "auto"
@@ -36,6 +39,47 @@ fun qualityMenu(info: PlayInfo?): List<QualityRung>? {
     if (!isPackaged(info?.mode)) return entries
     val auto = entries.firstOrNull { it.name == AUTO } ?: QualityRung(AUTO, "Auto")
     return listOf(auto) + entries.filter { it.name != AUTO }
+}
+
+/** A video variant of a master as the player read it: [track], its place
+ *  among the video tracks; its picture size, codec and bitrate (BANDWIDTH,
+ *  0 when unknown). */
+data class VideoVariant(
+    val track: Int,
+    val width: Int,
+    val height: Int,
+    val codec: String? = null,
+    val bitrate: Int = 0,
+)
+
+/**
+ * The quality menu of a master the player reads for itself, a stream with no
+ * /play/info: Auto, then one entry per picture size, tallest first, labelled
+ * as chino-stream labels a packaged title's rungs ([sizeLabel]) and named by
+ * the variant's [VideoVariant.track] — a pick pins that variant in the
+ * player, Auto lets it adapt again. Of two variants of one size the first in
+ * the master stays; one without a size is left out. Null when there are
+ * fewer than two sizes: nothing to pick.
+ */
+fun variantMenu(variants: List<VideoVariant>): List<QualityRung>? {
+    val bySize = LinkedHashMap<String, VideoVariant>()
+    for (v in variants) {
+        val label = sizeLabel(v.width, v.height) ?: continue
+        bySize.getOrPut(label) { v }
+    }
+    if (bySize.size < 2) return null
+    // Tallest first, as chino-stream lists rungs; of one height, master order.
+    val rungs = bySize.entries.sortedByDescending { it.value.height }.map { (label, v) ->
+        QualityRung(
+            name = v.track.toString(),
+            label = label,
+            width = v.width,
+            height = v.height,
+            codec = v.codec,
+            bitrate = v.bitrate.takeIf { it > 0 }?.toLong(),
+        )
+    }
+    return listOf(QualityRung(AUTO, "Auto")) + rungs
 }
 
 /**
