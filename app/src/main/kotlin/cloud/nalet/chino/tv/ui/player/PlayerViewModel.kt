@@ -80,11 +80,14 @@ sealed interface PlayerUiState {
  *  2. Fetch the previous resume position via /v1/items/{id}/progress and seek
  *     there silently on start (auto-resume always — matches chino-web b6a9437,
  *     which dropped the "Continue watching?" dialog). "Play from start" from
- *     the Detail screen sets [startFromZero] to skip the lookup entirely.
+ *     the Detail screen sets [PlayMode.Title.fromStart] to skip the lookup
+ *     entirely.
  *  3. While ExoPlayer is rolling, the PlayerScreen calls [reportProgress] every
  *     10 s and on dispose so chino-api's progress table stays current.
  *  4. Optional [reportTelemetry] for play/pause/seek/error events — chino-api
  *     forwards each batch to the cluster log aggregator.
+ * What it plays is its [mode], and each of those requests is made only when
+ * the mode asks for it ([PlayMode.requests]).
  */
 class PlayerViewModel(
     private val api: ChinoApi,
@@ -94,18 +97,18 @@ class PlayerViewModel(
     /** Bug-report funnel for fatal player errors — fire-and-forget, session-
      *  deduped by fingerprint, all failures swallowed (see [reportPlayerErrorBug]). */
     private val bugReporter: BugReporter,
-    private val itemId: String,
-    /** When true, prepare() ignores any saved resume position and starts at
-     *  0:00. Wired from the Detail screen's "Play from start" button via
-     *  the navigation route's `fromStart=true` query parameter. */
-    private val startFromZero: Boolean = false,
-    /** When true, prepare() pre-skips the intro segment (if one is detected
-     *  near 0:00) so a binge auto-play-next chain doesn't dump the user back
-     *  at 00:00 just to fire the SkipIntro countdown again. PlayerScreen
-     *  shows a brief undo pill so the user can BACK to revisit. Only set by
-     *  the auto-play-next nav path; manual prev/next/detail entry leaves it
-     *  false so the intro plays normally. */
-    private val fromBinge: Boolean = false,
+    /** What plays. A title's [PlayMode.Title.fromStart] (Detail's "Play from
+     *  start", the route's `fromStart=true`) has prepare() ignore any saved
+     *  resume position and start at 0:00; its [PlayMode.Title.resumeSec]
+     *  (Zap's ?resume= channel-surf handoff), when >0, resumes at that second
+     *  without the server progress lookup. Its [PlayMode.Title.fromBinge] has
+     *  prepare() pre-skip the intro segment (if one is detected near 0:00) so
+     *  a binge auto-play-next chain doesn't dump the user back at 00:00 just
+     *  to fire the SkipIntro countdown again; PlayerScreen shows a brief undo
+     *  pill so the user can BACK to revisit. Only the auto-play-next nav path
+     *  sets it; manual prev/next/detail entry leaves it false so the intro
+     *  plays normally. */
+    val mode: PlayMode,
     /** Application-lifetime scope for terminal POSTs (progress / watched) so
      *  the OkHttp call isn't cancelled when the user backs out of the player
      *  and viewModelScope dies. Without this the library refresh-on-resume
@@ -119,10 +122,12 @@ class PlayerViewModel(
      *  sourced from the runtime ServerConfig rather than BuildConfig so the
      *  player follows a user-configured server. */
     private val baseUrl: String,
-    /** When >0, resume at this absolute second (Zap's ?resume= channel-surf
-     *  handoff) and skip the server progress lookup. */
-    private val resumeSec: Int = 0,
 ) : ViewModel() {
+
+    private val itemId: String = mode.itemId
+
+    /** What the mode asks the server for: nothing is asked that it does not. */
+    val requests: PlayRequests = mode.requests
 
     private val _state = MutableStateFlow<PlayerUiState>(PlayerUiState.Preparing)
     val state: StateFlow<PlayerUiState> = _state.asStateFlow()
@@ -158,9 +163,10 @@ class PlayerViewModel(
      * the server's default rung; pass null on first prepare and the q to
      * reload with on a quality switch or a fallback. [atSec] is where a
      * reload goes on — the playhead of the player it replaces. Without it the
-     * start is looked up: the Zap handoff, Play from start, else the saved
-     * progress (a reload must not ask for that: the save it would read is
-     * still in flight, and Play from start or a Zap scene would apply again).
+     * start is looked up ([startSec]): the Zap handoff, Play from start, else
+     * the saved progress (a reload must not ask for that: the save it would
+     * read is still in flight, and Play from start or a Zap scene would apply
+     * again).
      */
     fun prepare(quality: String?, atSec: Int? = null) {
         _state.value = PlayerUiState.Preparing
@@ -171,24 +177,28 @@ class PlayerViewModel(
                 // Fan-out all six prepare-time API calls in parallel — they're
                 // independent and slow ones (segments, subtitles) used to gate
                 // playback startup on the longest single call (~11s observed
-                // on the BRAVIA). Now max(individual) ≈ 2-3s.
+                // on the BRAVIA). Now max(individual) ≈ 2-3s. Each only as the
+                // mode asks for it (requests).
                 val (item, resume, segments, rawSubs, info) = coroutineScope {
                     val itemDef = async { runCatching { api.getItem(itemId) }.getOrNull() }
                     // When the user clicked "Play from start", skip the
                     // resume-position lookup entirely — the saved progress
                     // is stale by intent. Saves a round-trip too.
                     val progressDef = async {
-                        when {
-                            atSec != null -> atSec.coerceAtLeast(0) // a reload: where the viewer was
-                            resumeSec > 0 -> resumeSec        // Zap channel-surf handoff
-                            startFromZero -> 0
-                            else -> runCatching { api.getProgress(itemId).positionSec }.getOrDefault(0)
-                        }
+                        startSec(mode, atSec)
+                            ?: runCatching { api.getProgress(itemId).positionSec }.getOrDefault(0)
                     }
-                    val segDef = async { runCatching { api.itemSegments(itemId).segments }.getOrDefault(emptyList()) }
-                    val subDef = async { runCatching { api.itemSubtitles(itemId).subtitles }.getOrDefault(emptyList()) }
+                    val segDef = async {
+                        if (!requests.segments) emptyList()
+                        else runCatching { api.itemSegments(itemId).segments }.getOrDefault(emptyList())
+                    }
+                    val subDef = async {
+                        if (!requests.subtitles) emptyList()
+                        else runCatching { api.itemSubtitles(itemId).subtitles }.getOrDefault(emptyList())
+                    }
                     val infoDef = async {
-                        runCatching {
+                        if (!requests.playInfo) null
+                        else runCatching {
                             api.playInfo(itemId, caps = capsParam.ifEmpty { null }, quality = quality)
                         }.getOrNull()
                     }
@@ -229,6 +239,7 @@ class PlayerViewModel(
                 // Only applies on the very first prepare of a binge-chained
                 // episode (quality == null) — switchQuality reloads shouldn't
                 // re-skip because the user already saw the pill and decided.
+                val fromBinge = (mode as? PlayMode.Title)?.fromBinge == true
                 val preSkip: Segment? = if (fromBinge && quality == null) {
                     val sortedByStart = segments.sortedBy { it.startMs }
                     val head = sortedByStart.firstOrNull { seg ->
@@ -270,7 +281,7 @@ class PlayerViewModel(
                 // anything else the fetch would 404, so skip it and let the
                 // scrubber degrade to segment-stripes-only. Body read on IO;
                 // a 404 / parse failure just yields an empty cue list.
-                val trickplayCues = if (info?.mode.equals("packaged", ignoreCase = true)) {
+                val trickplayCues = if (requests.trickplay && info?.mode.equals("packaged", ignoreCase = true)) {
                     withContext(Dispatchers.IO) {
                         runCatching {
                             api.trickplayVtt(itemId, stream = token).use { body ->
@@ -366,9 +377,10 @@ class PlayerViewModel(
      * whose Episode record didn't carry parent_id, we ALSO try its series
      * episodes list (resolved through getItem's parent_id field on episodes
      * we've already loaded). Worst case returns null and auto-play-next
-     * is a no-op.
+     * is a no-op. Null without asking where the mode has no up next.
      */
     suspend fun resolveNextEpisode(): String? {
+        if (!requests.nextUp) return null
         val ready = _state.value as? PlayerUiState.Ready ?: return null
         val lookupId = ready.parentSeriesId ?: itemId
         val viaApi = runCatching { api.nextEpisode(lookupId, after = itemId).next?.id }.getOrNull()
@@ -389,8 +401,9 @@ class PlayerViewModel(
     /** Mirror of [resolveNextEpisode] for the previous-episode chevron. chino-api
      *  has no /previous-episode endpoint, so this is purely client-side via the
      *  series episode list. Returns null on the first episode and on standalone
-     *  movies. */
+     *  movies, and without asking where the mode has no up next. */
     suspend fun resolvePrevEpisode(): String? {
+        if (!requests.nextUp) return null
         val ready = _state.value as? PlayerUiState.Ready ?: return null
         val parent = ready.parentSeriesId ?: return null
         return runCatching {
@@ -404,8 +417,10 @@ class PlayerViewModel(
     /** What to auto-play when the current item finishes. For a series item it's
      *  the next episode; for a movie / standalone item it's the top "more like
      *  this" recommendation (the player has no episode chain, so we continue
-     *  into a related title — web parity). Null when nothing is queued. */
+     *  into a related title — web parity). Null when nothing is queued, and
+     *  without asking where the mode has no up next. */
     suspend fun resolveNextUp(): String? {
+        if (!requests.nextUp) return null
         val ready = _state.value as? PlayerUiState.Ready ?: return null
         if (ready.parentSeriesId != null) return resolveNextEpisode()
         // Movie / standalone — chain into the first recommendation (skip self).
@@ -425,8 +440,10 @@ class PlayerViewModel(
      *
      *  Uses streamHttpClient (no bearer; HMAC `?stream=` authorises the
      *  master path) and appScope so it survives backing out of the player
-     *  before the response lands. We discard the body. */
+     *  before the response lands. We discard the body. Nothing where the
+     *  mode does not prewarm. */
     fun prewarmMaster(nextId: String) {
+        if (!requests.prewarm) return
         appScope.launch {
             runCatching {
                 val token = streamTokens.valid()
@@ -463,7 +480,7 @@ class PlayerViewModel(
             httpStatus?.let { put("http_status", it.toString()) }
             failedUrl?.takeIf { it.isNotBlank() }?.let { put("url", it) }
         }
-        telemetry.event("playback_error", extra = extra)
+        if (requests.telemetry) telemetry.event("playback_error", extra = extra)
         if (_state.value !is PlayerUiState.Error) {
             // A 404 on the manifest means chino-stream has no playable asset for
             // this item — show a plain-language message instead of the engine
@@ -532,7 +549,7 @@ class PlayerViewModel(
         val description = lastTechnicalError
             ?: (state.value as? PlayerUiState.Error)?.message
             ?: return
-        telemetry.event("bug_report_manual", extra = mapOf("screen" to "player"))
+        if (requests.telemetry) telemetry.event("bug_report_manual", extra = mapOf("screen" to "player"))
         _errorReport.value = BugReportState.Sending
         viewModelScope.launch {
             _errorReport.value = try {
@@ -561,9 +578,10 @@ class PlayerViewModel(
      *  AND once more in onDispose when the user leaves the player. Uses
      *  appScope so the terminal save survives ViewModel.onCleared() — the
      *  in-flight POST would otherwise be cancelled before OkHttp dispatched
-     *  it, leaving the resume position stale on the next library refresh. */
+     *  it, leaving the resume position stale on the next library refresh.
+     *  Nothing where the mode keeps no progress. */
     fun reportProgress(positionSec: Int, durationSec: Int) {
-        if (positionSec <= 0) return
+        if (!requests.progress || positionSec <= 0) return
         appScope.launch {
             runCatching {
                 api.postProgress(itemId, ProgressBody(positionSec = positionSec, durationSec = durationSec))
@@ -578,16 +596,19 @@ class PlayerViewModel(
      *  when the user enters the credits segment OR crosses 95 % of the
      *  duration, whichever fires first. A `markedWatched` flag in
      *  PlayerScreen guards against the two paths firing twice in the
-     *  same session. */
+     *  same session. Nothing where the mode marks nothing watched. */
     fun reportWatched() {
+        if (!requests.watched) return
         appScope.launch {
             runCatching { api.postWatched(itemId) }
         }
     }
 
     /** Fire-and-forget telemetry — never blocks playback. Auto-stamps device /
-     *  app / network context via the shared Telemetry singleton. */
+     *  app / network context via the shared Telemetry singleton. Nothing
+     *  where the mode sends none of the player's events. */
     fun reportTelemetry(kind: String, payload: Map<String, String> = emptyMap()) {
+        if (!requests.telemetry) return
         telemetry.event(kind, itemId = itemId, extra = payload)
     }
 
@@ -629,10 +650,12 @@ class PlayerViewModel(
         val atSec = (positionMs / 1000L).toInt()
         when (r) {
             is Recovery.StepDown -> {
-                telemetry.event(
-                    "quality_fallback",
-                    extra = mapOf("from" to cur.currentQuality, "to" to r.quality, "cause" to cause),
-                )
+                if (requests.telemetry) {
+                    telemetry.event(
+                        "quality_fallback",
+                        extra = mapOf("from" to cur.currentQuality, "to" to r.quality, "cause" to cause),
+                    )
+                }
                 prepare(quality = r.quality, atSec = atSec)
             }
             is Recovery.Reload -> {
@@ -649,13 +672,7 @@ class PlayerViewModel(
     }
 
     companion object {
-        fun factory(
-            container: AppContainer,
-            itemId: String,
-            startFromZero: Boolean = false,
-            fromBinge: Boolean = false,
-            resumeSec: Int = 0,
-        ) = viewModelFactory {
+        fun factory(container: AppContainer, mode: PlayMode) = viewModelFactory {
             initializer {
                 PlayerViewModel(
                     api = container.chinoApi,
@@ -663,13 +680,10 @@ class PlayerViewModel(
                     settingsStore = container.settings,
                     telemetry = container.telemetry,
                     bugReporter = container.bugReporter,
-                    itemId = itemId,
-                    startFromZero = startFromZero,
-                    fromBinge = fromBinge,
+                    mode = mode,
                     appScope = container.appScope,
                     streamHttpClient = container.streamHttpClient,
                     baseUrl = container.baseUrl,
-                    resumeSec = resumeSec,
                 )
             }
         }

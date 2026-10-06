@@ -37,6 +37,7 @@ import cloud.nalet.chino.tv.ui.notices.NoticesScreen
 import cloud.nalet.chino.tv.ui.notices.NoticesViewModel
 import cloud.nalet.chino.tv.ui.person.PersonScreen
 import cloud.nalet.chino.tv.ui.person.PersonViewModel
+import cloud.nalet.chino.tv.ui.player.PlayMode
 import cloud.nalet.chino.tv.ui.player.PlayerScreen
 import cloud.nalet.chino.tv.ui.player.PlayerViewModel
 import cloud.nalet.chino.tv.ui.search.SearchScreen
@@ -662,7 +663,7 @@ fun ChinoTvNavHost(container: AppContainer) {
             // never-watched teaser). >0 wins over the server progress lookup.
             val resume = backStackEntry.arguments?.getInt("resume") ?: 0
             val vm: PlayerViewModel = viewModel(
-                factory = PlayerViewModel.factory(container, itemId, fromStart, fromBinge, resume),
+                factory = PlayerViewModel.factory(container, PlayMode.Title(itemId, fromStart, fromBinge, resume)),
                 // Include fromStart + fromBinge in the key so navigating to
                 // the SAME episode with a different entry mode (Resume → Play
                 // from start, or manual Next → auto-play-next) rebuilds the
