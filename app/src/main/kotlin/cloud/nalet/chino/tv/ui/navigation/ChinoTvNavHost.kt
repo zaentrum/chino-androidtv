@@ -44,8 +44,6 @@ import cloud.nalet.chino.tv.ui.search.SearchScreen
 import cloud.nalet.chino.tv.ui.search.SearchViewModel
 import cloud.nalet.chino.tv.ui.settings.SettingsScreen
 import cloud.nalet.chino.tv.ui.settings.SettingsViewModel
-import cloud.nalet.chino.tv.ui.trailer.TrailerScreen
-import cloud.nalet.chino.tv.ui.trailer.TrailerViewModel
 import cloud.nalet.chino.tv.ui.watchlist.WatchlistScreen
 import cloud.nalet.chino.tv.ui.watchlist.WatchlistViewModel
 
@@ -76,7 +74,8 @@ object Routes {
     const val PERSON = "person/{personId}"
     const val PLAYER = "player/{itemId}?fromStart={fromStart}&fromBinge={fromBinge}&resume={resume}"
     /** A title's trailer from this server (one of its extras) — from
-     *  Detail's Trailer button. Plays it and closes; no progress. */
+     *  Detail's Trailer button. The full player plays it, in extra mode
+     *  (PlayMode.Extra), and closes; no progress. */
     const val TRAILER = "trailer/{itemId}/{extraId}"
     fun detail(itemId: String) = "detail/$itemId"
     fun person(personId: String) = "person/$personId"
@@ -606,12 +605,20 @@ fun ChinoTvNavHost(container: AppContainer) {
         ) { backStackEntry ->
             val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
             val extraId = backStackEntry.arguments?.getString("extraId").orEmpty()
-            val vm: TrailerViewModel = viewModel(
-                factory = TrailerViewModel.factory(container, itemId, extraId),
+            // The full player, in extra mode: what it asks the server for is
+            // the title's detail alone (PlayMode.Extra).
+            val vm: PlayerViewModel = viewModel(
+                factory = PlayerViewModel.factory(container, PlayMode.Extra(itemId, extraId)),
                 key = "trailer/$itemId/$extraId",
             )
-            TrailerScreen(
+            PlayerScreen(
                 viewModel = vm,
+                // The chrome's Home, as for a title.
+                onHome = {
+                    navController.navigate(Routes.LIBRARY) {
+                        popUpTo(Routes.LIBRARY) { inclusive = true }
+                    }
+                },
                 // At the trailer's end. Only while it is still the screen on
                 // top: a BACK that came first has popped it already.
                 onClose = {

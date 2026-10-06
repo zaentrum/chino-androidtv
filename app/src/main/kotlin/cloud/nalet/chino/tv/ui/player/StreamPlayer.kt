@@ -11,9 +11,9 @@ import androidx.media3.exoplayer.upstream.LoadErrorHandlingPolicy
 import cloud.nalet.chino.tv.data.AppContainer
 
 /*
- * What the TV's players of chino-stream's HLS share: the full player
- * (PlayerScreen) and the trailer's (ui/trailer) take their HTTP data source,
- * their retry rules and their ExoPlayer from here.
+ * The player's HTTP data source, retry rules and ExoPlayer for chino-stream's
+ * HLS: PlayerScreen takes them from here for a title and for one of its
+ * extras alike (PlayMode).
  */
 
 /** What a player tells chino-stream it is. */

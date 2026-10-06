@@ -48,7 +48,7 @@ fun pickTrailer(trailers: List<Trailer>): Trailer? {
 
 /** What the Trailer button does. */
 sealed interface TrailerChoice {
-    /** Plays [extra] in the app, on the trailer screen. */
+    /** Plays [extra] in the app, in the player (PlayMode.Extra). */
     data class Local(val extra: Extra) : TrailerChoice
 
     /** Opens [trailer]'s link, in the YouTube app where it is one of its. */

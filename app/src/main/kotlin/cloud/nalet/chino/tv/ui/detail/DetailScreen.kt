@@ -412,7 +412,7 @@ private fun DetailActions(
             }
         }
         // Trailer — labeled secondary CTA next to Play (web shows it too): a
-        // trailer this server plays opens the trailer screen, else the
+        // trailer this server plays opens in the player, else the
         // title's link opens in the YouTube app as before (trailerChoice).
         trailerChoice(item)?.let { choice ->
             val context = androidx.compose.ui.platform.LocalContext.current
