@@ -15,6 +15,7 @@ import cloud.nalet.chino.tv.data.api.QualityRung
 import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.data.api.SidecarSubtitle
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
+import cloud.nalet.chino.tv.data.model.Trailer
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.feedback.BugReporter
 import cloud.nalet.chino.tv.feedback.bugFingerprint
@@ -42,12 +43,14 @@ sealed interface PlayerUiState {
         // them without OIDC headers (matches the <track src> path on web).
         val sidecarSubtitles: List<SidecarSubtitle>,
         // Series parent id (the item the user originally entered from) so we
-        // know where to ask for the next episode. Null for movies.
+        // know where to ask for the next episode. Null for movies and extras.
         val parentSeriesId: String?,
-        /** chino-stream's transcode decision + ladder. Null on pre-probe failure. */
+        /** chino-stream's transcode decision + ladder. Null on pre-probe
+         *  failure, and for an extra, which has none. */
         val playInfo: PlayInfo?,
         /** The q the master is asked with: "auto" or a rung's name ("v1") for
-         *  a packaged title, "high" / "medium" / "low" on the fly. */
+         *  a packaged title, "high" / "medium" / "low" on the fly. "auto" for
+         *  an extra, whose master is asked with no q: its whole ladder. */
         val currentQuality: String,
         /** Scrub-preview thumbnail cues parsed from the trickplay VTT. Empty
          *  when the item isn't packaged (no sprite tree) or the fetch failed —
@@ -72,6 +75,11 @@ sealed interface PlayerUiState {
         val preSkippedIntro: Segment? = null,
     ) : PlayerUiState
     data class Error(val message: String) : PlayerUiState
+
+    /** An extra that is not there to play: its title or the extra is gone,
+     *  the viewer's rating cap hides the title, or the master answered 404.
+     *  [link] is the title's trailer link, when it has one. */
+    data class NotAvailable(val link: Trailer?) : PlayerUiState
 }
 
 /**
@@ -87,7 +95,9 @@ sealed interface PlayerUiState {
  *  4. Optional [reportTelemetry] for play/pause/seek/error events — chino-api
  *     forwards each batch to the cluster log aggregator.
  * What it plays is its [mode], and each of those requests is made only when
- * the mode asks for it ([PlayMode.requests]).
+ * the mode asks for it ([PlayMode.requests]). An extra asks for none: it
+ * plays the master its title's detail names (loadExtra) from the start, with
+ * one trailer_play ([reportStarted]) for all its telemetry.
  */
 class PlayerViewModel(
     private val api: ChinoApi,
@@ -156,6 +166,12 @@ class PlayerViewModel(
     private val _errorReport = MutableStateFlow<BugReportState>(BugReportState.Idle)
     val errorReport: StateFlow<BugReportState> = _errorReport.asStateFlow()
 
+    /** An extra's title's trailer link, offered should its master answer 404. */
+    private var link: Trailer? = null
+
+    /** An extra's trailer_play has gone out. */
+    private var started = false
+
     init { prepare(quality = null) }
 
     /**
@@ -174,13 +190,29 @@ class PlayerViewModel(
             _state.value = try {
                 val token = withContext(Dispatchers.IO) { streamTokens.valid() }
                 val capsParam = CodecCaps.queryParam
+                // An extra plays the master its title's detail names: the
+                // detail is read first, the one request an extra makes
+                // (loadExtra). One the detail does not name says so, and
+                // nothing more is asked.
+                val extra = (mode as? PlayMode.Extra)?.let { m ->
+                    when (val loaded = loadExtra(api, baseUrl, token, capsParam, m.itemId, m.extraId)) {
+                        is ExtraLoad.Found -> loaded
+                        is ExtraLoad.NotAvailable -> {
+                            link = loaded.link
+                            _state.value = PlayerUiState.NotAvailable(loaded.link)
+                            return@launch
+                        }
+                    }
+                }
+                link = extra?.link
                 // Fan-out all six prepare-time API calls in parallel — they're
                 // independent and slow ones (segments, subtitles) used to gate
                 // playback startup on the longest single call (~11s observed
                 // on the BRAVIA). Now max(individual) ≈ 2-3s. Each only as the
-                // mode asks for it (requests).
+                // mode asks for it (requests): an extra asks for none of them.
                 val (item, resume, segments, rawSubs, info) = coroutineScope {
-                    val itemDef = async { runCatching { api.getItem(itemId) }.getOrNull() }
+                    // An extra's detail is read above.
+                    val itemDef = async { if (extra != null) null else runCatching { api.getItem(itemId) }.getOrNull() }
                     // When the user clicked "Play from start", skip the
                     // resume-position lookup entirely — the saved progress
                     // is stale by intent. Saves a round-trip too.
@@ -216,10 +248,13 @@ class PlayerViewModel(
                 // The series title isn't on the episode payload, so fetch the
                 // parent series item for it; while unknown, fall back to
                 // "S01E02 · {Episode}". Movies / non-episodes: the bare title.
-                val title = composeTitle(item, parentSeriesId)
+                // An extra: its title's and its own, "Sintel · Trailer".
+                val title = extra?.title ?: composeTitle(item, parentSeriesId)
                 // The server's default on the first prepare; a reload's own q,
                 // but high for a packaged q the title is no longer served for.
-                val resolvedQuality = playQuality(quality, info)
+                // An extra's master is its whole ladder: its quality menu pins a
+                // variant in the player (variantMenu), with no reload.
+                val resolvedQuality = if (extra != null) AUTO else playQuality(quality, info)
                 // Binge entry: pre-skip the intro/recap chain ONLY when it
                 // begins right at the head (small tolerance for analyzer
                 // drift — segmenters often stamp the start a few hundred ms
@@ -294,7 +329,7 @@ class PlayerViewModel(
                     if (trickplayCues.isNotEmpty()) "$base/v1/items/$itemId/play/trickplay" else ""
                 val prev = _state.value as? PlayerUiState.Ready
                 PlayerUiState.Ready(
-                    masterUrl = buildString {
+                    masterUrl = extra?.masterUrl ?: buildString {
                         append("$base/v1/items/$itemId/play/master.m3u8?stream=$token")
                         if (capsParam.isNotEmpty()) append("&caps=$capsParam")
                         append("&q=$resolvedQuality")
@@ -481,11 +516,17 @@ class PlayerViewModel(
             failedUrl?.takeIf { it.isNotBlank() }?.let { put("url", it) }
         }
         if (requests.telemetry) telemetry.event("playback_error", extra = extra)
-        if (_state.value !is PlayerUiState.Error) {
+        if (_state.value !is PlayerUiState.Error && _state.value !is PlayerUiState.NotAvailable) {
             // A 404 on the manifest means chino-stream has no playable asset for
             // this item — show a plain-language message instead of the engine
             // error code. Everything else keeps the diagnostic code.
             val manifestMissing = httpStatus == 404 && (failedUrl?.contains(".m3u8") == true)
+            // An extra's: gone, or under the viewer's rating cap — not
+            // available, as when its detail no longer names it.
+            if (manifestMissing && mode is PlayMode.Extra) {
+                _state.value = PlayerUiState.NotAvailable(link)
+                return
+            }
             val userMessage = if (manifestMissing) {
                 "This title isn't available to stream yet."
             } else {
@@ -494,6 +535,13 @@ class PlayerViewModel(
             _state.value = PlayerUiState.Error(userMessage)
         }
     }
+
+    /** What a bug report says it is about: the title, and the extra played. */
+    private val reportContext: Map<String, String>
+        get() = buildMap {
+            put("itemId", itemId)
+            (mode as? PlayMode.Extra)?.let { put("extraId", it.extraId) }
+        }
 
     /**
      * Auto bug report for a Media3 player error — separate from
@@ -524,8 +572,7 @@ class PlayerViewModel(
             // codeName+message only (no frames): the same decoder failure
             // should dedupe regardless of which call path tripped it.
             fingerprint = bugFingerprint(name = code, message = message),
-            context = mapOf(
-                "itemId" to itemId,
+            context = reportContext + mapOf(
                 "positionSec" to positionSec.toString(),
                 "screen" to "player",
             ),
@@ -556,10 +603,7 @@ class PlayerViewModel(
                 val resp = bugReporter.reportManual(
                     title = "Playback failed",
                     description = description,
-                    context = mapOf(
-                        "screen" to "player",
-                        "itemId" to itemId,
-                    ),
+                    context = mapOf("screen" to "player") + reportContext,
                 )
                 BugReportState.Filed(id = resp.id, duplicate = resp.duplicate)
             } catch (e: Exception) {
@@ -612,22 +656,38 @@ class PlayerViewModel(
         telemetry.event(kind, itemId = itemId, extra = payload)
     }
 
+    /** Playback has begun. An extra's one event, once however often it plays:
+     *  trailer_play with the extra's id and local, as chino-web reports a
+     *  trailer this server plays. A title's play is one of the player's own
+     *  events. */
+    fun reportStarted() {
+        val extra = mode as? PlayMode.Extra ?: return
+        if (started) return
+        started = true
+        telemetry.event("trailer_play", itemId = extra.itemId, extra = mapOf("extra_id" to extra.extraId, "local" to "true"))
+    }
+
+    /** The title's trailer link opened instead of an extra not there, as
+     *  Detail reports its link. */
+    fun reportLinkLaunch() = telemetry.event("trailer_launch", itemId = itemId)
+
     /** What has been tried about trouble at the current spot of the title —
      *  kept across the reloads it starts (see [PlaybackRecovery]). */
     private val recovery = PlaybackRecovery()
 
     /**
-     * A player error at [positionMs]: what to do about it, by the title's
-     * mode (PlaybackRecovery). An on-the-fly title steps down its ladder
-     * (high→medium→low: the transcode still warming the high rung while
-     * medium has been cached for hours); a packaged one is tried again in
-     * place, then rebuilt at its quality — never put on the on-the-fly
-     * ladder. A step down or a reload is started here and goes on at the
-     * position; retrying in place and giving up are the screen's to do.
+     * A player error at [positionMs]: what to do about it, by how the title
+     * is served (PlaybackRecovery; an extra is packaged, [streamMode]). An
+     * on-the-fly title steps down its ladder (high→medium→low: the transcode
+     * still warming the high rung while medium has been cached for hours); a
+     * packaged one is tried again in place, then rebuilt at its quality —
+     * never put on the on-the-fly ladder. A step down or a reload is started
+     * here and goes on at the position; retrying in place and giving up are
+     * the screen's to do.
      */
     fun recoverFromError(positionMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.GiveUp
-        val r = recovery.onError(cur.playInfo?.mode, cur.currentQuality, positionMs)
+        val r = recovery.onError(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs)
         carryOut(r, cur, positionMs, cause = "error")
         return r
     }
@@ -641,7 +701,7 @@ class PlayerViewModel(
      */
     fun recoverFromStall(positionMs: Long, loading: Boolean, bufferedAheadMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.Wait
-        val r = recovery.onStall(cur.playInfo?.mode, cur.currentQuality, positionMs, loading, bufferedAheadMs)
+        val r = recovery.onStall(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, loading, bufferedAheadMs)
         carryOut(r, cur, positionMs, cause = "stall")
         return r
     }

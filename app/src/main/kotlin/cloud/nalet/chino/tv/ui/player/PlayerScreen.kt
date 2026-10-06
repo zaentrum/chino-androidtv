@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -80,9 +81,13 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.KeyEventBus
 import cloud.nalet.chino.tv.data.api.Segment
+import cloud.nalet.chino.tv.data.model.Trailer
 import cloud.nalet.chino.tv.ui.settings.BugReportState
+import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
+import cloud.nalet.chino.tv.ui.trailer.trailerLinkLabel
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SkipForward
+import com.composables.icons.lucide.Youtube
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
@@ -95,6 +100,9 @@ import kotlinx.coroutines.launch
  *  - Title overlay top-left
  *  - Progress reported every 10s + on dispose
  *  - Telemetry batched for chino-api log aggregator
+ * A title's extra — its trailer — plays here too (PlayMode.Extra), with the
+ * same chrome, menus and remote: from the start, with no progress, segments,
+ * previews or up next, and it closes at its end (onClose).
  */
 
 /** Witty rotating-message pool for the preparing/buffering overlay.
@@ -141,8 +149,13 @@ fun PlayerScreen(
     // Home affordance next to Back (chino-web parity). Optional so existing
     // call sites / previews compile; when null the Home button is hidden.
     onHome: (() -> Unit)? = null,
+    // Leaves the player, back to where it was opened from: what the end of
+    // the media does where the mode closes at its end (an extra, back to its
+    // title — PlayMode.closesAtEnd).
+    onClose: (() -> Unit)? = null,
 ) {
     val state by viewModel.state.collectAsState()
+    val context = LocalContext.current
     when (val s = state) {
         PlayerUiState.Preparing -> Centered("Preparing…")
         is PlayerUiState.Error -> {
@@ -153,7 +166,48 @@ fun PlayerScreen(
                 onReport = viewModel::fileTerminalErrorBug,
             )
         }
-        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext, onHome)
+        is PlayerUiState.NotAvailable -> NotAvailableScreen(
+            link = s.link,
+            onOpenLink = { link ->
+                viewModel.reportLinkLaunch()
+                launchTrailerLink(context, link)
+            },
+        )
+        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext, onHome, onClose)
+    }
+}
+
+/**
+ * An extra that is not there to play: "Trailer not available", and the
+ * title's trailer link when it has one — opened in the YouTube app where it
+ * is one of its. BACK leaves the player, as from the error screen.
+ */
+@Composable
+private fun NotAvailableScreen(link: Trailer?, onOpenLink: (Trailer) -> Unit) {
+    val focus = remember { FocusRequester() }
+    LaunchedEffect(link) { if (link != null) runCatching { focus.requestFocus() } }
+    Column(
+        modifier = Modifier.fillMaxSize().background(Color.Black).padding(64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
+    ) {
+        Text(
+            text = "Trailer not available",
+            style = MaterialTheme.typography.headlineSmall,
+            fontWeight = FontWeight.SemiBold,
+            color = Color.White,
+        )
+        if (link != null) {
+            Button(
+                onClick = { onOpenLink(link) },
+                modifier = Modifier.focusRequester(focus),
+                shape = ButtonDefaults.shape(shape = RectangleShape),
+            ) {
+                androidx.tv.material3.Icon(Lucide.Youtube, contentDescription = null, modifier = Modifier.size(20.dp))
+                Spacer(Modifier.width(8.dp))
+                Text(text = trailerLinkLabel(link))
+            }
+        }
     }
 }
 
@@ -232,6 +286,7 @@ private fun ExoPlayback(
     viewModel: PlayerViewModel,
     onPlayNext: ((String) -> Unit)?,
     onHome: (() -> Unit)?,
+    onClose: (() -> Unit)?,
 ) {
     val context = LocalContext.current
     // Key the ExoPlayer factory on (masterUrl + reloadKey) so switchQuality
@@ -404,6 +459,11 @@ private fun ExoPlayback(
     // The picture size of the video format Media3 plays (width to height) —
     // on Auto, the rung ExoPlayer has stepped to; null until the first frame.
     var playingSize by remember(player) { mutableStateOf<Pair<Int, Int>?>(null) }
+    // The master's video variants as Media3 read them: the quality menu of a
+    // mode without /play/info (an extra, variantMenu), and the one its menu
+    // pinned (its name), AUTO while the player adapts.
+    var videoVariants by remember(player) { mutableStateOf<List<VideoVariant>>(emptyList()) }
+    var pinnedVariant by remember(player) { mutableStateOf(AUTO) }
     var controllerVisible by remember { mutableStateOf(true) }
     // Shared with the Player.Listener block below so the preparing/buffering
     // overlay reflects current state in real time. MutableState backing so
@@ -432,10 +492,13 @@ private fun ExoPlayback(
         val listener = object : Player.Listener {
             override fun onIsPlayingChanged(isPlaying: Boolean) {
                 viewModel.reportTelemetry(if (isPlaying) "play" else "pause")
+                // An extra's one event, trailer_play.
+                if (isPlaying) viewModel.reportStarted()
             }
             override fun onTracksChanged(t: Tracks) {
                 tracks = collectSubtitleTracks(t)
                 audioTracks = collectAudioTracks(t)
+                videoVariants = collectVideoVariants(t)
             }
             override fun onVideoSizeChanged(videoSize: androidx.media3.common.VideoSize) {
                 // The selected format's size is the variant's RESOLUTION,
@@ -773,8 +836,13 @@ private fun ExoPlayback(
     // case where the user skipped the credits (auto-skip or BACK) and the
     // playhead reaches the end: play the next episode, or — for a movie — the
     // top recommendation. Gated on the Auto-play-next setting and guarded so it
-    // never double-fires with the credits countdown above.
+    // never double-fires with the credits countdown above. An extra closes
+    // instead, back to its title.
     LaunchedEffect(endedState.value) {
+        if (endedState.value && viewModel.mode.closesAtEnd) {
+            onClose?.invoke()
+            return@LaunchedEffect
+        }
         if (endedState.value && !autoAdvanced && settings.autoPlayNext && onPlayNext != null) {
             val next = viewModel.resolveNextUp()
             if (next != null) {
@@ -1048,7 +1116,13 @@ private fun ExoPlayback(
         }
         // The quality menu /play/info offers (null: nothing to pick) and the
         // rung that plays, by its menu label — Auto says it: "Auto · 720p".
-        val menu = remember(ready.playInfo) { qualityMenu(ready.playInfo) }
+        // A mode without /play/info (an extra) has its master's variants for
+        // a menu, and the entry it is on is the variant pinned.
+        val byPlayInfo = viewModel.requests.playInfo
+        val menu = remember(ready.playInfo, videoVariants) {
+            if (byPlayInfo) qualityMenu(ready.playInfo) else variantMenu(videoVariants)
+        }
+        val quality = if (byPlayInfo) ready.currentQuality else pinnedVariant
         val playing = playingSize?.let { (w, h) -> playingLabel(w, h, menu) }
         // Custom Compose chrome — replaces the default PlayerControlView.
         // Layout mirrors chino-web's PlayerPage: top bar (back + home + title),
@@ -1143,17 +1217,24 @@ private fun ExoPlayback(
         if (showQualityPanel && menu != null) {
             QualityPanel(
                 rungs = menu,
-                active = chosenQuality(menu, ready.currentQuality)?.name,
+                active = chosenQuality(menu, quality)?.name,
                 playing = playing,
                 onPick = { rung ->
                     showQualityPanel = false
-                    // The reload goes on at this playhead (prepare's atSec);
-                    // the progress save is only the usual one, not what the
-                    // reload reads.
-                    val pos = (player.currentPosition / 1000L).toInt()
-                    val dur = (player.duration.takeIf { it != C.TIME_UNSET } ?: 0).let { (it / 1000L).toInt() }
-                    if (pos > 0) viewModel.reportProgress(pos, dur)
-                    viewModel.switchQuality(rung, atSec = pos)
+                    if (!byPlayInfo) {
+                        // A variant of the master: pinned in this player,
+                        // where it plays on — no reload.
+                        pinnedVariant = rung
+                        applyVariantSelection(player, rung)
+                    } else {
+                        // The reload goes on at this playhead (prepare's atSec);
+                        // the progress save is only the usual one, not what the
+                        // reload reads.
+                        val pos = (player.currentPosition / 1000L).toInt()
+                        val dur = (player.duration.takeIf { it != C.TIME_UNSET } ?: 0).let { (it / 1000L).toInt() }
+                        if (pos > 0) viewModel.reportProgress(pos, dur)
+                        viewModel.switchQuality(rung, atSec = pos)
+                    }
                 },
                 onDismiss = { showQualityPanel = false },
             )
@@ -1236,7 +1317,7 @@ private fun ExoPlayback(
         if (showInfoOverlay) {
             PlaybackInfoOverlay(
                 info = ready.playInfo,
-                quality = qualityText(menu, ready.currentQuality, playing),
+                quality = qualityText(menu, quality, playing),
                 onDismiss = { showInfoOverlay = false },
             )
         }
@@ -1729,6 +1810,31 @@ private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
             trackIndex = i,
         )
     }
+}
+
+/** The master's video variants the device plays, as Media3 read them: each
+ *  one's track in the video group, its picture size, codec and bitrate — what
+ *  [variantMenu] makes a quality menu of. */
+private fun collectVideoVariants(tracks: Tracks): List<VideoVariant> {
+    val group = tracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO } ?: return emptyList()
+    return (0 until group.length).filter { group.isTrackSupported(it) }.map { i ->
+        val fmt = group.getTrackFormat(i)
+        VideoVariant(track = i, width = fmt.width, height = fmt.height, codec = fmt.codecs, bitrate = fmt.bitrate)
+    }
+}
+
+/** Pins the video variant a [variantMenu] entry names (its track), or, on
+ *  Auto, lets the player adapt again. */
+private fun applyVariantSelection(player: ExoPlayer, name: String) {
+    val group = player.currentTracks.groups.firstOrNull { it.type == C.TRACK_TYPE_VIDEO }
+    val track = name.toIntOrNull()?.takeIf { group != null && it in 0 until group.length }
+    val params = player.trackSelectionParameters.buildUpon()
+    if (group == null || track == null) {
+        params.clearOverridesOfType(C.TRACK_TYPE_VIDEO)
+    } else {
+        params.setOverrideForType(TrackSelectionOverride(group.mediaTrackGroup, track))
+    }
+    player.trackSelectionParameters = params.build()
 }
 
 private fun applyAudioSelection(player: ExoPlayer, track: AudioTrack): String {
