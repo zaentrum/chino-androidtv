@@ -69,6 +69,7 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
+import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -319,7 +320,13 @@ private fun ExoPlayback(
                 // for bitmap subs — .sup has no internal language tag.
                 .setLanguage(sub.lang.takeIf { it.isNotBlank() })
                 .setLabel(sub.label.takeIf { it.isNotBlank() })
-                .setSelectionFlags(if (sub.default == true) C.SELECTION_FLAG_DEFAULT else 0)
+                // DEFAULT as the catalog has it; FORCED where its label says
+                // so (sidecarKind), which the forced subtitle's rule reads
+                // (ForcedSubtitles.kt) and the menu shows ("(forced)").
+                .setSelectionFlags(
+                    (if (sub.default == true) C.SELECTION_FLAG_DEFAULT else 0) or
+                        (if (sidecarKind(sub.label) == SubtitleKind.FORCED) C.SELECTION_FLAG_FORCED else 0),
+                )
                 .build()
         }
         // chino-stream's retry rules: a segment's 404 is retried with a
@@ -357,9 +364,8 @@ private fun ExoPlayback(
         // factory applies the same OkHttp data source + 404 retry policy to the
         // HLS source AND the per-subtitle SingleSampleMediaSources it creates.
         // The sidecars are the subtitles: the master reaches Media3 without the
-        // SUBTITLES renditions they already have, and without forced ones
-        // (withoutDuplicateSubtitles), so no language is listed twice and no
-        // forced rendition switches itself on. Where the TV's output is stereo
+        // SUBTITLES renditions they already have (withoutDuplicateSubtitles),
+        // so no language is listed twice. Where the TV's output is stereo
         // a 5.1 default hands the DEFAULT to its stereo twin
         // (withStereoDefault): the player starts on the stereo track, the 5.1
         // one is in the audio menu.
@@ -388,6 +394,10 @@ private fun ExoPlayback(
                 } else {
                     setMaxAudioChannelCount(2)
                 }
+                // A forced track comes on by the player's rule alone
+                // (ForcedSubtitles.kt): Media3 would switch on the one in the
+                // audio's language wherever subtitles are on.
+                setIgnoredTextSelectionFlags(C.SELECTION_FLAG_FORCED)
             }.build()
             it.setMediaItem(mediaItem)
             it.prepare()
@@ -404,16 +414,18 @@ private fun ExoPlayback(
     // entirely. Anything the user selects manually via the side panel wins
     // because applySubtitleSelection sets a hard override.
     val settingsPref by viewModel.settings.collectAsState()
+    // The forced subtitle's state (the rule is below, with the tracks): the
+    // forced track it switched on, and whether the viewer picked in the menu.
+    var forcedOn by remember(player) { mutableStateOf<String?>(null) }
+    var subtitlePicked by remember(player) { mutableStateOf(false) }
     LaunchedEffect(player, settingsPref.preferredSubLang) {
-        val params = player.trackSelectionParameters.buildUpon()
-        if (settingsPref.preferredSubLang == "off" || settingsPref.preferredSubLang.isBlank()) {
-            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            params.clearOverridesOfType(C.TRACK_TYPE_TEXT)
-        } else {
-            params.setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            params.setPreferredTextLanguage(settingsPref.preferredSubLang)
-        }
-        player.trackSelectionParameters = params.build()
+        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+            // A forced track switched on before is the rule's to weigh again
+            // against the subtitles as set now.
+            .apply { if (forcedOn != null) clearOverridesOfType(C.TRACK_TYPE_TEXT) }
+            .subtitlesAsSet(settingsPref.preferredSubLang)
+            .build()
+        forcedOn = null
     }
 
     // Apply the user's preferred audio language on first load (and whenever the
@@ -473,6 +485,41 @@ private fun ExoPlayback(
     }
     var tracks by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
     var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
+    // The forced subtitle (ForcedSubtitles.kt): where the subtitles as set
+    // put none on, the forced track in the language of the audio that plays
+    // comes on, and goes with the audio into another language, until the
+    // viewer picks in the menu; their Off holds for the rest of the playback
+    // (the view model's, past a reload). Read off the player's own tracks
+    // each time they change, so a rebuilt player's are the ones it acts on.
+    LaunchedEffect(player, tracks, audioTracks) {
+        val subtitles = collectSubtitleTracks(player.currentTracks)
+        val change = forcedChange(
+            tracks = subtitles.map { it.option },
+            audioLanguage = collectAudioTracks(player.currentTracks).firstOrNull { it.selected }?.language,
+            selected = subtitles.firstOrNull { it.selected }?.id,
+            switchedOn = forcedOn,
+            viewerChose = subtitlePicked || viewModel.subtitlesOff,
+        )
+        when (change) {
+            ForcedChange.Keep -> Unit
+            is ForcedChange.On -> {
+                val track = subtitles.first { it.id == change.track.id }
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+                    .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex))
+                    .build()
+                forcedOn = track.id
+                viewModel.reportTelemetry("subtitle_forced", mapOf("label" to track.label))
+            }
+            ForcedChange.Off -> {
+                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
+                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                    .subtitlesAsSet(settingsPref.preferredSubLang)
+                    .build()
+                forcedOn = null
+            }
+        }
+    }
     // The picture size of the video format Media3 plays (width to height) —
     // on Auto, the rung ExoPlayer has stepped to; null until the first frame.
     var playingSize by remember(player) { mutableStateOf<Pair<Int, Int>?>(null) }
@@ -1211,6 +1258,11 @@ private fun ExoPlayback(
             SubtitlePanel(
                 tracks = tracks,
                 onSelect = { track ->
+                    // The viewer's from now on: no forced subtitle comes on
+                    // by itself any more, and after their Off none for the
+                    // rest of the playback.
+                    subtitlePicked = true
+                    if (track == null) viewModel.turnSubtitlesOff()
                     val label = applySubtitleSelection(player, track)
                     bannerMessage = label
                     showSubtitlePanel = false
@@ -1758,6 +1810,8 @@ data class SubtitleTrack(
     // Internal pointers so applySubtitleSelection can rebuild the override.
     val group: Tracks.Group,
     val trackIndex: Int,
+    /** What the forced subtitle's rule reads of it: language, forced, image. */
+    val option: SubtitleOption,
 )
 
 /** The subtitle panel's rows, each labelled by [subtitleLabels]: by its
@@ -1775,12 +1829,20 @@ private fun collectSubtitleTracks(tracks: Tracks): List<SubtitleTrack> {
         },
     )
     return found.mapIndexed { k, (g, i) ->
+        val id = "${g.mediaTrackGroup.id}#$i"
+        val fmt = formats[k]
         SubtitleTrack(
-            id = "${g.mediaTrackGroup.id}#$i",
+            id = id,
             label = labels[k],
             selected = g.isTrackSelected(i),
             group = g,
             trackIndex = i,
+            option = SubtitleOption(
+                id = id,
+                language = fmt.language,
+                forced = (fmt.selectionFlags and C.SELECTION_FLAG_FORCED) != 0,
+                image = isImageSubtitle(fmt.sampleMimeType, fmt.codecs),
+            ),
         )
     }
 }
@@ -1791,6 +1853,8 @@ data class AudioTrack(
     val selected: Boolean,
     val group: Tracks.Group,
     val trackIndex: Int,
+    /** Its language tag, which the forced subtitle follows. */
+    val language: String? = null,
 )
 
 /** Builds the user-facing label from format metadata: the language first
@@ -1831,6 +1895,7 @@ private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
             selected = g.isTrackSelected(i),
             group = g,
             trackIndex = i,
+            language = formats[k].language,
         )
     }
 }
@@ -1902,6 +1967,15 @@ private fun AudioPanel(
         }
     }
 }
+
+/** The subtitles as set in Settings: Off (or nothing set) turns text off,
+ *  and with it any track picked; a language has Media3 pick a track in it. */
+private fun TrackSelectionParameters.Builder.subtitlesAsSet(pref: String): TrackSelectionParameters.Builder =
+    if (pref == "off" || pref.isBlank()) {
+        setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).clearOverridesOfType(C.TRACK_TYPE_TEXT)
+    } else {
+        setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(pref)
+    }
 
 private fun applySubtitleSelection(player: ExoPlayer, track: SubtitleTrack?): String {
     val params = player.trackSelectionParameters

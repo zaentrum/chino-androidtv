@@ -61,17 +61,16 @@ class ManifestSubtitlesTest {
     }
 
     @Test
-    fun `without the sidecar list the master's are the subtitles, forced aside`() {
-        assertEquals(
-            master(listOf(subtitles[0], subtitles[2])),
-            withoutDuplicateSubtitles(master(subtitles), emptyList()),
-        )
+    fun `without the sidecar list the master's are the subtitles, the forced one among them`() {
+        val m = master(subtitles)
+        assertSame(m, withoutDuplicateSubtitles(m, emptyList()))
     }
 
     @Test
-    fun `a language the sidecars lack keeps its rendition`() {
+    fun `a language or a kind the sidecars lack keeps its rendition`() {
+        // A regular English sidecar: the forced English rendition stays.
         assertEquals(
-            master(listOf(subtitles[2])),
+            master(listOf(subtitles[1], subtitles[2])),
             withoutDuplicateSubtitles(master(subtitles), listOf(sidecar("en"))),
         )
     }
@@ -101,14 +100,18 @@ class ManifestSubtitlesTest {
     }
 
     @Test
-    fun `a forced rendition goes even where no sidecar has it`() {
-        assertFalse(keepRendition("de", "German (forced)", true, null, emptyList()))
+    fun `a forced rendition stays where no sidecar of its language is forced`() {
+        assertTrue(keepRendition("de", "German (forced)", true, null, emptyList()))
+        assertTrue(keepRendition("de", "German (forced)", true, null, listOf(sidecar("ger"))))
+        assertFalse(keepRendition("de", "German (forced)", true, null, listOf(sidecar("ger", "Forced"))))
         // FORCED read past a quoted value holding a comma.
         val signs = """#EXT-X-MEDIA:TYPE=SUBTITLES,URI="s4/playlist.m3u8",GROUP-ID="subs",NAME="Signs, Songs",LANGUAGE="fr",FORCED=YES"""
         assertEquals(
             master(listOf(subtitles[2])),
-            withoutDuplicateSubtitles(master(listOf(subtitles[2], signs)), emptyList()),
+            withoutDuplicateSubtitles(master(listOf(subtitles[2], signs)), listOf(sidecar("fre", "Forced"))),
         )
+        val kept = master(listOf(subtitles[2], signs))
+        assertSame(kept, withoutDuplicateSubtitles(kept, listOf(sidecar("fre"))))
     }
 
     @Test

@@ -180,6 +180,16 @@ class PlayerViewModel(
     /** An extra's trailer_play has gone out. */
     private var started = false
 
+    /** The viewer turned the subtitles Off in the menu: no forced subtitle
+     *  comes on by itself for the rest of this playback, its reloads
+     *  included (ForcedSubtitles.kt). */
+    var subtitlesOff: Boolean = false
+        private set
+
+    fun turnSubtitlesOff() {
+        subtitlesOff = true
+    }
+
     init { prepare(quality = null) }
 
     /**

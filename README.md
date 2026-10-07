@@ -43,6 +43,11 @@ real values always come from the connected server at runtime.
   beside the stereo ones, and the 5.1 track of the language plays first where
   the TV's audio output takes 5.1, the stereo one where it is stereo. Zap
   plays in stereo
+- Forced subtitles: where the subtitles as set put none on — Off, or no track
+  in the language chosen — the forced track in the language of the audio
+  comes on by itself (a text one before a picture one), and goes with the
+  audio into another language; Off in the subtitle menu keeps it off for the
+  rest of the playback
 - Trailers: a trailer your server has plays in the app's one player, with the
   controls, quality, audio and subtitle menus and remote a title has, from the
   start with sound, and closes at its end; it writes no progress, so Continue
@@ -79,7 +84,8 @@ never overwrites a release you installed.
 
 # JVM unit tests (paging, credits, people, series resume, the API contract,
 # account deletion, addon slots, notices, trailers, what the player asks the
-# server for a title and for a trailer, the caps and the 5.1 audio):
+# server for a title and for a trailer, the caps, the 5.1 audio and the
+# forced subtitle):
 ./gradlew :app:testDebugUnitTest
 ```
 
