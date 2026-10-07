@@ -98,9 +98,9 @@ fun ZapScreen(
                 repeatMode = Player.REPEAT_MODE_OFF
                 // A card plays in stereo: the DEFAULT rendition of the first
                 // variant's group, the stereo AAC one, which the prefetch and
-                // chino-stream warm. Of that and the 5.1 E-AC-3 group's
-                // DEFAULT a TV that decodes E-AC-3 is also served, Media3
-                // would take the one with more channels.
+                // chino-stream warm. Its caps name no surround codec
+                // (CodecCaps.zapQuery), so chino-stream serves it the stereo
+                // tracks alone; and of two it keeps to the stereo one.
                 trackSelectionParameters = trackSelectionParameters.buildUpon()
                     .setMaxAudioChannelCount(2)
                     // Zap has no subtitles. A FORCED rendition of the master

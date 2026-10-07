@@ -182,6 +182,10 @@ class AppContainer(context: Context) {
 
     val baseUrl: String by lazy { serverConfig.baseUrl.trimEnd('/') }
 
+    /** The caps a play sends, as the TV's audio output is routed now
+     *  ([CodecCaps.play]). Reads the route: not on the main thread. */
+    fun playCaps(): PlayCaps = CodecCaps.play(appCtx)
+
     /**
      * Dedicated OkHttp client for ExoPlayer's data source. Sharing a Call.Factory
      * (rather than DefaultHttpDataSource's per-request HttpURLConnection) means:
@@ -269,7 +273,7 @@ class AppContainer(context: Context) {
                 // identical to the Zap screen's first card.
                 val first = feed.topCandidate() ?: return@launch
                 val seekSec = cloud.nalet.chino.tv.ui.zap.deterministicFirstCardSeekSec(first.durationMs)
-                val caps = cloud.nalet.chino.tv.data.CodecCaps.queryParam
+                val caps = CodecCaps.zapQuery
                 val masterUrl = buildString {
                     append("$baseUrl/v1/items/${first.id}/play/master.m3u8?stream=$token")
                     if (caps.isNotEmpty()) append("&caps=$caps")

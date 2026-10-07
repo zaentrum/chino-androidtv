@@ -1,15 +1,21 @@
 package cloud.nalet.chino.tv.data
 
+import android.content.Context
 import android.media.MediaCodecInfo
 import android.media.MediaCodecList
 import android.media.MediaFormat
 import android.os.Build
+import androidx.media3.common.AudioAttributes
+import androidx.media3.common.Format
+import androidx.media3.common.MimeTypes
+import androidx.media3.exoplayer.audio.AudioCapabilities
 
 /**
  * Comma-separated codec-token list chino-stream's ParseCaps consumes —
  * video `avc` / `hvc` / `av1`, audio `aac` / `mp3` / `opus` / `ac3` /
- * `eac3`. Computed once per process; the MediaCodec list doesn't change at
- * runtime.
+ * `eac3`. What the device decodes is read once per process; the MediaCodec
+ * list doesn't change at runtime. Where the TV's audio goes is read at each
+ * play ([play]): a receiver can be switched on between two.
  *
  * Audio tokens matter as much as video ones: once a client sends caps,
  * ParseCaps starts from an EMPTY audio set, so a caps string with video
@@ -17,13 +23,21 @@ import android.os.Build
  * DecideWith then never chose passthrough — every non-packaged title went
  * through a remux that re-encoded its audio to stereo AAC, even AAC the TV
  * plays as is. Each audio token is advertised when MediaCodecList has a
- * decoder for it: AAC, MP3 and Opus come with the platform; AC-3 / E-AC-3
- * only where the device ships a Dolby decoder (most TVs), and passthrough to
- * an HDMI receiver isn't counted — without a decoder the server's stereo
- * AAC is the safe answer. ExoPlayer reads the real codec from the copied
- * segments (the copy master always says mp4a.40.2) and opens the matching
- * decoder. `vorbis` is not sent: Vorbis copied into fragmented MP4 is
- * non-standard and untried on TV, while the remux to AAC always plays.
+ * decoder for it: AAC, MP3 and Opus come with the platform; AC-3 only where
+ * the device ships a Dolby decoder (most TVs). ExoPlayer reads the real codec
+ * from the copied segments (the copy master always says mp4a.40.2) and opens
+ * the matching decoder. `vorbis` is not sent: Vorbis copied into fragmented
+ * MP4 is non-standard and untried on TV, while the remux to AAC always plays.
+ *
+ * `eac3` is sent where the device decodes E-AC-3, or where the audio output
+ * as it is routed now takes 5.1 E-AC-3 as it is: Media3 passes it through to
+ * a receiver or sound bar over HDMI (or to the TV's own decoder), as
+ * Media3's AudioCapabilities read the route. With it chino-stream serves a
+ * package's 5.1 E-AC-3 companions beside the stereo tracks, in one audio
+ * group; the player starts on the 5.1 track where the output takes 5.1
+ * ([PlayCaps.surround], SurroundAudio.kt), on the stereo one where it does
+ * not. A device that neither decodes nor passes it through gets the stereo
+ * tracks alone.
  *
  * Each VIDEO token may carry an optional `:maxHeight` suffix = the
  * largest frame HEIGHT a HARDWARE decoder advertises for that codec
@@ -55,12 +69,17 @@ import android.os.Build
  * sees no behaviour change. A previous 32-bit ABI gate was removed once
  * per-profile MediaCodec probes were trustworthy.
  *
- * Shared by PlayerViewModel (which puts it on the master.m3u8 URL) and
- * DetailViewModel (which pre-warms chino-stream's /play/info on Detail
- * mount with the same caps so the pipeline decision matches).
+ * The player (a title's master and an extra's, /play/info, the next
+ * episode's warm) and Detail (which pre-warms chino-stream's /play/info on
+ * mount so the pipeline decision matches) send [play]'s caps. Zap sends
+ * [zapQuery]: a card plays in stereo.
  */
 object CodecCaps {
-    val tokens: List<String> by lazy {
+    /** What MediaCodecList decodes: its caps tokens (video with the hardware
+     *  heights, then audio, no eac3), and whether it decodes E-AC-3. */
+    private class Decoders(val tokens: List<String>, val eac3: Boolean)
+
+    private val decoders: Decoders by lazy {
         val mcl = MediaCodecList(MediaCodecList.REGULAR_CODECS)
         val infos = mcl.codecInfos
 
@@ -100,7 +119,7 @@ object CodecCaps {
 
         // Any decoder (hardware or software) for an audio MIME: audio decode
         // is cheap enough that a software decoder plays it fine.
-        fun hasAudioDecoder(mime: String): Boolean = infos.any { info ->
+        fun hasAudioDecoder(mime: String): Boolean = infos.any { info: MediaCodecInfo ->
             !info.isEncoder && info.supportedTypes.any { it.equals(mime, ignoreCase = true) }
         }
 
@@ -111,7 +130,7 @@ object CodecCaps {
         for ((name, mime) in AUDIO_TOKENS) {
             if (hasAudioDecoder(mime)) out += name
         }
-        out
+        Decoders(out, eac3 = hasAudioDecoder(MimeTypes.AUDIO_E_AC3))
     }
 
     /** ParseCaps audio token → the decoder MIME type that backs it. */
@@ -120,9 +139,59 @@ object CodecCaps {
         "mp3" to "audio/mpeg",
         "opus" to "audio/opus",
         "ac3" to "audio/ac3",
-        "eac3" to "audio/eac3",
     )
 
-    /** Comma-joined for the ?caps= query parameter; empty string when nothing supported. */
-    val queryParam: String get() = tokens.joinToString(",")
+    /** 5.1 E-AC-3 as a package's companions are: what the output must take
+     *  as it is for the player to pass it through. */
+    private val SURROUND_EAC3: Format = Format.Builder()
+        .setSampleMimeType(MimeTypes.AUDIO_E_AC3)
+        .setChannelCount(6)
+        .setSampleRate(48_000)
+        .build()
+
+    /**
+     * Whether the audio output, as it is routed now, takes 5.1 E-AC-3 as it
+     * is: Media3's AudioCapabilities for the default route - HDMI to a
+     * receiver or sound bar, or the TV's own output - say so, and Media3
+     * passes it through there rather than decoding it. Binder calls: not on
+     * the main thread.
+     */
+    fun outputTakesSurround(context: Context): Boolean = runCatching {
+        AudioCapabilities.getCapabilities(context, AudioAttributes.DEFAULT, null)
+            .isPassthroughPlaybackSupported(SURROUND_EAC3, AudioAttributes.DEFAULT)
+    }.getOrDefault(false)
+
+    /** The caps of a play, as the audio output is routed now: see [PlayCaps].
+     *  Reads the route (binder calls): not on the main thread. */
+    fun play(context: Context): PlayCaps {
+        val surround = outputTakesSurround(context)
+        val d = decoders
+        return PlayCaps(query = capsQuery(d.tokens, eac3 = d.eac3 || surround), surround = surround)
+    }
+
+    /** Zap's caps: what the device decodes, without the surround codecs — a
+     *  card plays in stereo, and chino-stream serves stereo alone for them. */
+    val zapQuery: String by lazy { capsQuery(decoders.tokens, eac3 = false, stereo = true) }
+}
+
+/**
+ * The caps of a play: [query] for the master's, /play/info's and /prewarm's
+ * ?caps=, and whether the audio output takes 5.1 ([surround]): the player
+ * starts on a language's 5.1 track only then.
+ */
+data class PlayCaps(val query: String, val surround: Boolean)
+
+/** The tokens chino-stream reads as 5.1 audio a client decodes. */
+private val SURROUND_TOKENS = setOf("ac3", "eac3")
+
+/**
+ * The ?caps= value, comma-joined: the [decoded] tokens in their order, then
+ * eac3 where [eac3] says the device plays E-AC-3 (decodes it, or its output
+ * takes it as it is). [stereo] leaves the surround codecs out, eac3 and ac3:
+ * chino-stream then serves the stereo tracks alone. Empty when nothing is
+ * decoded.
+ */
+fun capsQuery(decoded: List<String>, eac3: Boolean, stereo: Boolean = false): String {
+    val tokens = decoded.filter { it != "eac3" } + if (eac3) listOf("eac3") else emptyList()
+    return tokens.filter { !stereo || it !in SURROUND_TOKENS }.joinToString(",")
 }

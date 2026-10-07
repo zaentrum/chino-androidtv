@@ -128,6 +128,18 @@ fun subtitleLabels(tracks: List<SubtitleLabelInput>): List<String> {
     return numbered(labels)
 }
 
+/** The codec a track's row shows: its codecs string ("mp4a.40.2"), else the
+ *  one of its sample format. Media3 leaves a track's codecs unset where it
+ *  cannot tell which of a variant's audio codecs is the track's: the 5.1
+ *  E-AC-3 companions of a group that holds stereo AAC as well ("ec-3"). */
+fun audioCodec(codecs: String?, sampleMimeType: String?): String? =
+    codecs?.trim()?.takeIf { it.isNotEmpty() } ?: when (sampleMimeType) {
+        "audio/eac3", "audio/eac3-joc" -> "ec-3"
+        "audio/ac3" -> "ac-3"
+        "audio/ac4" -> "ac-4"
+        else -> null
+    }
+
 /** What an audio menu is told about one track. */
 data class AudioLabelInput(
     /** The language tag as the track has it. */

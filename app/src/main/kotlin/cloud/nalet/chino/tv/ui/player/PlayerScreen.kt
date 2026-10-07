@@ -359,10 +359,14 @@ private fun ExoPlayback(
         // The sidecars are the subtitles: the master reaches Media3 without the
         // SUBTITLES renditions they already have, and without forced ones
         // (withoutDuplicateSubtitles), so no language is listed twice and no
-        // forced rendition switches itself on.
+        // forced rendition switches itself on. Where the TV's output is stereo
+        // a 5.1 default hands the DEFAULT to its stereo twin
+        // (withStereoDefault): the player starts on the stereo track, the 5.1
+        // one is in the audio menu.
         val sidecars = ready.sidecarSubtitles
+        val surround = ready.surroundAudio
         val playDataSourceFactory = MasterRewritingDataSource.Factory(httpFactory) { master ->
-            withoutDuplicateSubtitles(master, sidecars)
+            withoutDuplicateSubtitles(master, sidecars).let { if (surround) it else withStereoDefault(it) }
         }
         val mediaSourceFactory =
             androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playDataSourceFactory)
@@ -372,6 +376,19 @@ private fun ExoPlayback(
         streamPlayerBuilder(context, mediaSourceFactory)
             .setLoadControl(loadControl)
             .build().also {
+            // Of a language's tracks Media3 picks the 5.1 one where the output
+            // takes 5.1, else the stereo one; the other is the viewer's to
+            // pick (SurroundAudio.kt). Without a DEFAULT among them (another
+            // language than the master's default) Media3 would weigh a
+            // hardware AAC decoder above E-AC-3 passed through before it
+            // counts channels: the surround codecs are preferred instead.
+            it.trackSelectionParameters = it.trackSelectionParameters.buildUpon().apply {
+                if (surround) {
+                    setPreferredAudioMimeTypes(MimeTypes.AUDIO_E_AC3_JOC, MimeTypes.AUDIO_E_AC3, MimeTypes.AUDIO_AC3)
+                } else {
+                    setMaxAudioChannelCount(2)
+                }
+            }.build()
             it.setMediaItem(mediaItem)
             it.prepare()
             if (ready.resumePositionSec > 0) {
@@ -1318,6 +1335,7 @@ private fun ExoPlayback(
             PlaybackInfoOverlay(
                 info = ready.playInfo,
                 quality = qualityText(menu, quality, playing),
+                audio = audioTracks.firstOrNull { it.selected }?.label?.replace(" • ", " · "),
                 onDismiss = { showInfoOverlay = false },
             )
         }
@@ -1778,11 +1796,16 @@ data class AudioTrack(
 /** Builds the user-facing label from format metadata: the language first
  *  ("German", "No dialogue" for zxx), the NAME where there is none or where
  *  it tells two apart ([audioLabels]). Appends channel count + codec when
- *  present so "English • 5.1 • ac-3" disambiguates surround vs stereo. */
+ *  present so "English • 5.1 • ec-3" disambiguates surround vs stereo — a
+ *  package's 5.1 E-AC-3 companion beside its stereo twin, both of one
+ *  language. Only the tracks the TV can play are listed: a pick of one it
+ *  can neither decode nor pass through would fail the playback. */
 private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
     val found = tracks.groups
         .filter { it.type == C.TRACK_TYPE_AUDIO }
-        .flatMap { g -> (0 until g.length).map { i -> g to i } }
+        .flatMap { g ->
+            (0 until g.length).filter { g.isTrackSupported(it, /* allowExceedsCapabilities= */ true) }.map { i -> g to i }
+        }
     val formats = found.map { (g, i) -> g.getTrackFormat(i) }
     val details = formats.map { fmt ->
         listOfNotNull(
@@ -1795,7 +1818,7 @@ private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
                     else -> "${it}ch"
                 }
             },
-            fmt.codecs?.takeIf { it.isNotBlank() },
+            audioCodec(fmt.codecs, fmt.sampleMimeType),
         )
     }
     val labels = audioLabels(
@@ -1901,6 +1924,9 @@ private fun applySubtitleSelection(player: ExoPlayer, track: SubtitleTrack?): St
 private fun PlaybackInfoOverlay(
     info: cloud.nalet.chino.tv.data.api.PlayInfo?,
     quality: String,
+    /** The audio track that plays, as the audio menu names it ("English ·
+     *  5.1 · ec-3"); null before the player has picked one. */
+    audio: String?,
     onDismiss: () -> Unit,
 ) {
     // Auto-dismiss after 8s — same dwell as chino-web's info badge so the user
@@ -1924,7 +1950,9 @@ private fun PlaybackInfoOverlay(
         val codec = info?.videoCodec?.takeIf { it.isNotBlank() }
         val resolution = if ((info?.width ?: 0) > 0 && (info?.height ?: 0) > 0) "${info?.width}x${info?.height}" else null
         listOfNotNull(codec, resolution).takeIf { it.isNotEmpty() }?.let { add("Video" to it.joinToString(" • ")) }
-        info?.audioCodec?.takeIf { it.isNotBlank() }?.let { add("Audio" to it) }
+        // The track that plays, else the codec /play/info says it starts on:
+        // a stereo output starts on the stereo twin of the 5.1 default.
+        (audio ?: info?.audioCodec)?.takeIf { it.isNotBlank() }?.let { add("Audio" to it) }
         if (quality.isNotBlank()) add("Quality" to quality)
         if (isEmpty()) add("Info" to "No playback metadata available")
     }

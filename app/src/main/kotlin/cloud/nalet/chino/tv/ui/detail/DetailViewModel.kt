@@ -4,7 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
-import cloud.nalet.chino.tv.data.CodecCaps
+import cloud.nalet.chino.tv.data.PlayCaps
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.ContinueWatchingItem
@@ -13,12 +13,14 @@ import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.data.model.Item
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
 
 /** In-progress playback state for one episode row, extracted from the
  *  continue-watching feed. Only built for entries that are genuinely
@@ -63,6 +65,9 @@ class DetailViewModel(
     private val telemetry: Telemetry,
     private val baseUrl: String,
     val itemId: String,
+    /** The caps a play sends, as the audio output is routed now: the
+     *  pre-warm asks with the player's. */
+    private val playCaps: () -> PlayCaps,
 ) : ViewModel() {
     private val _state = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -254,7 +259,7 @@ class DetailViewModel(
     private suspend fun prewarmPipeline() {
         runCatching {
             val target = playTarget()
-            val caps = CodecCaps.queryParam.ifEmpty { null }
+            val caps = withContext(Dispatchers.IO) { playCaps().query }.ifEmpty { null }
             api.playInfo(target, caps = caps)
         }
     }
@@ -392,6 +397,7 @@ class DetailViewModel(
                     telemetry = container.telemetry,
                     baseUrl = container.baseUrl,
                     itemId = itemId,
+                    playCaps = container::playCaps,
                 ) as T
         }
     }

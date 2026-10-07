@@ -6,7 +6,7 @@ import androidx.lifecycle.viewmodel.initializer
 import androidx.lifecycle.viewmodel.viewModelFactory
 import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.AppSettings
-import cloud.nalet.chino.tv.data.CodecCaps
+import cloud.nalet.chino.tv.data.PlayCaps
 import cloud.nalet.chino.tv.data.SettingsStore
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.PlayInfo
@@ -65,6 +65,10 @@ sealed interface PlayerUiState {
         /** Reload bump — PlayerScreen keys ExoPlayer factory on it so changing
          *  quality tears down + rebuilds with the new ?q= URL. */
         val reloadKey: Int,
+        /** The TV's audio output takes 5.1 as this prepare found it
+         *  ([PlayCaps.surround]): a language's 5.1 track starts where the
+         *  master has one. Else its stereo one does (SurroundAudio.kt). */
+        val surroundAudio: Boolean = false,
         /** The intro segment we pre-skipped at prepare-time because the user
          *  arrived here via binge auto-play-next. Non-null only on the first
          *  prepare of a binge-chained episode; clears on switchQuality reload
@@ -132,6 +136,10 @@ class PlayerViewModel(
      *  sourced from the runtime ServerConfig rather than BuildConfig so the
      *  player follows a user-configured server. */
     private val baseUrl: String,
+    /** The caps a play sends and whether the audio output takes 5.1, as it
+     *  is routed when asked ([AppContainer.playCaps]): read at every
+     *  prepare, off the main thread. */
+    private val playCaps: () -> PlayCaps,
 ) : ViewModel() {
 
     private val itemId: String = mode.itemId
@@ -189,7 +197,10 @@ class PlayerViewModel(
         viewModelScope.launch {
             _state.value = try {
                 val token = withContext(Dispatchers.IO) { streamTokens.valid() }
-                val capsParam = CodecCaps.queryParam
+                // What the TV decodes and where its audio goes now: eac3 where
+                // it plays E-AC-3, decoded or passed through (CodecCaps).
+                val caps = withContext(Dispatchers.IO) { playCaps() }
+                val capsParam = caps.query
                 // An extra plays the master its title's detail names: the
                 // detail is read first, the one request an extra makes
                 // (loadExtra). One the detail does not name says so, and
@@ -350,6 +361,7 @@ class PlayerViewModel(
                     trickplayBaseUrl = trickplayBase,
                     streamToken = token,
                     reloadKey = (prev?.reloadKey ?: 0) + if (prev != null) 1 else 0,
+                    surroundAudio = caps.surround,
                 )
             } catch (e: Exception) {
                 PlayerUiState.Error(e.message ?: e::class.java.simpleName)
@@ -482,7 +494,7 @@ class PlayerViewModel(
         appScope.launch {
             runCatching {
                 val token = streamTokens.valid()
-                val capsParam = CodecCaps.queryParam
+                val capsParam = playCaps().query
                 val base = baseUrl
                 val url = buildString {
                     append("$base/v1/items/$nextId/play/master.m3u8?stream=$token")
@@ -744,6 +756,7 @@ class PlayerViewModel(
                     appScope = container.appScope,
                     streamHttpClient = container.streamHttpClient,
                     baseUrl = container.baseUrl,
+                    playCaps = container::playCaps,
                 )
             }
         }

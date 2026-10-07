@@ -310,7 +310,7 @@ class ZapViewModel(
      *  URL so the right rung + mid-scene window is primed (mirrors mobile). */
     private fun prewarmNext(target: ZapPrefetchTarget) {
         if (!prewarmed.add(target.itemId)) return
-        val caps = CodecCaps.queryParam.ifEmpty { null }
+        val caps = CodecCaps.zapQuery.ifEmpty { null }
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 runCatching {
@@ -332,8 +332,10 @@ class ZapViewModel(
     private fun buildArtworkUrl(id: String, kind: String): String =
         "$baseUrl/v1/items/$id/$kind?stream=$token"
 
+    /** A card's master: with Zap's stereo caps, so chino-stream serves no 5.1
+     *  tracks for it (CodecCaps.zapQuery). */
     private fun buildMasterUrl(id: String): String {
-        val caps = CodecCaps.queryParam
+        val caps = CodecCaps.zapQuery
         return buildString {
             append("$baseUrl/v1/items/$id/play/master.m3u8?stream=$token")
             if (caps.isNotEmpty()) append("&caps=$caps")

@@ -38,6 +38,11 @@ real values always come from the connected server at runtime.
 
 - Browse, search, and a detail screen with cast/crew
 - Playback with trickplay scrubbing thumbnails
+- 5.1 audio where the TV plays E-AC-3 — it decodes it, or passes it through
+  to a receiver or sound bar: a title's 5.1 tracks are in the audio menu
+  beside the stereo ones, and the 5.1 track of the language plays first where
+  the TV's audio output takes 5.1, the stereo one where it is stereo. Zap
+  plays in stereo
 - Trailers: a trailer your server has plays in the app's one player, with the
   controls, quality, audio and subtitle menus and remote a title has, from the
   start with sound, and closes at its end; it writes no progress, so Continue
@@ -74,7 +79,7 @@ never overwrites a release you installed.
 
 # JVM unit tests (paging, credits, people, series resume, the API contract,
 # account deletion, addon slots, notices, trailers, what the player asks the
-# server for a title and for a trailer):
+# server for a title and for a trailer, the caps and the 5.1 audio):
 ./gradlew :app:testDebugUnitTest
 ```
 

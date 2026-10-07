@@ -123,6 +123,30 @@ class TrackLabelsTest {
     }
 
     @Test
+    fun aFiveOneCompanionBesideItsStereoTwinReadsAsItsLanguageItsLayoutAndCodecBeside() {
+        // chino-stream's one group for a TV that plays E-AC-3: "English 5.1"
+        // just before "English", the two told apart by what the row shows
+        // beside the label.
+        assertEquals(
+            listOf("English", "English"),
+            audioLabels(
+                listOf(
+                    AudioLabelInput("en", name = "English 5.1", detail = "5.1 • ec-3"),
+                    AudioLabelInput("en", name = "English", detail = "Stereo • mp4a.40.2"),
+                ),
+            ),
+        )
+        // Media3 leaves the companion's codecs unset - the variant names two
+        // audio codecs - so the row takes its sample format's.
+        assertEquals("ec-3", audioCodec(null, "audio/eac3"))
+        assertEquals("ec-3", audioCodec(" ", "audio/eac3-joc"))
+        assertEquals("ac-3", audioCodec(null, "audio/ac3"))
+        assertEquals("mp4a.40.2", audioCodec("mp4a.40.2", "audio/mp4a-latm"))
+        assertEquals(null, audioCodec(null, "audio/mp4a-latm"))
+        assertEquals(null, audioCodec(null, null))
+    }
+
+    @Test
     fun subtitlesByLanguageWithWhatTheirLabelSaysBeyondIt() {
         assertEquals(
             listOf(
