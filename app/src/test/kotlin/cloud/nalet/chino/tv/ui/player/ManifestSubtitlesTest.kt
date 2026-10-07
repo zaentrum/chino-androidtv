@@ -46,8 +46,8 @@ class ManifestSubtitlesTest {
     private fun master(subs: List<String>, variantSubs: Boolean = true) =
         head + subs.joinToString("") { "$it\n" } + variants(variantSubs)
 
-    private fun sidecar(lang: String, label: String = "") =
-        SidecarSubtitle(id = "$lang-$label", label = label, lang = lang, url = "/api/v1/play/subs/x.vtt")
+    private fun sidecar(lang: String, label: String = "", forced: Boolean = false) =
+        SidecarSubtitle(id = "$lang-$label", label = label, lang = lang, url = "/api/v1/play/subs/x.vtt", forced = forced)
 
     // As the catalog lists the package's sidecars: ISO 639-2 codes, titles.
     private val catalogSidecars = listOf(sidecar("eng"), sidecar("eng", "Forced"), sidecar("ger"))
@@ -112,6 +112,30 @@ class ManifestSubtitlesTest {
         )
         val kept = master(listOf(subtitles[2], signs))
         assertSame(kept, withoutDuplicateSubtitles(kept, listOf(sidecar("fre"))))
+    }
+
+    @Test
+    fun `a sidecar is forced where chino-api says so, by its label where it says of none`() {
+        // chino-api says which are forced, and leaves the field out of the
+        // others: a label saying "forced" makes no other one so.
+        assertEquals(
+            listOf(SubtitleKind.REGULAR, SubtitleKind.FORCED, SubtitleKind.REGULAR, SubtitleKind.SDH),
+            sidecarKinds(listOf(sidecar("eng"), sidecar("eng", forced = true), sidecar("ger", "Forced"), sidecar("ger", "SDH"))),
+        )
+        // An older chino-api says it of none, as does a title without a
+        // forced track: the labels say it.
+        assertEquals(
+            listOf(SubtitleKind.REGULAR, SubtitleKind.FORCED, SubtitleKind.SDH),
+            sidecarKinds(listOf(sidecar("eng"), sidecar("eng", "Forced"), sidecar("eng", "SDH"))),
+        )
+        // The forced rendition goes where chino-api names a forced sidecar of
+        // its language, unlabelled as the catalog's sidecars mostly are.
+        assertFalse(keepRendition("en", "English (Forced)", true, null, listOf(sidecar("eng"), sidecar("eng", forced = true))))
+        assertTrue(keepRendition("de", "German (forced)", true, null, listOf(sidecar("ger", "Forced"), sidecar("eng", forced = true))))
+        assertEquals(
+            master(listOf(subtitles[2])),
+            withoutDuplicateSubtitles(master(subtitles), listOf(sidecar("eng"), sidecar("eng", forced = true))),
+        )
     }
 
     @Test

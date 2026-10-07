@@ -306,7 +306,8 @@ private fun ExoPlayback(
         // RLE colour-index-0 fix in 1.4.0). Bitmap tracks (.sup)
         // surface in the text-track list and overlay alongside any
         // HLS-internal text tracks.
-        val sideSubs = ready.sidecarSubtitles.map { sub ->
+        val kinds = sidecarKinds(ready.sidecarSubtitles)
+        val sideSubs = ready.sidecarSubtitles.mapIndexed { k, sub ->
             val mime = when (sub.format?.lowercase()) {
                 "pgs" -> MimeTypes.APPLICATION_PGS
                 "vobsub" -> MimeTypes.APPLICATION_VOBSUB
@@ -320,12 +321,13 @@ private fun ExoPlayback(
                 // for bitmap subs — .sup has no internal language tag.
                 .setLanguage(sub.lang.takeIf { it.isNotBlank() })
                 .setLabel(sub.label.takeIf { it.isNotBlank() })
-                // DEFAULT as the catalog has it; FORCED where its label says
-                // so (sidecarKind), which the forced subtitle's rule reads
-                // (ForcedSubtitles.kt) and the menu shows ("(forced)").
+                // DEFAULT as the catalog has it; FORCED where chino-api says
+                // so, else (an older one) where its label does (sidecarKinds),
+                // which the forced subtitle's rule reads (ForcedSubtitles.kt)
+                // and the menu shows ("(forced)").
                 .setSelectionFlags(
                     (if (sub.default == true) C.SELECTION_FLAG_DEFAULT else 0) or
-                        (if (sidecarKind(sub.label) == SubtitleKind.FORCED) C.SELECTION_FLAG_FORCED else 0),
+                        (if (kinds[k] == SubtitleKind.FORCED) C.SELECTION_FLAG_FORCED else 0),
                 )
                 .build()
         }

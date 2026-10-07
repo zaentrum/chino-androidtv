@@ -449,6 +449,10 @@ data class SidecarSubtitle(
     // backward compatibility with older manager-api builds that
     // didn't emit the field — those rows are assumed webvtt.
     val format: String? = null,
+    /** A forced subtitle, the catalog's forced: chino-api sends true and
+     *  leaves the field out otherwise; an older chino-api never sends it,
+     *  and the label is all there is to go by (sidecarKinds). */
+    val forced: Boolean = false,
 )
 
 @Serializable

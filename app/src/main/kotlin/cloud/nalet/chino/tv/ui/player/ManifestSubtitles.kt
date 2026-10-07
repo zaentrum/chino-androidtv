@@ -29,12 +29,33 @@ private val FORCED_WORD = Regex("""\bforced\b""", RegexOption.IGNORE_CASE)
 private val SDH_WORD = Regex("""\b(sdh|cc|hearing impaired)\b""", RegexOption.IGNORE_CASE)
 
 /** A sidecar's kind, from its label: the catalog names a track by its title
- *  ("Forced", "SDH"), which the packager's rendition NAMEs carry too. The
- *  player flags a forced one FORCED. */
+ *  ("Forced", "SDH"), which the packager's rendition NAMEs carry too. What
+ *  an older chino-api's sidecars are known by; see [sidecarKinds]. */
 fun sidecarKind(label: String): SubtitleKind = when {
     FORCED_WORD.containsMatchIn(label) -> SubtitleKind.FORCED
     SDH_WORD.containsMatchIn(label) -> SubtitleKind.SDH
     else -> SubtitleKind.REGULAR
+}
+
+/**
+ * The kind of each of [sidecars]. chino-api says which are forced (forced:
+ * true, the catalog's) and leaves the field out of the others; once one of
+ * a list says it, that is what is forced there, and a label saying "forced"
+ * makes no other one so - it is SDH or regular by its label. In a list where
+ * none says it - an older chino-api's, or a title without a forced track -
+ * a sidecar is forced where its label says so ([sidecarKind]). The player
+ * flags a forced one FORCED.
+ */
+fun sidecarKinds(sidecars: List<SidecarSubtitle>): List<SubtitleKind> {
+    val saysForced = sidecars.any { it.forced }
+    return sidecars.map { s ->
+        when {
+            !saysForced -> sidecarKind(s.label)
+            s.forced -> SubtitleKind.FORCED
+            SDH_WORD.containsMatchIn(s.label) -> SubtitleKind.SDH
+            else -> SubtitleKind.REGULAR
+        }
+    }
 }
 
 /** A SUBTITLES rendition's kind: FORCED=YES, the accessibility
@@ -56,7 +77,8 @@ fun keepRendition(
 ): Boolean {
     val kind = renditionKind(name, forced, characteristics)
     val lang = languageKey(language)
-    return sidecars.none { languageKey(it.lang) == lang && sidecarKind(it.label) == kind }
+    val kinds = sidecarKinds(sidecars)
+    return sidecars.indices.none { languageKey(sidecars[it].lang) == lang && kinds[it] == kind }
 }
 
 /**

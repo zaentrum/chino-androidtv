@@ -69,6 +69,16 @@ class ApiContractTest {
     }
 
     @Test
+    fun `a forced subtitle says so, the others leave the field out`() {
+        val subs = decode(
+            SubtitlesResponse.serializer(),
+            """{"subtitles":[{"id":"a","lang":"eng","format":"webvtt","url":"/api/v1/play/subs/a.vtt"},
+               {"id":"b","lang":"eng","format":"webvtt","forced":true,"url":"/api/v1/play/subs/b.vtt"}]}""",
+        )
+        assertEquals(listOf(false, true), subs.subtitles.map { it.forced })
+    }
+
+    @Test
     fun `the cast carries character, job, order and episode count`() {
         val item = decode(
             Item.serializer(),

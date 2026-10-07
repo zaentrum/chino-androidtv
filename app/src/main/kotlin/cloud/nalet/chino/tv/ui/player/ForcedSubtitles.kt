@@ -20,8 +20,9 @@ import androidx.media3.common.MimeTypes
  * Media3 would switch on a FORCED track in the audio's language by itself
  * wherever subtitles are on; the player has it ignore the flag
  * (ignoredTextSelectionFlags), so this is the one rule. A track is forced by
- * its FORCED flag: a master's FORCED=YES rendition, a sidecar whose label
- * says so (sidecarKind).
+ * its FORCED flag: a master's FORCED=YES rendition, a sidecar chino-api says
+ * is forced - or, from an older chino-api, whose label says so
+ * (sidecarKinds).
  */
 
 /** What the rule is told about a subtitle track: its [id] in the menu, its
