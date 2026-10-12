@@ -1,25 +1,11 @@
 package cloud.nalet.chino.tv.ui.detail
 
-import cloud.nalet.chino.tv.ui.theme.ChinoAccent
-import cloud.nalet.chino.tv.ui.theme.ChinoBg
-import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
-import cloud.nalet.chino.tv.ui.theme.ChinoError
-import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
-import cloud.nalet.chino.tv.ui.theme.ChinoSurface
-import cloud.nalet.chino.tv.ui.theme.PosterImage
-import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,6 +14,7 @@ import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -36,9 +23,14 @@ import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
@@ -62,14 +54,13 @@ import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.TextStyle
-import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.items
 import androidx.tv.material3.Button
 import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Card
@@ -82,15 +73,27 @@ import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.data.model.episodeCode
+import cloud.nalet.chino.tv.data.model.fileEntries
 import cloud.nalet.chino.tv.ui.player.languageOrLabel
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Check
 import com.composables.icons.lucide.ChevronDown
-import com.composables.icons.lucide.Clapperboard
 import com.composables.icons.lucide.ChevronRight
+import com.composables.icons.lucide.Clapperboard
 import com.composables.icons.lucide.Eye
 import com.composables.icons.lucide.Heart
 import com.composables.icons.lucide.Lucide
@@ -799,7 +802,10 @@ private fun SeasonSection(
             )
         }
         if (expanded) {
-            season.episodes.forEachIndexed { i, ep ->
+            // One entry per file: a file that holds several episodes is one
+            // thing to play, a box around them (EpisodeRow's held).
+            fileEntries(season.episodes).forEachIndexed { i, entry ->
+                val ep = entry.episode
                 if (i > 0) {
                     Box(
                         modifier = Modifier
@@ -808,15 +814,19 @@ private fun SeasonSection(
                             .background(ChinoBorderHi),
                     )
                 }
-                val isTarget = focusEpisodeId != null && ep.id == focusEpisodeId
+                val isTarget = focusEpisodeId != null && focusEpisodeId in entry.ids
                 EpisodeRow(
                     episode = ep,
+                    held = entry.held,
+                    lastEpisodeNumber = entry.last,
                     backdropUrl = "$baseUrl/v1/items/${ep.id}/backdrop?stream=$streamToken",
-                    resume = episodeResume[ep.id],
+                    // Resume is the file's: chino-api keeps one position for it.
+                    resume = entry.ids.firstNotNullOfOrNull { episodeResume[it] },
                     selected = isTarget,
                     focusRequester = targetRowFocus.takeIf { isTarget },
                     onClick = { onPlayEpisode(ep.id) },
-                    onToggleWatched = { onToggleEpisodeWatched(ep.id, ep.watchedAt == null) },
+                    // Watched is the file's: any of its episodes marked means the file is.
+                    onToggleWatched = { onToggleEpisodeWatched(ep.id, entry.held.none { it.watchedAt != null }) },
                     onAddToList = { onAddEpisodeToList(ep.id) },
                 )
             }
@@ -827,6 +837,14 @@ private fun SeasonSection(
 @Composable
 private fun EpisodeRow(
     episode: Episode,
+    /** The episodes the row's file holds: [episode], the holder, first. More
+     *  than one makes the row a box around them - the file is the truth, the
+     *  one thing that plays, named for them (S03E18–21) and as long as the
+     *  file is; the episodes in it are listed by number and title, and none
+     *  of them plays on its own. */
+    held: List<Episode> = listOf(episode),
+    /** The last episode number the file holds (the range's end). */
+    lastEpisodeNumber: Int? = null,
     backdropUrl: String,
     // Non-null when the continue-watching feed says this episode is mid-watch:
     // draws the thin accent progress bar on the thumbnail + the "Resume ·
@@ -843,21 +861,34 @@ private fun EpisodeRow(
     focusRequester: FocusRequester? = null,
 ) {
     var focused by remember { mutableStateOf(false) }
-    val watched = episode.watchedAt != null
+    val several = held.size > 1
+    // Watched is the file's: chino-api marks every episode it holds together.
+    val watched = held.any { it.watchedAt != null }
+    // The entry's length is the file's: for a file of several, its measured
+    // length where chino-api says it, else what its episodes' runtimes come to.
+    val fileDurationMs: Long = if (several) {
+        episode.fileDurationMs ?: held.sumOf { it.durationMs ?: 0L }
+    } else {
+        episode.durationMs ?: 0L
+    }
     // Effective duration for the resume bar + remaining label: the CW row's
     // durationSec when known, else the episode's catalogue runtime
     // (canonical durationSec<=0 fallback). 0 when both are unknown — the
     // fill + remaining label then stay hidden.
     val resumeDurSec = if (resume != null && resume.durationSec > 0) resume.durationSec
-        else ((episode.durationMs ?: 0L) / 1000L).toInt()
+        else (fileDurationMs / 1000L).toInt()
     val rowBg = when {
         focused -> ChinoBorderHi
         selected -> ChinoAccent.copy(alpha = 0.18f)
+        several -> ChinoBg.copy(alpha = 0.6f)
         else -> Color.Transparent
     }
     Row(
         modifier = Modifier
             .fillMaxWidth()
+            // A file of several episodes: a box, with room around it so its
+            // border reads as a box and not as a row's divider.
+            .then(if (several) Modifier.padding(8.dp) else Modifier)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .clickable(onClick = onClick)
             .onFocusChanged { focused = it.isFocused }
@@ -865,8 +896,14 @@ private fun EpisodeRow(
             .background(rowBg)
             // Selected-target ring — the ChinoAccent highlight that survives
             // while the row isn't the focused element.
-            .then(if (selected && !focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .then(
+                when {
+                    selected && !focused -> Modifier.border(2.dp, ChinoAccent, RectangleShape)
+                    several -> Modifier.border(1.dp, ChinoAccent.copy(alpha = 0.5f), RectangleShape)
+                    else -> Modifier
+                },
+            )
+            .padding(horizontal = if (several) 8.dp else 16.dp, vertical = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -910,7 +947,7 @@ private fun EpisodeRow(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
             Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 val label = episode.episodeNumber?.let { ep ->
-                    "S%02dE%02d".format(episode.seasonNumber ?: 0, ep)
+                    episodeCode(episode.seasonNumber ?: 0, ep, lastEpisodeNumber.takeIf { several })
                 }
                 if (label != null) {
                     Text(
@@ -921,15 +958,17 @@ private fun EpisodeRow(
                     )
                 }
                 Text(
-                    text = episode.title,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.Medium,
-                    color = Color.White,
+                    // A box says what it is where a row has its title: its
+                    // episodes are listed under this line.
+                    text = if (several) "${held.size} episodes · one file" else episode.title,
+                    style = if (several) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                    fontWeight = if (several) FontWeight.Normal else FontWeight.Medium,
+                    color = if (several) ChinoMuted else Color.White,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
-                episode.durationMs?.let { (it / 60_000L).toInt() }?.takeIf { it > 0 }?.let {
+                ((fileDurationMs + 30_000L) / 60_000L).toInt().takeIf { it > 0 }?.let {
                     Text(text = "${it}m", color = ChinoMuted, style = MaterialTheme.typography.bodySmall)
                 }
                 if (resume != null) {
@@ -948,7 +987,32 @@ private fun EpisodeRow(
                     )
                 }
             }
-            episode.overview?.takeIf { it.isNotBlank() }?.let {
+            if (several) {
+                // The episodes the file holds, each by number and title:
+                // text, not controls - the box is what plays.
+                held.forEach { e ->
+                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                        Text(
+                            text = e.episodeNumber?.toString().orEmpty(),
+                            color = ChinoMuted,
+                            style = MaterialTheme.typography.bodySmall,
+                            textAlign = TextAlign.End,
+                            modifier = Modifier.width(24.dp).alignByBaseline(),
+                        )
+                        Text(
+                            text = e.title,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium,
+                            color = if (watched) ChinoMuted else Color.White,
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis,
+                            modifier = Modifier.weight(1f).alignByBaseline(),
+                        )
+                    }
+                }
+            }
+            // A box lists its episodes; one episode's overview is not the file's.
+            episode.overview?.takeIf { it.isNotBlank() && !several }?.let {
                 Text(
                     text = it,
                     color = ChinoText,

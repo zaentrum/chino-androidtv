@@ -1,11 +1,5 @@
 package cloud.nalet.chino.tv.ui.profile
 
-import cloud.nalet.chino.tv.ui.theme.ChinoAccent
-import cloud.nalet.chino.tv.ui.theme.ChinoBg
-import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
-import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -32,13 +26,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
 import androidx.compose.ui.layout.ContentScale
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -48,9 +42,16 @@ import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.data.model.episodeCode
 import cloud.nalet.chino.tv.ui.auth.Avatar
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import coil.compose.AsyncImage
 
 /**
@@ -277,10 +278,7 @@ private fun HistoryRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (isEpisode) {
-                val epNum = listOfNotNull(
-                    item.seasonNumber?.let { "S${it.toString().padStart(2, '0')}" },
-                    item.episodeNumber?.let { "E${it.toString().padStart(2, '0')}" },
-                ).joinToString("")
+                val epNum = episodeCode(item.seasonNumber, item.episodeNumber, item.episodeEnd)
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(6.dp),

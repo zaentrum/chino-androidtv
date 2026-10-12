@@ -1,13 +1,5 @@
 package cloud.nalet.chino.tv.ui.watchlist
 
-import cloud.nalet.chino.tv.ui.theme.ChinoAccent
-import cloud.nalet.chino.tv.ui.theme.ChinoBg
-import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
-import cloud.nalet.chino.tv.ui.theme.ChinoError
-import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSurface
-import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -68,10 +60,19 @@ import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.data.model.episodeCode
 import cloud.nalet.chino.tv.ui.browse.PosterGridCard
 import cloud.nalet.chino.tv.ui.library.SeeAllCard
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
+import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -182,7 +183,7 @@ fun WatchlistScreen(
  *  numbers are missing, which hides the card's episode line. */
 private fun episodeBadgeFor(item: Item): String? =
     if (item.kind == "episode" && item.seasonNumber != null && item.episodeNumber != null) {
-        "S%02dE%02d".format(item.seasonNumber, item.episodeNumber)
+        episodeCode(item.seasonNumber, item.episodeNumber, item.episodeEnd)
     } else null
 
 /** The modal shown over the lists surface. */

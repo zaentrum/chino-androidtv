@@ -396,7 +396,8 @@ class PlayerViewModel(
         val season = item?.seasonNumber
         val episode = item?.episodeNumber
         if (parentSeriesId == null || season == null || episode == null) return epTitle
-        val code = "S%02dE%02d".format(season, episode)
+        // S03E18–21 for a file that holds several episodes: the file plays.
+        val code = cloud.nalet.chino.tv.data.model.episodeCode(season, episode, item.episodeEnd)
         val prefix = if (epTitle.isNotBlank()) "$code · $epTitle" else code
         val seriesTitle = runCatching { api.getItem(parentSeriesId).title }
             .getOrNull()

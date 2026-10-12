@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data.api
 
+import cloud.nalet.chino.tv.data.model.FileMember
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.ItemsPage
 import kotlinx.serialization.SerialName
@@ -377,10 +378,10 @@ private val feedbackJson = Json { explicitNulls = false }
 
 @Serializable
 data class Episode(
-    val id: String,
+    override val id: String,
     val title: String,
     @SerialName("season_number") val seasonNumber: Int? = null,
-    @SerialName("episode_number") val episodeNumber: Int? = null,
+    @SerialName("episode_number") override val episodeNumber: Int? = null,
     @SerialName("parent_id") val parentId: String? = null,
     // RFC3339; non-null when the current user has watched this episode
     // end-to-end. chino-api stamps it in seriesEpisodes() per 4f693fe.
@@ -390,7 +391,14 @@ data class Episode(
     @SerialName("description") val overview: String? = null,
     @SerialName("duration_ms") val durationMs: Long? = null,
     val year: Int? = null,
-)
+    // One file that holds several episodes ([FileMember]): chino-api's names.
+    @SerialName("coveredBy") override val coveredBy: String? = null,
+    override val covers: List<String> = emptyList(),
+    @SerialName("episodeEnd") override val episodeEnd: Int? = null,
+    /** On a holder: how long its file is, as measured — the length of the
+     *  one thing that plays, not of any one episode it holds. */
+    @SerialName("file_duration_ms") val fileDurationMs: Long? = null,
+) : FileMember
 
 @Serializable
 data class Season(
@@ -630,6 +638,9 @@ data class ContinueWatchingItem(
     @SerialName("series_title") val seriesTitle: String? = null,
     @SerialName("season_number") val seasonNumber: Int? = null,
     @SerialName("episode_number") val episodeNumber: Int? = null,
+    /** The last episode number of a file that holds several: the card is
+     *  the file's, under its first episode (S03E18–21). */
+    @SerialName("episodeEnd") val episodeEnd: Int? = null,
     /** The series of an episode row — what ties a row to a series' Play. */
     @SerialName("parent_id") val parentId: String? = null,
     val type: String? = null,

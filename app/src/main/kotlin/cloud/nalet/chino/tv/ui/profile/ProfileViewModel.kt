@@ -7,6 +7,7 @@ import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.data.model.oneRowPerFile
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
@@ -80,7 +81,9 @@ class ProfileViewModel(
                 return@launch
             }
             _state.value = ProfileUiState.Ready(
-                history = items,
+                // One row for a file that holds several episodes: chino-api
+                // marks each of them watched together.
+                history = oneRowPerFile(items),
                 seriesTitles = emptyMap(),
                 baseUrl = baseUrl,
                 streamToken = token,
