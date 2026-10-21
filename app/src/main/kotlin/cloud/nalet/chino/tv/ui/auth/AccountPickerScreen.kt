@@ -53,8 +53,7 @@ import kotlinx.coroutines.launch
 
 /**
  * "Who's watching?" — horizontal row of account avatars + "Add account"
- * tile. Mirrors the cross-platform pattern (Netflix, Disney+) for TV
- * apps with shared remotes.
+ * tile, the common pattern for TV apps with shared remotes.
  *
  * Hosting NavHost only routes here when [AccountStore.accounts] has ≥2
  * entries; a single-account user skips this screen and lands on the

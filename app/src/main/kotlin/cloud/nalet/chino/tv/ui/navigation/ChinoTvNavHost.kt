@@ -240,7 +240,7 @@ fun ChinoTvNavHost(container: AppContainer) {
     //  - default fallback                        → LIBRARY
     // Important: the 2+ branch goes ABOVE the "active != null" branch so the
     // picker always shows on launch when multiple profiles exist, even if
-    // one is marked active. Matches the Netflix/Disney+ pattern + the user
+    // one is marked active. Matches the common pattern of TV apps + the user
     // expectation laid out when the feature was scoped.
     val start = when {
         !bootState.serverConfigured -> Routes.SERVER

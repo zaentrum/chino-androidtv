@@ -1365,9 +1365,9 @@ internal fun PosterCard(
     // Card body: poster on top in 2:3, meta strip below with title + year.
     // Matches chino-web MediaCard layout — title outside the poster, not
     // overlaid, so the artwork reads cleanly without a gradient scrim.
-    // Fixed 180dp width because the parent is a TvLazyRow (Netflix-style
-    // horizontal shelf); the previous 6-col grid measured cards via the
-    // grid's column-width.
+    // Fixed 180dp width because the parent is a TvLazyRow (a horizontal
+    // shelf); the previous 6-col grid measured cards via the grid's
+    // column-width.
     val focused = focus.focused
     ChinoCard(
         onClick = { onItemSelected(item.id) },
