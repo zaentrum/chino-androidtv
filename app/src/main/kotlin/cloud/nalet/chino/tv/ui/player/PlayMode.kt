@@ -27,8 +27,8 @@ sealed interface PlayMode {
     /**
      * The title [itemId], from where the viewer left off — or from the start
      * ([fromStart]: Detail's Play from start), or at [resumeSec] when above 0
-     * (Zap's handoff). [fromBinge]: auto-play-next opened it, so an intro at
-     * its head is skipped.
+     * (Zap's handoff, Detail's Resume). [fromBinge]: auto-play-next opened it,
+     * so an intro at its head is skipped.
      */
     data class Title(
         override val itemId: String,

@@ -555,6 +555,15 @@ private fun ExoPlayback(
     // both fire onPlayNext. Both reset when the player rebuilds for a new item.
     val endedState = remember(player) { mutableStateOf(false) }
     var autoAdvanced by remember(player) { mutableStateOf(false) }
+    // Auto-advance leaves a title only once it has played (AdvanceGuard): one
+    // that ends, or reaches its credits, right after it starts stays where it
+    // is, and says so (auto_play_next_held).
+    fun mayAutoAdvance(): Boolean {
+        val guard = viewModel.advanceGuard
+        if (guard.mayAdvance()) return true
+        viewModel.reportTelemetry("auto_play_next_held", mapOf("played_ms" to guard.playedMs().toString()))
+        return false
+    }
 
     // The app going to the background while the player is up - the
     // activity's stop, not the screen's, which leaving it stops too: the
@@ -584,6 +593,11 @@ private fun ExoPlayback(
                 viewModel.reportTelemetry(if (isPlaying) "play" else "pause")
                 // An extra's one event, trailer_play.
                 if (isPlaying) viewModel.reportStarted()
+                // What auto-advance waits for: the title has played.
+                viewModel.advanceGuard.playing(isPlaying)
+            }
+            override fun onRenderedFirstFrame() {
+                viewModel.advanceGuard.firstFrame()
             }
             override fun onTracksChanged(t: Tracks) {
                 tracks = collectSubtitleTracks(t)
@@ -716,6 +730,8 @@ private fun ExoPlayback(
             )
             player.removeListener(listener)
             player.release()
+            // A player released while it played: its time counts until now.
+            viewModel.advanceGuard.playing(false)
         }
     }
 
@@ -899,7 +915,7 @@ private fun ExoPlayback(
                 viewModel.reportTelemetry("auto_skip_credits")
             }
             is PendingSkip.PlayNext -> {
-                val next = viewModel.resolveNextUp()
+                val next = if (mayAutoAdvance()) viewModel.resolveNextUp() else null
                 if (next != null && onPlayNext != null && !autoAdvanced) {
                     autoAdvanced = true
                     viewModel.reportTelemetry("auto_play_next", mapOf("next" to next))
@@ -907,7 +923,7 @@ private fun ExoPlayback(
                 }
             }
             is PendingSkip.PreviewNext -> {
-                val next = viewModel.resolveNextUp()
+                val next = if (mayAutoAdvance()) viewModel.resolveNextUp() else null
                 if (next != null && onPlayNext != null && !autoAdvanced) {
                     autoAdvanced = true
                     viewModel.reportTelemetry("auto_play_next_preview", mapOf("next" to next))
@@ -929,7 +945,7 @@ private fun ExoPlayback(
             onClose?.invoke()
             return@LaunchedEffect
         }
-        if (endedState.value && !autoAdvanced && settings.autoPlayNext && onPlayNext != null) {
+        if (endedState.value && !autoAdvanced && settings.autoPlayNext && onPlayNext != null && mayAutoAdvance()) {
             val next = viewModel.resolveNextUp()
             if (next != null) {
                 autoAdvanced = true

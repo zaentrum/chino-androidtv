@@ -287,6 +287,14 @@ class DetailViewModel(
         return ready.seriesPlay?.episodeId ?: itemId
     }
 
+    /** The second Resume goes on at in [playTarget]: a series' episode's, as
+     *  Play picked it, else the title's own saved position. */
+    fun resumeSecond(): Int {
+        val ready = _state.value as? DetailUiState.Ready ?: return 0
+        if (ready.focusEpisodeId == null && ready.item.kind == "series") return ready.seriesPlay?.positionSec ?: 0
+        return ready.resumeSec
+    }
+
     /** Plain "+"-press: add the item to the DEFAULT list when it's in no list,
      *  or (when already saved) remove it from every list. The specific-list
      *  picker is reached separately via [setItemInList]. */

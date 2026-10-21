@@ -249,14 +249,17 @@ class PlayerViewModel(
                 // playback startup on the longest single call (~11s observed
                 // on the BRAVIA). Now max(individual) ≈ 2-3s. Each only as the
                 // mode asks for it (requests): an extra asks for none of them.
-                val (item, resume, segments, rawSubs, info) = coroutineScope {
+                // A reload's, Zap's or Play from start's own second; else the
+                // saved progress decides (startFrom, below).
+                val explicitStart = startSec(mode, atSec)
+                val (item, saved, segments, rawSubs, info) = coroutineScope {
                     // An extra's detail is read above.
                     val itemDef = async { if (extra != null) null else runCatching { api.getItem(itemId) }.getOrNull() }
                     // When the user clicked "Play from start", skip the
                     // resume-position lookup entirely — the saved progress
                     // is stale by intent. Saves a round-trip too.
                     val progressDef = async {
-                        startSec(mode, atSec)
+                        explicitStart
                             ?: runCatching { api.getProgress(itemId).positionSec }.getOrDefault(0)
                     }
                     val segDef = async {
@@ -281,6 +284,17 @@ class PlayerViewModel(
                         info = infoDef.await(),
                     )
                 }
+                // The saved position resumes only mid-watch, as chino-web's
+                // player has it; a title opened by auto-advance or Next that
+                // the viewer finished starts over (startFrom). Its length is
+                // /play/info's, chino-web's too, else the catalog's.
+                val resume = explicitStart ?: startFrom(
+                    savedSec = saved,
+                    durationSec = ((info?.durationMs ?: item?.durationMs ?: 0L) / 1000L).toInt(),
+                    binge = (mode as? PlayMode.Title)?.fromBinge == true,
+                    watched = item?.watchedAt != null,
+                    segments = segments,
+                )
                 val parentSeriesId = item?.parentId
                 // Episode title compose (web parity): "{Series} — S01E02 · {Episode}".
                 // Only for episodes (parentId present + a season/episode number).
@@ -499,18 +513,22 @@ class PlayerViewModel(
 
     /** What to auto-play when the current item finishes. For a series item it's
      *  the next episode; for a movie / standalone item it's the top "more like
-     *  this" recommendation (the player has no episode chain, so we continue
-     *  into a related title — web parity). Null when nothing is queued, and
-     *  without asking where the mode has no up next. */
+     *  this" recommendation the viewer has not watched (the player has no
+     *  episode chain, so we continue into a related title; chino-web's player
+     *  goes on from episodes only). Null when nothing is queued, and without
+     *  asking where the mode has no up next. */
     suspend fun resolveNextUp(): String? {
         if (!requests.nextUp) return null
         val ready = _state.value as? PlayerUiState.Ready ?: return null
         if (ready.parentSeriesId != null) return resolveNextEpisode()
-        // Movie / standalone — chain into the first recommendation (skip self).
-        return runCatching {
-            api.similar(itemId, limit = 8).items.firstOrNull { it.id != itemId }?.id
-        }.getOrNull()
+        // Movie / standalone — chain into the first recommendation not
+        // watched yet (skip self): two finished films that recommend each
+        // other once looped (nextSimilar).
+        return runCatching { nextSimilar(api.similar(itemId, limit = 8).items, itemId) }.getOrNull()
     }
+
+    /** Whether auto-advance may leave this title: it has played (AdvanceGuard). */
+    internal val advanceGuard = AdvanceGuard(now = { android.os.SystemClock.elapsedRealtime() })
 
     /** Binge pre-warm — fire one GET against the next episode's master.m3u8
      *  while the current episode is still rolling. chino-stream's Master()

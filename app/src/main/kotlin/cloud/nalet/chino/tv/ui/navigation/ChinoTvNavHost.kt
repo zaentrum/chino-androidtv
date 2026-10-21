@@ -574,14 +574,16 @@ fun ChinoTvNavHost(container: AppContainer) {
             )
             DetailScreen(
                 viewModel = vm,
-                onPlay = { id, resume ->
+                onPlay = { id, resumeSec ->
                     // launchSingleTop: the Detail Play button is a tv-material3
                     // Button that fires onClick on DPAD_CENTER key-UP; the BRAVIA
                     // remote can deliver that activation twice, which without this
                     // guard pushes a SECOND player/{id} entry. The duplicate
                     // DETAIL/PLAYER pair is what makes BACK loop back into the
                     // player instead of reaching home (Stube #151).
-                    navController.navigate(Routes.player(id, fromStart = !resume)) {
+                    navController.navigate(
+                        Routes.player(id, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0)),
+                    ) {
                         launchSingleTop = true
                     }
                 },

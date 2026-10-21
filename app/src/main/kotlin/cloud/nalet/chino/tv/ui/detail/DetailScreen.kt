@@ -110,8 +110,10 @@ import kotlinx.coroutines.launch
 @Composable
 fun DetailScreen(
     viewModel: DetailViewModel,
-    onPlay: (itemId: String, resume: Boolean) -> Unit,
-    onPlayEpisode: (String) -> Unit = { id -> onPlay(id, false) },
+    /** Plays itemId from resumeSec, the second Resume names, or from the
+     *  start where it is 0. */
+    onPlay: (itemId: String, resumeSec: Int) -> Unit,
+    onPlayEpisode: (String) -> Unit = { id -> onPlay(id, 0) },
     /** Plays the extra extraId of the title itemId: its trailer from this server. */
     onPlayTrailer: (itemId: String, extraId: String) -> Unit = { _, _ -> },
     onSimilarSelected: (String) -> Unit = {},
@@ -150,8 +152,11 @@ fun DetailScreen(
     var listPickerTarget by remember { mutableStateOf<String?>(null) }
     // The play target is worked out on load (a series' episode included), so
     // Play navigates at once; launchSingleTop on the route absorbs a doubled
-    // DPAD_CENTER.
-    val play: (Boolean) -> Unit = { resume -> onPlay(viewModel.playTarget(), resume) }
+    // DPAD_CENTER. Resume goes on at the second its label names, as chino-web's
+    // Resume does: the player looks up nothing.
+    val play: (Boolean) -> Unit = { resume ->
+        onPlay(viewModel.playTarget(), if (resume) viewModel.resumeSecond() else 0)
+    }
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
