@@ -20,6 +20,31 @@ class ApiContractTest {
         RetrofitFactory.json.decodeFromString(serializer, body)
 
     @Test
+    fun `progress says a finished title has no resume point, and a dismiss is sent only when it is one`() {
+        // chino-api's GET progress: a finished title at 0, finished; an older
+        // chino-api's without the word.
+        val finished = decode(ProgressResponse.serializer(), """{"finished":true,"position_sec":0}""")
+        assertEquals(0, finished.positionSec)
+        assertTrue(finished.finished)
+        val older = decode(ProgressResponse.serializer(), """{"position_sec":754}""")
+        assertEquals(754, older.positionSec)
+        assertFalse(older.finished)
+        // POST progress: the player's writes as before; Continue Watching's
+        // remove with dismiss.
+        assertEquals(
+            """{"position_sec":600,"duration_sec":2700}""",
+            RetrofitFactory.json.encodeToString(ProgressBody.serializer(), ProgressBody(positionSec = 600, durationSec = 2700)),
+        )
+        assertEquals(
+            """{"position_sec":2700,"duration_sec":2700,"dismiss":true}""",
+            RetrofitFactory.json.encodeToString(
+                ProgressBody.serializer(),
+                ProgressBody(positionSec = 2700, durationSec = 2700, dismiss = true),
+            ),
+        )
+    }
+
+    @Test
     fun `a list is a bare page of items - no cursor`() {
         val page = decode(
             ItemsPage.serializer(),

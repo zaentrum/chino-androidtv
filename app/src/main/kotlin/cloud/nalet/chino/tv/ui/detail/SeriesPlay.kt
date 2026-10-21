@@ -30,7 +30,13 @@ data class SeriesPlayTarget(
 }
 
 /** The episode of a series the viewer last touched and where they left it. */
-data class LastTouched(val episodeId: String, val positionSec: Int)
+data class LastTouched(
+    val episodeId: String,
+    val positionSec: Int,
+    /** chino-api says the episode is finished (its last 5 % or 2 minutes):
+     *  it has no resume point, and the next one is played. */
+    val finished: Boolean = false,
+)
 
 /**
  * The canonical cross-client "mid-watch" test: more than 30 s in and not
@@ -67,7 +73,8 @@ fun lastTouchedEpisodeId(response: NextEpisodeResponse?, seasons: List<Season>):
  * Play's episode when the continue-watching feed has none of the series
  * (it holds the 20 newest titles only):
  *  - the last episode touched, when it isn't finished (not marked watched,
- *    not in its last minute) — resumed when mid-watch, else from the top;
+ *    not finished as chino-api says - its last 5 % or 2 minutes - not in its
+ *    last minute) — resumed when mid-watch, else from the top;
  *  - else the first unwatched episode after it;
  *  - else (nothing touched, or nothing unwatched after it) the first
  *    unwatched episode, then the first episode — of the regular seasons, as
@@ -82,7 +89,7 @@ fun nextTarget(seasons: List<Season>, lastTouched: LastTouched?, serverNext: Ite
         if (at >= 0) {
             val (season, ep) = all[at]
             val durationSec = ((ep.durationMs ?: 0L) / 1000L).toInt()
-            val finished = ep.watchedAt != null ||
+            val finished = ep.watchedAt != null || lastTouched.finished ||
                 (durationSec > 0 && lastTouched.positionSec >= durationSec - 60)
             if (!finished) {
                 val resumeAt = lastTouched.positionSec.takeIf { isMidWatch(it, durationSec) } ?: 0

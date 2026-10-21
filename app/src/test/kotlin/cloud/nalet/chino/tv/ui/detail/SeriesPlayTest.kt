@@ -116,6 +116,19 @@ class SeriesPlayTest {
     }
 
     @Test
+    fun `an episode chino-api calls finished is finished, at no resume point and not marked watched`() {
+        // Its last 5 % or 2 minutes (chino-api's rule): position 0, finished -
+        // taken off Continue Watching, say, so not marked watched. The next.
+        val list = seasons(ep(1, 1), ep(1, 2))
+        val t = nextTarget(list, LastTouched("s1e1", 0, finished = true), serverNext = item("s1e2", 1, 2))!!
+        assertEquals("s1e2", t.episodeId)
+        assertFalse(t.resumes)
+        // Without the word, position 0 is an episode not begun: from its top.
+        val begun = nextTarget(list, LastTouched("s1e1", 0), serverNext = item("s1e2", 1, 2))!!
+        assertEquals("s1e1", begun.episodeId)
+    }
+
+    @Test
     fun `an episode in its last minute counts as finished`() {
         val list = seasons(ep(1, 1), ep(1, 2))
         val t = nextTarget(list, LastTouched("s1e1", 45 * 60 - 30), serverNext = null)!!

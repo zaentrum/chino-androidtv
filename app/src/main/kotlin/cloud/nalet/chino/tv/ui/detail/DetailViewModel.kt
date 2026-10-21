@@ -206,7 +206,8 @@ class DetailViewModel(
     ): SeriesPlayTarget? {
         continueWatchingTarget(seriesId, continueWatching)?.let { return it }
         val lastTouched = lastTouchedEpisodeId(next, seasons)?.let { id ->
-            LastTouched(id, runCatching { api.getProgress(id).positionSec }.getOrDefault(0))
+            val progress = runCatching { api.getProgress(id) }.getOrNull()
+            LastTouched(id, progress?.positionSec ?: 0, finished = progress?.finished == true)
         }
         return nextTarget(seasons, lastTouched, next?.next)
     }

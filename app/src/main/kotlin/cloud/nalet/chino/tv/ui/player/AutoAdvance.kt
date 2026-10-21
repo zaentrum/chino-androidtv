@@ -1,6 +1,5 @@
 package cloud.nalet.chino.tv.ui.player
 
-import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.detail.isMidWatch
 
@@ -9,53 +8,29 @@ import cloud.nalet.chino.tv.ui.detail.isMidWatch
  * "more like this" title - and where a title starts. It once looped: at the
  * end of a film the player went on to its top similar title; that one resumed
  * at its saved end, ended at once and went on to its own top similar - the
- * first film - and so on, every second. Three rules end that: a saved
- * position resumes only mid-watch ([startFrom]), a film goes on only to a
- * title the viewer has not watched ([nextSimilar]), and nothing goes on from
- * a title that has hardly played ([AdvanceGuard]). Pure: AutoAdvanceTest runs
- * the loop and these on the JVM.
+ * first film - and so on, every second. Three rules end that: a title starts
+ * where the server's resume point is, and chino-api has none for a finished
+ * one ([startFrom]); a film goes on only to a title the viewer has not
+ * watched ([nextSimilar]); and nothing goes on from a title that has hardly
+ * played ([AdvanceGuard]). Pure: AutoAdvanceTest runs the loop and these on
+ * the JVM.
  */
 
 /** How long a title plays, after its first frame, before auto-advance may
  *  leave it. */
 internal const val MIN_PLAYED_MS = 10_000L
 
-/** A title opened by auto-advance or Next starts over where the viewer has
- *  seen this much of it: where the player marks it watched. */
-private const val FINISHED_FRACTION = 0.95
-
 /**
  * Where a title opened without a second to start at starts - the home's
  * hero, an episode row, auto-advance; Resume on the detail page and Zap name
- * theirs - from the position the viewer saved, [savedSec]: there while they
- * are in the middle of it - more than 30 s in and not in its last minute
- * ([isMidWatch], chino-web's player's rule too) - else from the top. One
- * opened by auto-advance or Next ([binge]) starts from the top too where the
- * viewer finished it: marked watched, past 95 % or in its end credits.
- * [durationSec] 0 is unknown.
+ * theirs - from the resume point the server gives, [savedSec]: chino-api has
+ * none for a title the viewer finished (its last 5 % or 2 minutes, its one
+ * rule), and the player resumes the one it has as chino-web's does - more
+ * than 30 s in and not in the title's last minute ([isMidWatch]) - else from
+ * the top. [durationSec] 0 is unknown.
  */
-internal fun startFrom(
-    savedSec: Int,
-    durationSec: Int,
-    binge: Boolean,
-    watched: Boolean,
-    segments: List<Segment>,
-): Int {
-    if (!isMidWatch(savedSec, durationSec)) return 0
-    if (binge && (watched || finishedAt(savedSec, durationSec, segments))) return 0
-    return savedSec
-}
-
-/** Past 95 %, or at or past the start of the end credits: a credits segment
- *  in the title's second half (any one, where its length is not known). */
-private fun finishedAt(savedSec: Int, durationSec: Int, segments: List<Segment>): Boolean {
-    if (durationSec > 0 && savedSec >= durationSec * FINISHED_FRACTION) return true
-    val positionMs = savedSec * 1000L
-    val halfMs = durationSec * 1000L / 2
-    return segments.any { seg ->
-        seg.kind.equals("credits", ignoreCase = true) && seg.startMs >= halfMs && positionMs >= seg.startMs
-    }
-}
+internal fun startFrom(savedSec: Int, durationSec: Int): Int =
+    if (isMidWatch(savedSec, durationSec)) savedSec else 0
 
 /** What a film goes on to: its first "more like this" title the viewer has
  *  not watched (chino-api stamps watched_at on each), itself left out. Null

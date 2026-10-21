@@ -634,13 +634,22 @@ data class StreamTokenResponse(
 
 @Serializable
 data class ProgressResponse(
+    /** The resume point: 0 where there is none - never begun, or finished. */
     @SerialName("position_sec") val positionSec: Int = 0,
+    /** chino-api's finished: the title saved in its last 5 % or 2 minutes,
+     *  which has no resume point and is watched (false from a chino-api
+     *  older than its one rule). */
+    val finished: Boolean = false,
 )
 
 @Serializable
 data class ProgressBody(
     @SerialName("position_sec") val positionSec: Int,
     @SerialName("duration_sec") val durationSec: Int,
+    /** Taking the title off Continue Watching: saved at its end, but not
+     *  marked watched - chino-api marks a title saved there watched
+     *  otherwise. Sent only when true (the app's JSON leaves defaults out). */
+    val dismiss: Boolean = false,
 )
 
 @Serializable

@@ -284,16 +284,12 @@ class PlayerViewModel(
                         info = infoDef.await(),
                     )
                 }
-                // The saved position resumes only mid-watch, as chino-web's
-                // player has it; a title opened by auto-advance or Next that
-                // the viewer finished starts over (startFrom). Its length is
-                // /play/info's, chino-web's too, else the catalog's.
+                // The server's resume point - none for a title the viewer
+                // finished - resumed as chino-web's player does (startFrom). Its
+                // length is /play/info's, chino-web's too, else the catalog's.
                 val resume = explicitStart ?: startFrom(
                     savedSec = saved,
                     durationSec = ((info?.durationMs ?: item?.durationMs ?: 0L) / 1000L).toInt(),
-                    binge = (mode as? PlayMode.Title)?.fromBinge == true,
-                    watched = item?.watchedAt != null,
-                    segments = segments,
                 )
                 val parentSeriesId = item?.parentId
                 // Episode title compose (web parity): "{Series} — S01E02 · {Episode}".

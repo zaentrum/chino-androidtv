@@ -1,6 +1,5 @@
 package cloud.nalet.chino.tv.ui.player
 
-import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.data.model.Item
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -75,7 +74,7 @@ class AutoAdvanceTest {
 
     private val now = Rules(
         next = { current, similar -> nextSimilar(similar, current.id) },
-        start = { startFrom(it.savedSec, it.durationSec, binge = true, watched = it.watched, segments = emptyList()) },
+        start = { startFrom(it.savedSec, it.durationSec) },
         guarded = true,
     )
 
@@ -96,7 +95,7 @@ class AutoAdvanceTest {
         val hops = chain(a, mapOf("a" to a, "b" to unmarked), now)
         // b plays from the top (90 s), then a - watched - is not gone on to.
         assertEquals(listOf("b"), hops)
-        assertEquals(0, startFrom(90, 90, binge = true, watched = false, segments = emptyList()))
+        assertEquals(0, startFrom(90, 90))
     }
 
     @Test
@@ -108,41 +107,18 @@ class AutoAdvanceTest {
     }
 
     @Test
-    fun `a saved position resumes only mid-watch - chino-web's player's rule`() {
-        // More than 30 s in, and not in the last minute.
-        assertEquals(600, startFrom(600, 3_000, binge = false, watched = false, segments = emptyList()))
-        assertEquals(0, startFrom(30, 3_000, binge = false, watched = false, segments = emptyList()))
-        assertEquals(31, startFrom(31, 3_000, binge = false, watched = false, segments = emptyList()))
-        assertEquals(0, startFrom(2_940, 3_000, binge = false, watched = false, segments = emptyList()))
-        assertEquals(2_939, startFrom(2_939, 3_000, binge = false, watched = false, segments = emptyList()))
-        assertEquals(0, startFrom(3_000, 3_000, binge = false, watched = false, segments = emptyList()))
+    fun `the server's resume point resumes only mid-watch - chino-web's player's rule`() {
+        // More than 30 s in, and not in the last minute. chino-api gives none
+        // for a title the viewer finished (its last 5 % or 2 minutes): 0.
+        assertEquals(600, startFrom(600, 3_000))
+        assertEquals(0, startFrom(0, 3_000))
+        assertEquals(0, startFrom(30, 3_000))
+        assertEquals(31, startFrom(31, 3_000))
+        assertEquals(0, startFrom(2_940, 3_000))
+        assertEquals(2_939, startFrom(2_939, 3_000))
+        assertEquals(0, startFrom(3_000, 3_000))
         // An unknown length keeps any position past 30 s.
-        assertEquals(5_000, startFrom(5_000, 0, binge = false, watched = false, segments = emptyList()))
-        // Not opened by auto-advance or Next (the hero, an episode row), a
-        // title mid-watch resumes even where it is marked watched and in its
-        // credits: only the mid-watch rule goes there.
-        val credits = listOf(Segment(kind = "credits", startMs = 2_700_000, endMs = 3_000_000))
-        assertEquals(2_800, startFrom(2_800, 3_000, binge = false, watched = true, segments = credits))
-    }
-
-    @Test
-    fun `opened by auto-advance or Next, a finished title starts from the top`() {
-        val credits = listOf(
-            Segment(kind = "intro", startMs = 0, endMs = 60_000),
-            Segment(kind = "credits", startMs = 2_700_000, endMs = 3_000_000),
-        )
-        // Marked watched.
-        assertEquals(0, startFrom(1_200, 3_000, binge = true, watched = true, segments = emptyList()))
-        // In its end credits, or past them.
-        assertEquals(0, startFrom(2_700, 3_000, binge = true, watched = false, segments = credits))
-        assertEquals(0, startFrom(2_900, 3_000, binge = true, watched = false, segments = credits))
-        // Past 95 %.
-        assertEquals(0, startFrom(2_860, 3_000, binge = true, watched = false, segments = emptyList()))
-        // In the middle of it, not watched: it resumes.
-        assertEquals(1_200, startFrom(1_200, 3_000, binge = true, watched = false, segments = credits))
-        // Credits in the first half are no end credits.
-        val opening = listOf(Segment(kind = "credits", startMs = 30_000, endMs = 120_000))
-        assertEquals(600, startFrom(600, 3_000, binge = true, watched = false, segments = opening))
+        assertEquals(5_000, startFrom(5_000, 0))
     }
 
     @Test

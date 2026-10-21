@@ -292,13 +292,14 @@ class LibraryViewModel(
             continueWatching = ready.continueWatching.filterNot { it.id == itemId },
         )
         viewModelScope.launch {
-            // Stamp progress at the end (web's "dismiss" path) so the CW query
-            // drops the row (it drops rows within 60s of duration) WITHOUT
-            // marking a part-watched item fully WATCHED — postWatched would add a
+            // Stamp progress at the end, as a dismiss (web's "dismiss" path),
+            // so the CW query drops the row - a finished one - WITHOUT marking
+            // a part-watched item fully WATCHED: chino-api marks a title saved
+            // at its end watched but for a dismiss, and postWatched would add a
             // green badge + drop it from Zap. Fall back to postWatched only when
             // the duration is unknown (can't compute the end position).
             runCatching {
-                if (dur > 0) api.postProgress(itemId, ProgressBody(positionSec = dur, durationSec = dur))
+                if (dur > 0) api.postProgress(itemId, ProgressBody(positionSec = dur, durationSec = dur, dismiss = true))
                 else api.postWatched(itemId)
             }
             // Reconcile from server truth — chino-api may surface a substituted
