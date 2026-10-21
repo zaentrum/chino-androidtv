@@ -106,7 +106,7 @@ fun ProfileScreen(
                     ProfileUiState.Loading -> Centered("Loading your profile…")
                     is ProfileUiState.Error -> LoadError(
                         title = "couldn't load your watch history",
-                        reason = s.message,
+                        failure = s.failure,
                         onRetry = viewModel::load,
                     )
                     is ProfileUiState.Ready -> ReadyContent(

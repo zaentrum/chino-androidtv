@@ -66,6 +66,8 @@ import cloud.nalet.chino.tv.ui.detail.formatRoles
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import kotlinx.coroutines.launch
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.ui.theme.GoneError
 
 /**
  * Person / Filmography surface, chino-web's PersonPage on a TV. Rail +
@@ -91,6 +93,8 @@ fun PersonScreen(
     onAccountClick: () -> Unit = {},
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: Account? = null,
+    /** Where the person is gone: back to where they were opened from. */
+    onBack: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     // True while the whole biography is up over the page; BACK closes it.
@@ -116,11 +120,20 @@ fun PersonScreen(
                     )
                     when (val s = state) {
                         PersonUiState.Loading -> Centered("Loading…")
-                        is PersonUiState.Error -> LoadError(
-                            title = "couldn't load this person",
-                            reason = s.message,
-                            onRetry = viewModel::load,
-                        )
+                        is PersonUiState.Error -> if (s.failure.kind == LoadFailure.Kind.NotFound) {
+                            // Gone: no try brings it back.
+                            GoneError(
+                                title = "this person isn't in the library anymore",
+                                reason = s.failure.reason,
+                                onBack = onBack,
+                            )
+                        } else {
+                            LoadError(
+                                title = "couldn't load this person",
+                                failure = s.failure,
+                                onRetry = viewModel::load,
+                            )
+                        }
                         is PersonUiState.Ready -> Filmography(
                             s = s,
                             onItemSelected = onItemSelected,

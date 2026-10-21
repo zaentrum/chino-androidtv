@@ -21,6 +21,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 /** In-progress playback state for one episode row, extracted from the
  *  continue-watching feed. Only built for entries that are genuinely
@@ -55,7 +57,8 @@ sealed interface DetailUiState {
          *  and when no episode could be found. */
         val seriesPlay: SeriesPlayTarget? = null,
     ) : DetailUiState
-    data class Error(val message: String) : DetailUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : DetailUiState
 }
 
 class DetailViewModel(
@@ -176,7 +179,7 @@ class DetailViewModel(
                 // playback starts in <1s instead of waiting for cold ffmpeg.
                 launch { prewarmPipeline() }
             } catch (e: Exception) {
-                _state.value = DetailUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = DetailUiState.Error(loadFailureOf(e))
             }
         }
     }

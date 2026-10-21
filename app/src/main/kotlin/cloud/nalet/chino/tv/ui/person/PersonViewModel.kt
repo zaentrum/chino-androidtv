@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 import java.util.Locale
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 sealed interface PersonUiState {
     data object Loading : PersonUiState
@@ -35,7 +37,8 @@ sealed interface PersonUiState {
         /** The biography's language (a primary subtag), when the catalog said. */
         val biographyLang: String? = null,
     ) : PersonUiState
-    data class Error(val message: String) : PersonUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : PersonUiState
 }
 
 /**
@@ -87,7 +90,7 @@ class PersonViewModel(
                     biographyLang = detail.biographyLang?.takeIf { it.isNotBlank() },
                 )
             } catch (e: Exception) {
-                _state.value = PersonUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = PersonUiState.Error(loadFailureOf(e))
             }
         }
     }

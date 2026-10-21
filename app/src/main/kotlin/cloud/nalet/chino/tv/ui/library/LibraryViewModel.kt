@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 data class BrowseFilter(
     val genre: String? = null,
@@ -51,7 +53,8 @@ sealed interface LibraryUiState {
         // (it's a movies-only shelf, like web).
         val topRated: List<Item> = emptyList(),
     ) : LibraryUiState
-    data class Error(val message: String) : LibraryUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : LibraryUiState
 }
 
 class LibraryViewModel(
@@ -219,7 +222,7 @@ class LibraryViewModel(
                     topRated = if (currentFilter.type == "series") emptyList() else cachedTopRated,
                 )
             } catch (e: Exception) {
-                LibraryUiState.Error(e.message ?: e::class.java.simpleName)
+                LibraryUiState.Error(loadFailureOf(e))
             }
         }
     }

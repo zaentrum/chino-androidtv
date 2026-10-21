@@ -144,7 +144,7 @@ fun LibraryScreen(
             // The screen's way on: try again, focused first.
             is LibraryUiState.Error -> LoadError(
                 title = stringResource(R.string.library_error_title),
-                reason = s.message,
+                failure = s.failure,
                 onRetry = viewModel::refresh,
             )
             is LibraryUiState.Ready -> {

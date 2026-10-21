@@ -596,6 +596,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                 },
                 onSimilarSelected = { id -> navController.navigate(Routes.detail(id)) },
                 onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
+                onBack = { navController.popBackStack() },
             )
         }
         composable(
@@ -653,6 +654,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                 },
                 noticesBell = noticesBell,
                 activeAccount = activeAccount,
+                onBack = { navController.popBackStack() },
             )
         }
         composable(

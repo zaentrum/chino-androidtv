@@ -112,7 +112,7 @@ fun BrowseScreen(
                         BrowseUiState.Loading -> Centered(pageTitle, loading = true)
                         is BrowseUiState.Error -> LoadError(
                             title = "couldn't load ${pageTitle.lowercase()}",
-                            reason = s.message,
+                            failure = s.failure,
                             onRetry = viewModel::retry,
                         )
                         is BrowseUiState.Ready -> BrowseGrid(

@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 /** Decade buckets shown as filter chips (mirrors the library's DECADES). */
 data class Decade(val label: String, val min: Int, val max: Int)
@@ -59,7 +61,8 @@ sealed interface BrowseUiState {
         val loadingMore: Boolean,
         val hasMore: Boolean,
     ) : BrowseUiState
-    data class Error(val message: String) : BrowseUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : BrowseUiState
 }
 
 /**
@@ -140,7 +143,7 @@ class BrowseViewModel(
             } catch (e: CancellationException) {
                 throw e
             } catch (e: Exception) {
-                _state.value = BrowseUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = BrowseUiState.Error(loadFailureOf(e))
             }
         }
     }

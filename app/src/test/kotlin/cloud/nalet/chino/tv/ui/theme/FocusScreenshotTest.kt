@@ -39,6 +39,7 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.R
 import cloud.nalet.chino.tv.data.api.Episode
+import cloud.nalet.chino.tv.data.api.LoadFailure
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.browse.PosterGridCard
 import cloud.nalet.chino.tv.ui.detail.DetailActions
@@ -149,6 +150,13 @@ class FocusScreenshotTest {
     // has the focus there at once.
     @Test fun loadErrorAtRest() = shot("load_error_rest", remote = false) { LibraryError(focusFirst = false) }
     @Test fun loadErrorFocused() = shot("load_error_focused") { LibraryError(focusFirst = true) }
+    // The server answered with an error: try again in a moment.
+    @Test fun serverErrorFocused() = shot("load_error_server_focused") {
+        LibraryError(focusFirst = true, failure = LoadFailure(LoadFailure.Kind.Server, "HTTP 503 Service Unavailable"))
+    }
+    // Not in the library any more: no try brings it back, so back, focused.
+    @Test fun goneTitleFocused() = shot("gone_title_focused") { Gone("this title isn't in the library anymore") }
+    @Test fun gonePersonFocused() = shot("gone_person_focused") { Gone("this person isn't in the library anymore") }
 
     /**
      * Renders [content] in the theme on the page background, moves the
@@ -280,16 +288,27 @@ class FocusScreenshotTest {
     }
 
     @Composable
-    private fun LibraryError(focusFirst: Boolean) {
+    private fun LibraryError(
+        focusFirst: Boolean,
+        failure: LoadFailure = LoadFailure(LoadFailure.Kind.Connection, "timeout"),
+    ) {
         // The library's error, filling the screen on its surface; the reason
-        // a timeout's.
+        // a timeout's, else the one given.
         Box(Modifier.fillMaxSize().background(ChinoSurface)) {
             LoadError(
                 title = stringResource(R.string.library_error_title),
-                reason = "timeout",
+                failure = failure,
                 onRetry = {},
                 focusFirst = focusFirst,
             )
+        }
+    }
+
+    @Composable
+    private fun Gone(title: String) {
+        // A detail page's or a person's, filling the screen; the server's 404.
+        Box(Modifier.fillMaxSize().background(ChinoSurface)) {
+            GoneError(title = title, reason = "HTTP 404 Not Found", onBack = {})
         }
     }
 

@@ -107,6 +107,8 @@ import com.composables.icons.lucide.Plus
 import com.composables.icons.lucide.Star
 import com.composables.icons.lucide.Youtube
 import kotlinx.coroutines.launch
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.ui.theme.GoneError
 
 @Composable
 fun DetailScreen(
@@ -119,6 +121,8 @@ fun DetailScreen(
     onPlayTrailer: (itemId: String, extraId: String) -> Unit = { _, _ -> },
     onSimilarSelected: (String) -> Unit = {},
     onPersonSelected: (String) -> Unit = {},
+    /** Where the title is gone: back to where it was opened from. */
+    onBack: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
     val savedItems by viewModel.savedItems.collectAsState()
@@ -161,8 +165,13 @@ fun DetailScreen(
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
-            // The screen's way on: try again, focused first.
-            is DetailUiState.Error -> LoadError(title = "couldn't load this title", reason = s.message, onRetry = viewModel::load)
+            // The screen's way on: try again, focused first; back where the
+            // title is gone, which no try brings back.
+            is DetailUiState.Error -> if (s.failure.kind == LoadFailure.Kind.NotFound) {
+                GoneError(title = "this title isn't in the library anymore", reason = s.failure.reason, onBack = onBack)
+            } else {
+                LoadError(title = "couldn't load this title", failure = s.failure, onRetry = viewModel::load)
+            }
             is DetailUiState.Ready -> DetailContent(
                 s = s,
                 inWatchlist = viewModel.displayItemId in savedItems,

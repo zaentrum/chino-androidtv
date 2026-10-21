@@ -18,6 +18,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 /** How many watch-history rows to pull. Mirrors web/mobile's
  *  `GET /v1/me/watched?limit=60`. */
@@ -37,7 +39,8 @@ sealed interface ProfileUiState {
         val streamToken: String,
     ) : ProfileUiState
 
-    data class Error(val message: String) : ProfileUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : ProfileUiState
 }
 
 /**
@@ -78,7 +81,7 @@ class ProfileViewModel(
             }
             // The technical reason, for the error screen's details.
             val items = loaded.getOrElse { e ->
-                _state.value = ProfileUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = ProfileUiState.Error(loadFailureOf(e))
                 return@launch
             }
             _state.value = ProfileUiState.Ready(

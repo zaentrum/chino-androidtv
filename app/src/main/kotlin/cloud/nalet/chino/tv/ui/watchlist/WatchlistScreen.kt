@@ -135,7 +135,7 @@ fun WatchlistScreen(
                         WatchlistUiState.Loading -> Centered("Loading your lists…")
                         is WatchlistUiState.Error -> LoadError(
                             title = "couldn't load your watchlists",
-                            reason = s.message,
+                            failure = s.failure,
                             onRetry = { viewModel.refresh() },
                         )
                         is WatchlistUiState.Ready -> {

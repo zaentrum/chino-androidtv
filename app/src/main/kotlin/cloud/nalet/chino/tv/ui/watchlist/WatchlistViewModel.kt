@@ -17,6 +17,8 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 
 /** Max posters a hub shelf renders before deferring to the See-all tile —
  *  matches web/mobile's hub cap. */
@@ -37,7 +39,8 @@ sealed interface WatchlistUiState {
         val streamToken: String,
     ) : WatchlistUiState
 
-    data class Error(val message: String) : WatchlistUiState
+    /** What failed, for the error screen: what it says, and the reason. */
+    data class Error(val failure: LoadFailure) : WatchlistUiState
 }
 
 /**
@@ -105,7 +108,7 @@ class WatchlistViewModel(
                     _openItems.value = emptyList()
                 }
             } catch (e: Exception) {
-                _state.value = WatchlistUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = WatchlistUiState.Error(loadFailureOf(e))
             }
         }
     }
