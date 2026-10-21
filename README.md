@@ -37,6 +37,10 @@ real values always come from the connected server at runtime.
 ## Features
 
 - Browse, search, and a detail screen with cast/crew
+- Search: films and series in one grid, ranked together by your server's
+  search (`/api/v1/search`), best match first, with the cast & crew whose
+  names match in a row above — one request. A server without that search is
+  asked as before: its films, then its series, and the people apart
 - Playback with trickplay scrubbing thumbnails
 - 5.1 audio where the TV plays E-AC-3 — it decodes it, or passes it through
   to a receiver or sound bar: a title's 5.1 tracks are in the audio menu
@@ -83,9 +87,9 @@ never overwrites a release you installed.
 # APK: app/build/outputs/apk/debug/app-debug.apk
 
 # JVM unit tests (paging, credits, people, series resume, the API contract,
-# account deletion, addon slots, notices, trailers, what the player asks the
-# server for a title and for a trailer, the caps, the 5.1 audio and the
-# forced subtitle):
+# what a search asks the server for, account deletion, addon slots, notices,
+# trailers, what the player asks the server for a title and for a trailer,
+# the caps, the 5.1 audio and the forced subtitle):
 ./gradlew :app:testDebugUnitTest
 ```
 
