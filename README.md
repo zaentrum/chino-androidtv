@@ -48,6 +48,12 @@ real values always come from the connected server at runtime.
   screen; the episode a detail page was opened on has a bar along its left
   edge instead (`ui/theme/Focus.kt`)
 - Playback with trickplay scrubbing thumbnails
+- Playback quality reports, as chino-web sends them: the time to the first
+  frame, each stall mid-play and how long it lasted, the bandwidth the player
+  sees with its segments' load times and time to first byte, the switches of
+  the quality on screen, and fatal errors - in batches to the server's
+  `/api/v1/play/events`, which counts them; nothing about the account or the
+  device goes with them
 - 5.1 audio where the TV plays E-AC-3 — it decodes it, or passes it through
   to a receiver or sound bar: a title's 5.1 tracks are in the audio menu
   beside the stereo ones, and the 5.1 track of the language plays first where
@@ -95,8 +101,8 @@ never overwrites a release you installed.
 # JVM unit tests (paging, credits, people, series resume, the API contract,
 # what a search asks the server for, account deletion, addon slots, notices,
 # trailers, what the player asks the server for a title and for a trailer,
-# the caps, the 5.1 audio, the forced subtitle and the focus style's
-# contrast):
+# the caps, the 5.1 audio, the forced subtitle, the playback quality reports
+# and the focus style's contrast):
 ./gradlew :app:testDebugUnitTest
 
 # The same, and the focus style's screenshots compared with their golden

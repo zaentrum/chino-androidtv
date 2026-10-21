@@ -202,7 +202,8 @@ dependencies {
     // JVM unit tests for the pure logic (paging, credits, people, series
     // resume): no Android framework in them, so no Robolectric.
     testImplementation(libs.junit)
-    // Screenshot tests of the focus style: under Robolectric.
+    // Screenshot tests of the focus style, and the player's quality reports
+    // against Media3's own types: under Robolectric.
     testImplementation(libs.robolectric)
     testImplementation(libs.roborazzi)
     testImplementation(libs.roborazzi.compose)

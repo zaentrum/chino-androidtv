@@ -160,6 +160,24 @@ class PlayerViewModel(
     // telemetry rolls up to one "app launch" view even across multiple plays.
     private val sessionId: String = telemetry.sessionId
 
+    /**
+     * How this title plays, measured as chino-web measures it and reported
+     * to chino-api in batches ([Telemetry.queue]): the first frame, the
+     * stalls, the bandwidth and segment timings, the renditions, the fatal
+     * errors (PlaybackQuality.kt). It lives across the players this screen
+     * builds - a quality switch or a recovery builds another - and each one
+     * feeds it through QoeAnalytics. None where the mode sends none of the
+     * player's events (an extra).
+     */
+    internal val quality: PlaybackQuality? = if (requests.telemetry) {
+        PlaybackQuality(
+            now = { android.os.SystemClock.elapsedRealtime() },
+            send = { kind, payload -> telemetry.queue(kind, itemId, payload) },
+        )
+    } else {
+        null
+    }
+
     /** Technical string of the most recent fatal player error — the exact
      *  description [reportPlayerErrorBug]'s auto report shipped. The terminal
      *  error UI's manual "Report this problem" row re-files it through
@@ -348,6 +366,11 @@ class PlayerViewModel(
                 } else emptyList()
                 val trickplayBase =
                     if (trickplayCues.isNotEmpty()) "$base/v1/items/$itemId/play/trickplay" else ""
+                // What the quality reports say of how it plays.
+                this@PlayerViewModel.quality?.let { report ->
+                    report.mode = playMode(info?.mode)
+                    report.quality = resolvedQuality
+                }
                 val prev = _state.value as? PlayerUiState.Ready
                 PlayerUiState.Ready(
                     masterUrl = extra?.masterUrl ?: buildString {
@@ -422,6 +445,8 @@ class PlayerViewModel(
         val cur = _state.value as? PlayerUiState.Ready ?: return
         if (cur.currentQuality == rung) return
         reportTelemetry("quality_switch", mapOf("from" to cur.currentQuality, "to" to rung))
+        // The next player's rendition is the viewer's pick.
+        quality?.manualPick()
         prepare(quality = rung, atSec = atSec)
     }
 
@@ -539,6 +564,8 @@ class PlayerViewModel(
             failedUrl?.takeIf { it.isNotBlank() }?.let { put("url", it) }
         }
         if (requests.telemetry) telemetry.event("playback_error", extra = extra)
+        // The player gives up: a stall it was in ends there.
+        quality?.stop("error")
         if (_state.value !is PlayerUiState.Error && _state.value !is PlayerUiState.NotAvailable) {
             // A 404 on the manifest means chino-stream has no playable asset for
             // this item — show a plain-language message instead of the engine
@@ -693,6 +720,20 @@ class PlayerViewModel(
     /** The title's trailer link opened instead of an extra not there, as
      *  Detail reports its link. */
     fun reportLinkLaunch() = telemetry.event("trailer_launch", itemId = itemId)
+
+    /** The app went to the background while the player was up: a stall ends
+     *  there, a start not made yet was hidden, and the quality reports go. */
+    fun onHidden() {
+        quality?.hidden()
+        telemetry.flush()
+    }
+
+    /** The player screen closed: a stall ends there, and the quality reports go. */
+    override fun onCleared() {
+        quality?.stop("exit")
+        telemetry.flush()
+        super.onCleared()
+    }
 
     /** What has been tried about trouble at the current spot of the title —
      *  kept across the reloads it starts (see [PlaybackRecovery]). */

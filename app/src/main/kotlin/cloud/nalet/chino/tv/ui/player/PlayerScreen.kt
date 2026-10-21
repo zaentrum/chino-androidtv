@@ -295,10 +295,13 @@ private fun ExoPlayback(
     // tears down + rebuilds the player with the new ?q= URL. The ViewModel
     // bumps reloadKey on every prepare() that follows a switchQuality call.
     val player = remember(ready.masterUrl, ready.reloadKey) {
+        // What this player says of how it plays, for the quality reports
+        // (QoeAnalytics): its events, and its data source's segment timings.
+        val qoe = viewModel.quality?.let { QoeAnalytics(it) }
         // OkHttp over the AppContainer's stream client, shared with every
         // segment fetch (streamDataSourceFactory, StreamPlayer.kt).
         val appContainer = (context.applicationContext as cloud.nalet.chino.tv.ChinoTvApp).container
-        val httpFactory = streamDataSourceFactory(appContainer)
+        val httpFactory = streamDataSourceFactory(appContainer).apply { qoe?.let { setTransferListener(it) } }
         // Sidecar subs from /v1/items/{id}/subtitles attached as
         // side-loaded tracks. Format drives MIME so Media3 picks the
         // right decoder: TEXT_VTT goes through PgsDecoder etc via the
@@ -402,7 +405,10 @@ private fun ExoPlayback(
                 // audio's language wherever subtitles are on.
                 setIgnoredTextSelectionFlags(C.SELECTION_FLAG_FORCED)
             }.build()
+            qoe?.let { listener -> it.addAnalyticsListener(listener) }
             it.setMediaItem(mediaItem)
+            // A new source of the playback, its master asked for now.
+            viewModel.quality?.sourceRequested()
             it.prepare()
             if (ready.resumePositionSec > 0) {
                 it.seekTo(ready.resumePositionSec * 1000L)
@@ -550,10 +556,27 @@ private fun ExoPlayback(
     val endedState = remember(player) { mutableStateOf(false) }
     var autoAdvanced by remember(player) { mutableStateOf(false) }
 
+    // The app going to the background while the player is up - the
+    // activity's stop, not the screen's, which leaving it stops too: the
+    // quality reports say so (a stall ends, a start not made yet was hidden)
+    // and go.
+    val activity = remember(context) {
+        generateSequence(context) { (it as? android.content.ContextWrapper)?.baseContext }
+            .filterIsInstance<androidx.lifecycle.LifecycleOwner>()
+            .firstOrNull()
+    }
+    DisposableEffect(activity) {
+        val observer = androidx.lifecycle.LifecycleEventObserver { _, event ->
+            if (event == androidx.lifecycle.Lifecycle.Event.ON_STOP) viewModel.onHidden()
+        }
+        activity?.lifecycle?.addObserver(observer)
+        onDispose { activity?.lifecycle?.removeObserver(observer) }
+    }
+
     // Track the player's tracks list so the side panel always has the latest set.
     DisposableEffect(player) {
-        // Stamps so we can derive first_frame_ms / buffering durations.
-        val mountTs = System.currentTimeMillis()
+        // Stamps for the buffering durations. The first frame is the quality
+        // reports' (QoeAnalytics): once a playback, from the screen's start.
         var sawFirstFrame = false
         var bufferingStartTs = 0L
         val listener = object : Player.Listener {
@@ -600,10 +623,6 @@ private fun ExoPlayback(
                         if (!sawFirstFrame) {
                             sawFirstFrame = true
                             sawFirstFrameState.value = true
-                            viewModel.reportTelemetry(
-                                "first_frame",
-                                mapOf("startup_ms" to (System.currentTimeMillis() - mountTs).toString()),
-                            )
                         }
                     }
                     Player.STATE_ENDED -> {

@@ -11,6 +11,7 @@ import cloud.nalet.chino.tv.data.api.TelemetryEvent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -26,9 +27,9 @@ import java.util.UUID
  * `p_<key>` prefixes (see chino-api/internal/http/telemetry.go), so every
  * field we put in the payload becomes its own queryable column.
  *
- * No batching for now — events are low-volume and the existing per-call
- * `runCatching { api.postTelemetry(...) }` pattern is fine. If volume
- * grows (e.g. 1-second player ticks), wrap in a queue + 10s flush here.
+ * [event] sends each event on its own, at once: they are few. The player's
+ * playback-quality reports, two a minute while it plays, are [queue]d and
+ * go together in one batch, as chino-web sends them.
  */
 class Telemetry(
     context: Context,
@@ -65,7 +66,7 @@ class Telemetry(
         "app_version_code" to BuildConfig.VERSION_CODE.toString(),
         "app_flavor" to BuildConfig.FLAVOR_NAME,
         "app_build_type" to BuildConfig.BUILD_TYPE,
-        "client" to "chino-androidtv",
+        "client" to TELEMETRY_CLIENT,
     )
 
     /**
@@ -106,6 +107,45 @@ class Telemetry(
                         ),
                     ),
                 )
+            }
+        }
+    }
+
+    private val queued = EventQueue()
+
+    /**
+     * A playback-quality report (PlaybackQuality): queued, and sent with the
+     * others in one batch, 30 s after the first of them as chino-web does,
+     * and at once when the player closes or the app goes to the background
+     * ([flush]). Best effort: it never blocks, a batch that fails is not
+     * sent again, and past [EventQueue]'s bound the oldest go. Its payload is
+     * what it is given and the client's name, which chino-api counts a TV
+     * by - no device, account or network context: chino-web sends none.
+     */
+    fun queue(kind: String, itemId: String?, payload: Map<String, String>) {
+        val event = TelemetryEvent(
+            ts = System.currentTimeMillis(),
+            kind = kind,
+            itemId = itemId,
+            payload = payload + ("client" to TELEMETRY_CLIENT),
+        )
+        if (queued.add(event)) {
+            scope.launch {
+                delay(QUEUE_FLUSH_MS)
+                flush()
+            }
+        }
+    }
+
+    /** Sends what is [queue]d, if anything, in one batch. */
+    fun flush() {
+        val events = queued.drain()
+        if (events.isEmpty()) return
+        scope.launch {
+            runCatching {
+                // No server yet: the batch has nowhere to go and is dropped.
+                val client = api() ?: return@launch
+                client.postTelemetry(TelemetryBatch(sessionId = sessionId, events = events))
             }
         }
     }
