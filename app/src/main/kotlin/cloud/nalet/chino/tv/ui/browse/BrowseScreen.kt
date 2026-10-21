@@ -13,6 +13,7 @@ import cloud.nalet.chino.tv.ui.theme.ItemFocus
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -109,7 +110,11 @@ fun BrowseScreen(
                     )
                     when (val s = state) {
                         BrowseUiState.Loading -> Centered(pageTitle, loading = true)
-                        is BrowseUiState.Error -> Centered("Couldn't load $pageTitle: ${s.message}", isError = true)
+                        is BrowseUiState.Error -> LoadError(
+                            title = "couldn't load ${pageTitle.lowercase()}",
+                            reason = s.message,
+                            onRetry = viewModel::retry,
+                        )
                         is BrowseUiState.Ready -> BrowseGrid(
                             s = s,
                             pageTitle = pageTitle,
@@ -430,11 +435,11 @@ internal fun PosterGridCard(
 }
 
 @Composable
-private fun Centered(text: String, loading: Boolean = false, isError: Boolean = false) {
+private fun Centered(text: String, loading: Boolean = false) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = if (loading) "Loading $text…" else text,
-            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
+            color = ChinoMuted,
             fontSize = 18.sp,
         )
     }

@@ -90,6 +90,7 @@ import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
@@ -160,7 +161,8 @@ fun DetailScreen(
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
-            is DetailUiState.Error -> Centered("Could not load item: ${s.message}", isError = true)
+            // The screen's way on: try again, focused first.
+            is DetailUiState.Error -> LoadError(title = "couldn't load this title", reason = s.message, onRetry = viewModel::load)
             is DetailUiState.Ready -> DetailContent(
                 s = s,
                 inWatchlist = viewModel.displayItemId in savedItems,
@@ -1474,7 +1476,7 @@ private fun initialsOf(name: String): String {
 }
 
 @Composable
-private fun Centered(text: String, isError: Boolean = false) {
+private fun Centered(text: String) {
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -1483,8 +1485,7 @@ private fun Centered(text: String, isError: Boolean = false) {
     ) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error
-                    else MaterialTheme.colorScheme.onSurfaceVariant,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
     }
 }

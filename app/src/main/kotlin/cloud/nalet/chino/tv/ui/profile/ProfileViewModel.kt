@@ -73,11 +73,12 @@ class ProfileViewModel(
             val token = withContext(Dispatchers.IO) {
                 runCatching { streamTokens.valid() }.getOrDefault("")
             }
-            val items = withContext(Dispatchers.IO) {
-                runCatching { api.watched(limit = WATCHED_LIMIT).items }.getOrNull()
+            val loaded = withContext(Dispatchers.IO) {
+                runCatching { api.watched(limit = WATCHED_LIMIT).items }
             }
-            if (items == null) {
-                _state.value = ProfileUiState.Error("Couldn't load your watch history.")
+            // The technical reason, for the error screen's details.
+            val items = loaded.getOrElse { e ->
+                _state.value = ProfileUiState.Error(e.message ?: e::class.java.simpleName)
                 return@launch
             }
             _state.value = ProfileUiState.Ready(

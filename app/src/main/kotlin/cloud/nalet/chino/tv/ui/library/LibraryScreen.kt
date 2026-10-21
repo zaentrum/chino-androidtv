@@ -79,6 +79,7 @@ import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.composables.icons.lucide.Bookmark
@@ -140,9 +141,11 @@ fun LibraryScreen(
     Surface(modifier = Modifier.fillMaxSize()) {
         when (val s = state) {
             LibraryUiState.Loading -> CenterText(stringResource(R.string.library_loading))
-            is LibraryUiState.Error -> CenterText(
-                stringResource(R.string.library_error_prefix) + s.message,
-                isError = true,
+            // The screen's way on: try again, focused first.
+            is LibraryUiState.Error -> LoadError(
+                title = stringResource(R.string.library_error_title),
+                reason = s.message,
+                onRetry = viewModel::refresh,
             )
             is LibraryUiState.Ready -> {
                 // Even when both rows are empty (filter zeroed the list) we
@@ -1607,12 +1610,9 @@ private fun CardActionRow(
 }
 
 @Composable
-private fun CenterText(text: String, isError: Boolean = false) {
+private fun CenterText(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(
-            text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        Text(text = text, color = MaterialTheme.colorScheme.onSurfaceVariant)
     }
 }
 

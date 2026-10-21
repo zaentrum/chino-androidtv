@@ -109,6 +109,17 @@ class BrowseViewModel(
         reload(next)
     }
 
+    /** Try again after a load that failed: the stream token again if the
+     *  first try had none, then the page. */
+    fun retry() {
+        viewModelScope.launch {
+            if (token.isEmpty()) {
+                token = runCatching { withContext(Dispatchers.IO) { streamTokens.valid() } }.getOrDefault("")
+            }
+            reload(filters)
+        }
+    }
+
     private fun reload(f: BrowseFilters) {
         loadJob?.cancel()
         _state.value = BrowseUiState.Loading

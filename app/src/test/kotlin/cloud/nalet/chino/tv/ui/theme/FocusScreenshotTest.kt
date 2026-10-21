@@ -12,6 +12,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -25,6 +26,7 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
@@ -35,6 +37,7 @@ import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
+import cloud.nalet.chino.tv.R
 import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.browse.PosterGridCard
@@ -140,22 +143,31 @@ class FocusScreenshotTest {
     @Test fun filledActionFocused() = shot("fills_detail_actions_focused", focusLabel = "Liked") { Actions() }
     @Test fun badges() = shot("fills_badges") { Badges() }
 
+    // The library, as any screen whose content did not load: its way on, try
+    // again, at rest and focused - it takes the focus first. At rest without
+    // the remote: with the remote, a screen whose one focusable is the button
+    // has the focus there at once.
+    @Test fun loadErrorAtRest() = shot("load_error_rest", remote = false) { LibraryError(focusFirst = false) }
+    @Test fun loadErrorFocused() = shot("load_error_focused") { LibraryError(focusFirst = true) }
+
     /**
      * Renders [content] in the theme on the page background, moves the
      * remote's focus to item [focus], or to the item that reads or is named
      * [focusLabel] (neither for the look at rest), and takes the picture once
-     * the ring and the growth have settled.
+     * the ring and the growth have settled. [remote] false leaves the input in
+     * touch mode, where nothing takes the focus by itself.
      */
     private fun shot(
         name: String,
         focus: Int? = null,
         focusLabel: String? = null,
+        remote: Boolean = true,
         content: @Composable (Pair<Int, FocusRequester>?) -> Unit,
     ) {
         val target = FocusRequester()
         compose.setContent {
             ChinoTvTheme {
-                RemoteInput()
+                if (remote) RemoteInput()
                 Box(Modifier.background(ChinoBg).padding(24.dp)) {
                     content(focus?.let { it to target })
                 }
@@ -264,6 +276,20 @@ class FocusScreenshotTest {
             ) {
                 LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
             }
+        }
+    }
+
+    @Composable
+    private fun LibraryError(focusFirst: Boolean) {
+        // The library's error, filling the screen on its surface; the reason
+        // a timeout's.
+        Box(Modifier.fillMaxSize().background(ChinoSurface)) {
+            LoadError(
+                title = stringResource(R.string.library_error_title),
+                reason = "timeout",
+                onRetry = {},
+                focusFirst = focusFirst,
+            )
         }
     }
 

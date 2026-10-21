@@ -75,6 +75,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -132,7 +133,11 @@ fun WatchlistScreen(
                     )
                     when (val s = state) {
                         WatchlistUiState.Loading -> Centered("Loading your lists…")
-                        is WatchlistUiState.Error -> Centered("Couldn't load watchlists: ${s.message}", isError = true)
+                        is WatchlistUiState.Error -> LoadError(
+                            title = "couldn't load your watchlists",
+                            reason = s.message,
+                            onRetry = { viewModel.refresh() },
+                        )
                         is WatchlistUiState.Ready -> {
                             val openList = s.lists.firstOrNull { it.id == openListId }
                             if (openList == null) {
@@ -513,11 +518,11 @@ private fun NameDialog(
 }
 
 @Composable
-private fun Centered(text: String, isError: Boolean = false) {
+private fun Centered(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
+            color = ChinoMuted,
             fontSize = 18.sp,
         )
     }

@@ -13,5 +13,10 @@
     <string name="library_title">Recently added — Movies</string>
     <string name="library_loading">Loading your library…</string>
     <string name="library_empty">No items yet.</string>
-    <string name="library_error_prefix">Could not load library: </string>
+    <string name="library_error_title">couldn\'t load the library</string>
+
+    <!-- A screen whose content did not load (LoadError). -->
+    <string name="load_error_body">Check the connection to the server, then try again.</string>
+    <string name="load_error_retry">try again</string>
+    <string name="load_error_details">details</string>
 </resources>

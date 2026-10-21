@@ -52,6 +52,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import coil.compose.AsyncImage
 
 /**
@@ -103,7 +104,11 @@ fun ProfileScreen(
                 )
                 when (val s = state) {
                     ProfileUiState.Loading -> Centered("Loading your profile…")
-                    is ProfileUiState.Error -> Centered(s.message, isError = true)
+                    is ProfileUiState.Error -> LoadError(
+                        title = "couldn't load your watch history",
+                        reason = s.message,
+                        onRetry = viewModel::load,
+                    )
                     is ProfileUiState.Ready -> ReadyContent(
                         state = s,
                         activeAccount = activeAccount,
@@ -332,11 +337,11 @@ private fun watchedDateLabel(rfc3339: String?): String? {
 }
 
 @Composable
-private fun Centered(text: String, isError: Boolean = false) {
+private fun Centered(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
+            color = ChinoMuted,
             fontSize = 18.sp,
         )
     }

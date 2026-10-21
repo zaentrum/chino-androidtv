@@ -6,6 +6,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.LoadError
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -115,7 +116,11 @@ fun PersonScreen(
                     )
                     when (val s = state) {
                         PersonUiState.Loading -> Centered("Loading…")
-                        is PersonUiState.Error -> Centered("Couldn't load person: ${s.message}", isError = true)
+                        is PersonUiState.Error -> LoadError(
+                            title = "couldn't load this person",
+                            reason = s.message,
+                            onRetry = viewModel::load,
+                        )
                         is PersonUiState.Ready -> Filmography(
                             s = s,
                             onItemSelected = onItemSelected,
@@ -369,14 +374,14 @@ internal fun initialsOf(name: String): String {
 }
 
 @Composable
-private fun Centered(text: String, isError: Boolean = false) {
+private fun Centered(text: String) {
     Box(
         modifier = Modifier.fillMaxSize().padding(64.dp),
         contentAlignment = Alignment.Center,
     ) {
         Text(
             text = text,
-            color = if (isError) MaterialTheme.colorScheme.error else ChinoMuted,
+            color = ChinoMuted,
             fontSize = 18.sp,
         )
     }
