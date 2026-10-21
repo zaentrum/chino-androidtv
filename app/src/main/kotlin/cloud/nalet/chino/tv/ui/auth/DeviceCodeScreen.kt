@@ -26,11 +26,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.R
 
 @Composable
@@ -178,7 +177,7 @@ fun DeviceCodeScreen(
                                 color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center,
                             )
-                            Button(onClick = { viewModel.start() }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                            ChinoButton(onClick = { viewModel.start() }) {
                                 Text(text = stringResource(R.string.auth_retry))
                             }
                         }

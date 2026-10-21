@@ -41,6 +41,12 @@ real values always come from the connected server at runtime.
   search (`/api/v1/search`), best match first, with the cast & crew whose
   names match in a row above — one request. A server without that search is
   asked as before: its films, then its series, and the people apart
+- One focus style for the remote, the design system's
+  [tv focus](https://nalet.github.io/design-system/patterns/tv-focus/): what
+  has focus gets a 3 dp ring in the focus colour, a lighter surface behind a
+  row, plain button or chip, a little growth and brighter text, on every
+  screen; the episode a detail page was opened on has a bar along its left
+  edge instead (`ui/theme/Focus.kt`)
 - Playback with trickplay scrubbing thumbnails
 - 5.1 audio where the TV plays E-AC-3 — it decodes it, or passes it through
   to a receiver or sound bar: a title's 5.1 tracks are in the audio menu
@@ -89,8 +95,15 @@ never overwrites a release you installed.
 # JVM unit tests (paging, credits, people, series resume, the API contract,
 # what a search asks the server for, account deletion, addon slots, notices,
 # trailers, what the player asks the server for a title and for a trailer,
-# the caps, the 5.1 audio and the forced subtitle):
+# the caps, the 5.1 audio, the forced subtitle and the focus style's
+# contrast):
 ./gradlew :app:testDebugUnitTest
+
+# The same, and the focus style's screenshots compared with their golden
+# images in app/src/test/screenshots (rendered under Robolectric, no device):
+./gradlew :app:verifyRoborazziDebug
+# After a change to the focus style's look, write the golden images anew:
+./gradlew :app:recordRoborazziDebug
 ```
 
 Install on a real Android TV device (or an "Android TV" emulator AVD):

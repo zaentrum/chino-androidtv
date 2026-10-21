@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.person
 
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -55,8 +56,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -285,9 +284,8 @@ private fun Biography(text: String, readMoreFocus: FocusRequester, onReadMore: (
             onTextLayout = { cut = it.hasVisualOverflow },
         )
         if (cut) {
-            Button(
+            ChinoButton(
                 onClick = onReadMore,
-                shape = ButtonDefaults.shape(shape = RectangleShape),
                 modifier = Modifier.focusRequester(readMoreFocus),
             ) {
                 Text(text = "Read more", fontWeight = FontWeight.SemiBold)

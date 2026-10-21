@@ -44,7 +44,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -61,10 +60,6 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -80,12 +75,21 @@ import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoCard
 import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ItemFocus
 import cloud.nalet.chino.tv.ui.theme.PosterImage
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.shelfPadding
+import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
@@ -385,30 +389,17 @@ private fun DetailActions(
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Button(
-            // Without a position to resume (a series' next episode included)
-            // the player starts at 0:00 rather than at a finished episode's
-            // last saved second.
-            onClick = { onPlay(canResume) },
-            colors = ButtonDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                focusedContainerColor = MaterialTheme.colorScheme.primary,
-                focusedContentColor = Color.White,
-            ),
-            shape = ButtonDefaults.shape(shape = RectangleShape),
-        ) {
-            Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
-            Spacer(Modifier.width(8.dp))
-            Text(text = primaryLabel, fontWeight = FontWeight.SemiBold)
-        }
+        // Without a position to resume (a series' next episode included) the
+        // player starts at 0:00 rather than at a finished episode's last
+        // saved second.
+        PlayButton(label = primaryLabel, onClick = { onPlay(canResume) })
         // "Start over" — secondary CTA shown only when there's a saved position
         // (so the primary reads "Resume"; for a series, the episode it
         // resumes). Plays from the beginning via onPlay(false); the player
         // distinguishes resume vs fromStart. Sits second in the D-pad order
         // (Resume first, Start over next).
         if (canResume) {
-            Button(onClick = { onPlay(false) }, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+            ChinoButton(onClick = { onPlay(false) }) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Start over")
@@ -419,7 +410,7 @@ private fun DetailActions(
         // title's link opens in the YouTube app as before (trailerChoice).
         trailerChoice(item)?.let { choice ->
             val context = androidx.compose.ui.platform.LocalContext.current
-            Button(
+            ChinoButton(
                 onClick = {
                     when (choice) {
                         is TrailerChoice.Local -> onPlayTrailer(choice.extra.id)
@@ -429,7 +420,6 @@ private fun DetailActions(
                         }
                     }
                 },
-                shape = ButtonDefaults.shape(shape = RectangleShape),
             ) {
                 Icon(
                     if (choice is TrailerChoice.Local) Lucide.Clapperboard else Lucide.Youtube,
@@ -475,6 +465,24 @@ private fun DetailActions(
     }
 }
 
+/** The detail's emphasized action, Play or Resume: a filled button, its fill
+ *  kept on focus. */
+@Composable
+internal fun PlayButton(label: String, onClick: () -> Unit, focus: ItemFocus = rememberItemFocus()) {
+    ChinoButton(
+        onClick = onClick,
+        container = MaterialTheme.colorScheme.primary,
+        content = Color.White,
+        filled = true,
+        focus = focus,
+    ) {
+        Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text(text = label, fontWeight = FontWeight.SemiBold)
+    }
+}
+
+/** An icon-only toggle: filled in its colour while on, plain while off. */
 @Composable
 private fun DetailActionCircle(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -483,17 +491,13 @@ private fun DetailActionCircle(
     activeColor: Color = ChinoSignalGreen,
     onClick: () -> Unit,
 ) {
-    Button(
+    ChinoButton(
         onClick = onClick,
         modifier = Modifier.size(44.dp),
-        shape = ButtonDefaults.shape(shape = RectangleShape),
+        container = if (active) activeColor else Color.White.copy(alpha = 0.1f),
+        content = Color.White,
+        filled = active,
         contentPadding = PaddingValues(0.dp),
-        colors = ButtonDefaults.colors(
-            containerColor = if (active) activeColor else Color.White.copy(alpha = 0.1f),
-            contentColor = Color.White,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
-        ),
     ) {
         Icon(icon, contentDescription = contentDescription, modifier = Modifier.size(20.dp))
     }
@@ -527,11 +531,11 @@ private fun AddToListPanel(
             .background(Color(0xCC000000)),
         contentAlignment = Alignment.Center,
     ) {
+        // Not clipped: a focused row grows past the panel's edge.
         Column(
             modifier = Modifier
                 .width(360.dp)
                 .heightIn(max = 520.dp)
-                .clip(RectangleShape)
                 .background(ChinoSurface)
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 .verticalScroll(rememberScrollState())
@@ -584,15 +588,12 @@ private fun AddToListRow(
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val base = Modifier
-        .fillMaxWidth()
-        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
-        .padding(horizontal = 16.dp, vertical = 12.dp)
-    val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
+    val focus = rememberItemFocus()
     Row(
-        modifier = m
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -600,7 +601,8 @@ private fun AddToListRow(
                         e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
                     onClick(); true
                 } else false
-            },
+            }
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -619,7 +621,7 @@ private fun AddToListRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (secondary != null) {
-                Text(text = secondary, color = ChinoMuted, fontSize = 12.sp, maxLines = 1)
+                Text(text = secondary, color = ChinoFocus.text(ChinoMuted, focus.focused), fontSize = 12.sp, maxLines = 1)
             }
         }
     }
@@ -655,19 +657,16 @@ private fun NewListField(
     var value by remember { mutableStateOf("") }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    var focused by remember { mutableStateOf(false) }
+    // The field takes the focus style as a row does: its frame follows the
+    // text field's focus.
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .padding(horizontal = 12.dp, vertical = 8.dp)
             .height(44.dp)
-            .clip(RectangleShape)
-            .background(ChinoBg)
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) ChinoAccent else ChinoBorder,
-                shape = RectangleShape,
-            )
+            .focusStyle(focus, FocusKind.Row, surface = ChinoBg)
+            .border(1.dp, ChinoBorder, RectangleShape)
             .padding(horizontal = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -682,11 +681,10 @@ private fun NewListField(
                 keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { focused = it.isFocused },
+                    .focusRequester(focusRequester),
             )
             if (value.isEmpty()) {
-                Text(text = "List name…", color = ChinoMuted, fontSize = 15.sp)
+                Text(text = "List name…", color = ChinoFocus.text(ChinoMuted, focus.focused), fontSize = 15.sp)
             }
         }
     }
@@ -756,7 +754,7 @@ private fun SeasonSection(
     onAddEpisodeToList: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
-    var headerFocused by remember { mutableStateOf(false) }
+    val headerFocus = rememberItemFocus()
     // On an episode entry, land DPAD focus on the targeted row once the season
     // is expanded (the parent already expanded it via initiallyExpanded).
     val targetRowFocus = remember(focusEpisodeId) { FocusRequester() }
@@ -765,20 +763,18 @@ private fun SeasonSection(
             runCatching { targetRowFocus.requestFocus() }
         }
     }
+    // Not clipped: a focused row grows past the season's edge.
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .clip(RectangleShape)
             .background(ChinoSurface),
     ) {
-        // Season header — focusable; CENTER toggles expand/collapse.
+        // Season header — one focus target; CENTER toggles expand/collapse.
         Row(
             modifier = Modifier
                 .fillMaxWidth()
+                .focusStyle(headerFocus, FocusKind.Row, surface = Color.Transparent)
                 .clickable { expanded = !expanded }
-                .onFocusChanged { headerFocused = it.isFocused }
-                .focusable()
-                .background(if (headerFocused) ChinoBorderHi else Color.Transparent)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalAlignment = Alignment.CenterVertically,
         ) {
@@ -790,14 +786,14 @@ private fun SeasonSection(
             )
             Text(
                 text = "${season.episodes.size} episodes",
-                color = ChinoMuted,
+                color = ChinoFocus.text(ChinoMuted, headerFocus.focused),
                 style = MaterialTheme.typography.bodyMedium,
                 modifier = Modifier.weight(1f),
             )
             Icon(
                 imageVector = if (expanded) Lucide.ChevronDown else Lucide.ChevronRight,
                 contentDescription = if (expanded) "Collapse" else "Expand",
-                tint = ChinoMuted,
+                tint = ChinoFocus.text(ChinoMuted, headerFocus.focused),
                 modifier = Modifier.size(20.dp),
             )
         }
@@ -834,8 +830,13 @@ private fun SeasonSection(
     }
 }
 
+/**
+ * One entry of a season: the episode that plays - its own focus target, a
+ * row in the focus style - and beside it, each a focus target of its own,
+ * its watched toggle and its add-to-list (RIGHT from the row reaches them).
+ */
 @Composable
-private fun EpisodeRow(
+internal fun EpisodeRow(
     episode: Episode,
     /** The episodes the row's file holds: [episode], the holder, first. More
      *  than one makes the row a box around them - the file is the truth, the
@@ -855,12 +856,14 @@ private fun EpisodeRow(
     onToggleWatched: () -> Unit,
     onAddToList: () -> Unit,
     // Set when this row is the episode the detail was navigated to (episode
-    // entry): a persistent ChinoAccent ring + tint marks it as the target even
-    // before/without focus. focusRequester lands DPAD focus here on entry.
+    // entry): where you came from - a tint and a bar along its left edge in
+    // the accent mark it, never the focus ring. focusRequester lands DPAD
+    // focus here on entry.
     selected: Boolean = false,
     focusRequester: FocusRequester? = null,
+    focus: ItemFocus = rememberItemFocus(),
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val focused = focus.focused
     val several = held.size > 1
     // Watched is the file's: chino-api marks every episode it holds together.
     val watched = held.any { it.watchedAt != null }
@@ -878,7 +881,6 @@ private fun EpisodeRow(
     val resumeDurSec = if (resume != null && resume.durationSec > 0) resume.durationSec
         else (fileDurationMs / 1000L).toInt()
     val rowBg = when {
-        focused -> ChinoBorderHi
         selected -> ChinoAccent.copy(alpha = 0.18f)
         several -> ChinoBg.copy(alpha = 0.6f)
         else -> Color.Transparent
@@ -889,137 +891,139 @@ private fun EpisodeRow(
             // A file of several episodes: a box, with room around it so its
             // border reads as a box and not as a row's divider.
             .then(if (several) Modifier.padding(8.dp) else Modifier)
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .clickable(onClick = onClick)
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
             .background(rowBg)
-            // Selected-target ring — the ChinoAccent highlight that survives
-            // while the row isn't the focused element.
-            .then(
-                when {
-                    selected && !focused -> Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                    several -> Modifier.border(1.dp, ChinoAccent.copy(alpha = 0.5f), RectangleShape)
-                    else -> Modifier
-                },
-            )
-            .padding(horizontal = if (several) 8.dp else 16.dp, vertical = 12.dp),
+            .then(if (several) Modifier.border(1.dp, ChinoAccent.copy(alpha = 0.5f), RectangleShape) else Modifier)
+            .padding(end = if (several) 8.dp else 16.dp),
+        // Room for the row's growth beside the toggles, and for theirs.
         horizontalArrangement = Arrangement.spacedBy(16.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Box(
+        // The episode that plays: one focus target. The toggles beside it are
+        // its siblings, not its children, so RIGHT reaches them.
+        Row(
             modifier = Modifier
-                .width(160.dp)
-                .aspectRatio(16f / 9f)
-                .clip(RectangleShape)
-                .background(ChinoBg),
+                .weight(1f)
+                .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+                .focusStyle(focus, FocusKind.Row, surface = Color.Transparent, cameFrom = selected)
+                .clickable(onClick = onClick)
+                .padding(start = if (several) 8.dp else 16.dp, end = 8.dp, top = 12.dp, bottom = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
         ) {
-            AsyncImage(
-                model = backdropUrl,
-                contentDescription = episode.title,
-                contentScale = ContentScale.Crop,
-                modifier = Modifier.fillMaxSize(),
-            )
-            // In-progress marker: accent bar along the thumbnail's bottom edge
-            // over a full-width track. Canonical cross-client spec: height
-            // 4dp, ChinoBorder track, ChinoAccent fill, fraction coerced 0..1.
-            if (resume != null) {
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .height(4.dp)
-                        .background(ChinoBorder),
+            Box(
+                modifier = Modifier
+                    .width(160.dp)
+                    .aspectRatio(16f / 9f)
+                    .clip(RectangleShape)
+                    .background(ChinoBg),
+            ) {
+                AsyncImage(
+                    model = backdropUrl,
+                    contentDescription = episode.title,
+                    contentScale = ContentScale.Crop,
+                    modifier = Modifier.fillMaxSize(),
                 )
-                if (resumeDurSec > 0) {
+                // In-progress marker: accent bar along the thumbnail's bottom edge
+                // over a full-width track. Canonical cross-client spec: height
+                // 4dp, ChinoBorder track, ChinoAccent fill, fraction coerced 0..1.
+                if (resume != null) {
                     Box(
                         modifier = Modifier
                             .align(Alignment.BottomStart)
-                            .fillMaxWidth(
-                                (resume.positionSec.toFloat() / resumeDurSec).coerceIn(0f, 1f),
-                            )
+                            .fillMaxWidth()
                             .height(4.dp)
-                            .background(ChinoAccent),
+                            .background(ChinoBorder),
                     )
-                }
-            }
-        }
-        Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
-            Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                val label = episode.episodeNumber?.let { ep ->
-                    episodeCode(episode.seasonNumber ?: 0, ep, lastEpisodeNumber.takeIf { several })
-                }
-                if (label != null) {
-                    Text(
-                        text = label,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.primary,
-                        fontWeight = FontWeight.SemiBold,
-                    )
-                }
-                Text(
-                    // A box says what it is where a row has its title: its
-                    // episodes are listed under this line.
-                    text = if (several) "${held.size} episodes · one file" else episode.title,
-                    style = if (several) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
-                    fontWeight = if (several) FontWeight.Normal else FontWeight.Medium,
-                    color = if (several) ChinoMuted else Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f, fill = false),
-                )
-                ((fileDurationMs + 30_000L) / 60_000L).toInt().takeIf { it > 0 }?.let {
-                    Text(text = "${it}m", color = ChinoMuted, style = MaterialTheme.typography.bodySmall)
-                }
-                if (resume != null) {
-                    // Canonical remaining label: CEIL((dur - pos) / 60),
-                    // floored at 1m. resumeDurSec already folds in the
-                    // catalogue-runtime fallback; when even that's unknown
-                    // there is no remaining to compute — plain "Resume".
-                    val remainingMin = if (resumeDurSec > 0) {
-                        ((resumeDurSec - resume.positionSec + 59) / 60).coerceAtLeast(1)
-                    } else null
-                    Text(
-                        text = remainingMin?.let { "Resume · ${it}m left" } ?: "Resume",
-                        color = ChinoAccent,
-                        style = MaterialTheme.typography.bodySmall,
-                        fontWeight = FontWeight.Medium,
-                    )
-                }
-            }
-            if (several) {
-                // The episodes the file holds, each by number and title:
-                // text, not controls - the box is what plays.
-                held.forEach { e ->
-                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                        Text(
-                            text = e.episodeNumber?.toString().orEmpty(),
-                            color = ChinoMuted,
-                            style = MaterialTheme.typography.bodySmall,
-                            textAlign = TextAlign.End,
-                            modifier = Modifier.width(24.dp).alignByBaseline(),
-                        )
-                        Text(
-                            text = e.title,
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = if (watched) ChinoMuted else Color.White,
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis,
-                            modifier = Modifier.weight(1f).alignByBaseline(),
+                    if (resumeDurSec > 0) {
+                        Box(
+                            modifier = Modifier
+                                .align(Alignment.BottomStart)
+                                .fillMaxWidth(
+                                    (resume.positionSec.toFloat() / resumeDurSec).coerceIn(0f, 1f),
+                                )
+                                .height(4.dp)
+                                .background(ChinoAccent),
                         )
                     }
                 }
             }
-            // A box lists its episodes; one episode's overview is not the file's.
-            episode.overview?.takeIf { it.isNotBlank() && !several }?.let {
-                Text(
-                    text = it,
-                    color = ChinoText,
-                    style = MaterialTheme.typography.bodySmall,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                )
+            Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    val label = episode.episodeNumber?.let { ep ->
+                        episodeCode(episode.seasonNumber ?: 0, ep, lastEpisodeNumber.takeIf { several })
+                    }
+                    if (label != null) {
+                        Text(
+                            text = label,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.primary,
+                            fontWeight = FontWeight.SemiBold,
+                        )
+                    }
+                    Text(
+                        // A box says what it is where a row has its title: its
+                        // episodes are listed under this line.
+                        text = if (several) "${held.size} episodes · one file" else episode.title,
+                        style = if (several) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
+                        fontWeight = if (several) FontWeight.Normal else FontWeight.Medium,
+                        color = if (several) ChinoFocus.text(ChinoMuted, focused) else Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.weight(1f, fill = false),
+                    )
+                    ((fileDurationMs + 30_000L) / 60_000L).toInt().takeIf { it > 0 }?.let {
+                        Text(text = "${it}m", color = ChinoFocus.text(ChinoMuted, focused), style = MaterialTheme.typography.bodySmall)
+                    }
+                    if (resume != null) {
+                        // Canonical remaining label: CEIL((dur - pos) / 60),
+                        // floored at 1m. resumeDurSec already folds in the
+                        // catalogue-runtime fallback; when even that's unknown
+                        // there is no remaining to compute — plain "Resume".
+                        val remainingMin = if (resumeDurSec > 0) {
+                            ((resumeDurSec - resume.positionSec + 59) / 60).coerceAtLeast(1)
+                        } else null
+                        Text(
+                            text = remainingMin?.let { "Resume · ${it}m left" } ?: "Resume",
+                            color = ChinoAccent,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontWeight = FontWeight.Medium,
+                        )
+                    }
+                }
+                if (several) {
+                    // The episodes the file holds, each by number and title:
+                    // text, not controls - the box is what plays.
+                    held.forEach { e ->
+                        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                            Text(
+                                text = e.episodeNumber?.toString().orEmpty(),
+                                color = ChinoFocus.text(ChinoMuted, focused),
+                                style = MaterialTheme.typography.bodySmall,
+                                textAlign = TextAlign.End,
+                                modifier = Modifier.width(24.dp).alignByBaseline(),
+                            )
+                            Text(
+                                text = e.title,
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = if (watched) ChinoFocus.text(ChinoMuted, focused) else Color.White,
+                                maxLines = 1,
+                                overflow = TextOverflow.Ellipsis,
+                                modifier = Modifier.weight(1f).alignByBaseline(),
+                            )
+                        }
+                    }
+                }
+                // A box lists its episodes; one episode's overview is not the file's.
+                episode.overview?.takeIf { it.isNotBlank() && !several }?.let {
+                    Text(
+                        text = it,
+                        color = ChinoText,
+                        style = MaterialTheme.typography.bodySmall,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
         // Per-episode watched TOGGLE — its own DPAD focus target on the row's
@@ -1031,57 +1035,47 @@ private fun EpisodeRow(
         EpisodeWatchedToggle(watched = watched, onToggle = onToggleWatched)
         // Per-episode ADD-TO-LIST — a second trailing focus target (RIGHT past
         // the watched toggle reaches it; LEFT returns). CENTER opens the
-        // AddToList picker targeting THIS episode id. Same square focus-ring
-        // idiom as the watched toggle so the row's trailing controls read as
-        // one family; the row body's click-to-play is untouched.
+        // AddToList picker targeting THIS episode id. A button in the focus
+        // style, as the watched toggle is; the row body's click-to-play is
+        // untouched.
         EpisodeAddToListButton(onClick = onAddToList)
     }
 }
 
 @Composable
 private fun EpisodeAddToListButton(onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
             .size(40.dp)
-            .clip(RectangleShape)
-            .background(if (focused) Color.White else Color.White.copy(alpha = 0.1f))
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = Color.White.copy(alpha = 0.1f))
             // clickable maps DPAD_CENTER/ENTER to a click on key-UP — same
-            // single-activation reasoning as EpisodeWatchedToggle above.
+            // single-activation reasoning as EpisodeWatchedToggle below.
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
         Icon(
             imageVector = Lucide.Plus,
             contentDescription = "Add episode to a list",
-            tint = if (focused) Color.Black else ChinoMuted,
+            tint = ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(18.dp),
         )
     }
 }
 
+/** Filled green while the episode is watched, plain while it is not. */
 @Composable
 private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
             .size(40.dp)
-            .clip(RectangleShape)
-            .background(
-                when {
-                    focused -> Color.White
-                    watched -> ChinoSignalGreen
-                    else -> Color.White.copy(alpha = 0.1f)
-                },
+            .focusStyle(
+                focus,
+                FocusKind.Control,
+                surface = if (watched) ChinoSignalGreen else Color.White.copy(alpha = 0.1f),
+                filled = watched,
             )
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
             // clickable already maps DPAD_CENTER/ENTER to a click on key-UP, so
             // a manual onKeyEvent(KeyDown) handler here would double-fire (mark
             // then immediately un-mark = no-op on a real remote). Use clickable
@@ -1092,7 +1086,7 @@ private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
         Icon(
             imageVector = if (watched) Lucide.Check else Lucide.Eye,
             contentDescription = if (watched) "Mark episode as unwatched" else "Mark episode as watched",
-            tint = if (focused) Color.Black else if (watched) Color.White else ChinoMuted,
+            tint = if (watched) Color.White else ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(18.dp),
         )
     }
@@ -1155,14 +1149,6 @@ private fun MetaRow(year: Int?, durationMs: Long?, rating: Double?, kind: String
 private fun Bullet() {
     Text("•", color = ChinoMuted)
 }
-
-@Composable
-private fun greenButtonColors() = ButtonDefaults.colors(
-    containerColor = ChinoSignalGreen,
-    contentColor = Color.White,
-    focusedContainerColor = ChinoSignalGreen,
-    focusedContentColor = Color.White,
-)
 
 @OptIn(ExperimentalLayoutApi::class)
 @Composable
@@ -1245,9 +1231,9 @@ private fun MoreLikeThisSection(
             color = Color.White,
         )
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(end = 32.dp, top = 12.dp, bottom = 12.dp),
-            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
+            modifier = Modifier.shelfRoom().fillMaxWidth(),
         ) {
             items(items, key = { it.id }) { entry ->
                 SimilarCard(
@@ -1262,13 +1248,11 @@ private fun MoreLikeThisSection(
 
 @Composable
 private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
-    Card(
+    val focus = rememberItemFocus()
+    ChinoCard(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = Modifier
-            .width(180.dp)
-            .clip(RectangleShape),
+        modifier = Modifier.width(180.dp),
+        focus = focus,
     ) {
         Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
@@ -1287,7 +1271,7 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = item.title,
-                    color = ChinoText,
+                    color = ChinoFocus.title(ChinoText, focus.focused),
                     fontSize = 13.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -1295,13 +1279,14 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
                 )
                 val ratingText = item.rating?.let { String.format("%.1f", it) }
                 if (item.year != null || ratingText != null) {
+                    val meta = ChinoFocus.text(ChinoMuted, focus.focused)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 12.sp) }
+                        item.year?.let { Text(it.toString(), color = meta, fontSize = 12.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 12.sp)
+                            if (item.year != null) Text("•", color = meta, fontSize = 12.sp)
                             Text(it, color = ChinoAccent, fontSize = 12.sp)
                         }
                     }
@@ -1342,9 +1327,9 @@ private fun CreditsSection(
                 color = Color.White,
             )
             LazyRow(
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
-                contentPadding = PaddingValues(end = 32.dp, top = 4.dp, bottom = 4.dp),
-                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+                contentPadding = shelfPadding(end = 32.dp, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.shelfRoom().fillMaxWidth(),
             ) {
                 // groupCredits lists a person once per role, so role + person
                 // id (else name) keys a card uniquely; a name alone does not
@@ -1372,13 +1357,12 @@ private fun CreditsSection(
  *  Narrator" when the catalog credits two). */
 @Composable
 private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
-    var focused by remember { mutableStateOf(false) }
+    // A card: a person, the initials for their artwork.
+    val focus = rememberItemFocus()
     Column(
         modifier = Modifier
             .width(128.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else Color.Transparent)
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Card)
             .creditTarget(onClick)
             .padding(8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1387,11 +1371,7 @@ private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
         Box(
             modifier = Modifier
                 .size(72.dp)
-                .clip(RectangleShape)
-                .background(ChinoSurface)
-                .then(
-                    if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
-                ),
+                .background(ChinoSurface),
             contentAlignment = Alignment.Center,
         ) {
             Text(
@@ -1413,7 +1393,7 @@ private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
         actor.character?.takeIf { it.isNotBlank() }?.let { character ->
             Text(
                 text = character,
-                color = ChinoMuted,
+                color = ChinoFocus.text(ChinoMuted, focus.focused),
                 fontSize = 11.sp,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
@@ -1435,10 +1415,11 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(160.dp),
         )
+        // Chips far enough apart for a focused one's growth and ring.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
-            contentPadding = PaddingValues(end = 32.dp, top = 2.dp, bottom = 2.dp),
-            modifier = Modifier.weight(1f),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(end = 32.dp, top = 2.dp, bottom = 2.dp),
+            modifier = Modifier.weight(1f).shelfRoom(),
         ) {
             items(group.people, key = ::creditKey) { person ->
                 CrewName(
@@ -1450,25 +1431,20 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
     }
 }
 
+/** A crew name: a chip. */
 @Composable
 private fun CrewName(name: String, onClick: (() -> Unit)?) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else ChinoSurface)
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) ChinoAccent else ChinoBorder,
-                shape = RectangleShape,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
+            .border(1.dp, ChinoBorder, RectangleShape)
             .creditTarget(onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
     ) {
         Text(
             text = name,
-            color = if (focused) Color.White else ChinoText,
+            color = ChinoFocus.title(ChinoText, focus.focused),
             fontSize = 14.sp,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,

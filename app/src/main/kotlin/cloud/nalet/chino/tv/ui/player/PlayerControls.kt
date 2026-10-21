@@ -1,5 +1,10 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.ItemFocus
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -42,7 +47,6 @@ import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -153,10 +157,11 @@ internal fun PlayerBottomChrome(
         // No ±10s skip buttons (web has none — the scrubber handles seeking;
         // on D-pad the focused scrubber seeks ±10s, and so does LEFT/RIGHT
         // while the chrome is hidden).
+        // Controls far enough apart for a focused one's growth and ring.
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
         ) {
             ControlIconButton(
                 icon = if (isPlaying) Lucide.Pause else Lucide.Play,
@@ -286,7 +291,7 @@ private fun ScrubberRow(
     onSeek: (Long) -> Unit,
     onUserInteraction: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier.fillMaxWidth(),
         verticalAlignment = Alignment.CenterVertically,
@@ -306,8 +311,8 @@ private fun ScrubberRow(
             trickplayCues = trickplayCues,
             trickplayBaseUrl = trickplayBaseUrl,
             streamToken = streamToken,
-            focused = focused,
-            onFocusChange = { focused = it; if (it) onUserInteraction() },
+            focus = focus,
+            onFocusChange = { if (it) onUserInteraction() },
             onSeek = { delta ->
                 val target = (positionMs + delta).coerceIn(0L, if (durationMs > 0) durationMs else Long.MAX_VALUE)
                 onSeek(target)
@@ -341,20 +346,24 @@ private fun ScrubberBar(
     trickplayCues: List<TrickplayCue>,
     trickplayBaseUrl: String,
     streamToken: String,
-    focused: Boolean,
+    focus: ItemFocus,
     onFocusChange: (Boolean) -> Unit,
     onSeek: (deltaMs: Long) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val focused = focus.focused
     val safeDuration = if (durationMs > 0) durationMs else 1L
     val playProgress = (positionMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
     val bufferProgress = (bufferedMs.toFloat() / safeDuration.toFloat()).coerceIn(0f, 1f)
-    val barHeight = if (focused) 8.dp else 6.dp
-    val thumbSize = if (focused) 20.dp else 14.dp
+    // The bar, as a row in the focus style: its look on focus is the style's,
+    // and its own stays the same focused or not.
+    val barHeight = 6.dp
+    val thumbSize = 14.dp
     BoxWithConstraints(
         modifier = modifier
             .height(40.dp)
             .focusRequester(remember { FocusRequester() })
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .onFocusChanged { onFocusChange(it.isFocused) }
             // Intercept DPAD_LEFT/RIGHT to scrub instead of letting focus
             // travel to a sibling control. Each press = ±10s, matching the
@@ -419,7 +428,7 @@ private fun ScrubberBar(
                 .fillMaxWidth(playProgress)
                 .height(barHeight)
                 .clip(RectangleShape)
-                .background(if (focused) ChinoAccent else Color(0xFFAACCFF)),
+                .background(Color(0xFFAACCFF)),
         )
         // Thumb. Positioned by a horizontally-offset Box at the playProgress
         // fraction; we render it inside a fillMaxWidth wrapper so the parent's
@@ -429,8 +438,7 @@ private fun ScrubberBar(
                 modifier = Modifier
                     .size(thumbSize)
                     .clip(RectangleShape)
-                    .background(Color.White)
-                    .then(if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier),
+                    .background(Color.White),
             )
         }
         // Trickplay preview — a sprite-cropped thumbnail floating above the bar
@@ -569,17 +577,13 @@ private fun VolumeControl(
     onToggleMute: () -> Unit,
     onVolumeChange: (Float) -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    // A plain control in the focus style.
+    val focus = rememberItemFocus()
     val level = if (muted) 0f else volume.coerceIn(0f, 1f)
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RectangleShape)
-            .background(if (focused) Color.White.copy(alpha = 0.1f) else Color.Transparent)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape) else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = Color.Transparent)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
@@ -627,41 +631,27 @@ internal fun ControlIconButton(
     modifier: Modifier = Modifier,
     enabled: Boolean = true,
     accent: Boolean = false,
+    focus: ItemFocus = rememberItemFocus(),
 ) {
-    var focused by remember { mutableStateOf(false) }
     // Web/mobile ChromeButton metrics: 36px circle / 20px icon, idle bg
     // white@0.1, accent #58A6FF@0.3. Bumped to 40dp for 10-ft legibility.
+    // A plain control in the focus style; the accent tint (subtitles on, a
+    // menu open) is a fill it keeps on focus.
     val size = 40.dp
     val iconSize = 20.dp
     val bg = when {
         !enabled -> Color.White.copy(alpha = 0.05f)
-        // Match chino-web's hover (bg-white/10 -> hover:bg-white/20): a subtle
-        // lighten, NOT a full white-fill inversion. The brand-blue focus ring
-        // below carries the actual 10-ft focus affordance.
-        focused -> Color.White.copy(alpha = 0.2f)
         accent -> ChinoAccent.copy(alpha = 0.3f) // ChromeBtnVariant.Accent (subs on / menu open)
         else -> Color.White.copy(alpha = 0.1f) // ChromeBtnVariant.Neutral
     }
     val fg = when {
         !enabled -> Color.White.copy(alpha = 0.35f)
-        // Icon stays white on focus (web parity) — was inverted to black for the
-        // old white-fill state.
         else -> Color.White
     }
     Box(
         modifier = modifier
             .size(size)
-            .clip(RectangleShape)
-            .background(bg)
-            // Bright brand-blue ring on focus — high-contrast against both
-            // dark video frames and bright-scene frames. Without the ring
-            // the button-bg colour change alone was hard to spot at TV
-            // viewing distance.
-            .then(
-                if (focused) Modifier.border(width = 3.dp, color = ChinoAccent, shape = RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = bg, filled = accent)
             .focusable(enabled)
             // Explicit DPAD-CENTER/ENTER handler — a bare clickable does NOT
             // reliably fire on a TV remote's select key (the rail/search/menu

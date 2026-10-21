@@ -7,6 +7,12 @@ import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChinoCard
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.ItemFocus
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.shelfPadding
+import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -37,7 +43,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,8 +52,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -224,9 +227,15 @@ private fun FilterBar(
     genres: List<String>,
     onChange: (BrowseFilters) -> Unit,
 ) {
+    // Chip rows: their chips far enough apart for a focused one's growth and
+    // ring, and room at the rows' ends (shelfRoom).
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
         // Genre row — "All" clears the genre; tapping the active genre clears it.
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(),
+            modifier = Modifier.shelfRoom(),
+        ) {
             item("g-all") {
                 FilterChip("All genres", filters.genre == null) { onChange(filters.copy(genre = null)) }
             }
@@ -237,7 +246,11 @@ private fun FilterBar(
             }
         }
         // Decade + rating row.
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(),
+            modifier = Modifier.shelfRoom(),
+        ) {
             items(BROWSE_DECADES, key = { "d:${it.label}" }) { d ->
                 FilterChip(d.label, filters.decade == d) {
                     onChange(filters.copy(decade = if (filters.decade == d) null else d))
@@ -250,7 +263,11 @@ private fun FilterBar(
             }
         }
         // Sort row.
-        LazyRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(),
+            modifier = Modifier.shelfRoom(),
+        ) {
             items(BROWSE_SORTS, key = { "s:${it.second}" }) { (label, value) ->
                 FilterChip(label, filters.sort == value) { onChange(filters.copy(sort = value)) }
             }
@@ -272,7 +289,7 @@ private fun FilterBar(
 /** Poster grid card shared by Browse and Watchlist so the two grids stay
  *  pixel-identical: 2:3 poster on #0D1117, watched ✓ badge, a "saved" bookmark
  *  badge when the item is in >=1 list, title + year•rating on a #161B22 footer,
- *  1.05× focus scale via the native TV Card. */
+ *  a card in the focus style. */
 @Composable
 internal fun PosterGridCard(
     item: Item,
@@ -296,16 +313,14 @@ internal fun PosterGridCard(
     // title ("Director · Writer") — the Person filmography (web MediaCard's
     // `credit`). Null hides it.
     credit: String? = null,
+    focus: ItemFocus = rememberItemFocus(),
 ) {
-    var focused by remember { mutableStateOf(false) }
-    Card(
+    val focused = focus.focused
+    ChinoCard(
         onClick = onClick,
         onLongClick = onLongPress,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = modifier
-            .clip(RectangleShape)
-            .onFocusChanged { focused = it.isFocused },
+        modifier = modifier,
+        focus = focus,
     ) {
         Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
@@ -356,9 +371,10 @@ internal fun PosterGridCard(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                val meta = ChinoFocus.text(ChinoMuted, focused)
                 Text(
                     text = item.title,
-                    color = ChinoText,
+                    color = ChinoFocus.title(ChinoText, focused),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -380,9 +396,9 @@ internal fun PosterGridCard(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 14.sp) }
+                        item.year?.let { Text(it.toString(), color = meta, fontSize = 14.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 14.sp)
+                            if (item.year != null) Text("•", color = meta, fontSize = 14.sp)
                             Text(it, color = ChinoAccent, fontSize = 14.sp)
                         }
                     }
@@ -390,7 +406,7 @@ internal fun PosterGridCard(
                 credit?.let {
                     Text(
                         text = it,
-                        color = ChinoMuted,
+                        color = meta,
                         fontSize = 13.sp,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis,
@@ -402,7 +418,7 @@ internal fun PosterGridCard(
                 if (focused && onLongPress != null) {
                     Text(
                         text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
-                        color = ChinoMuted,
+                        color = meta,
                         fontSize = 12.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,

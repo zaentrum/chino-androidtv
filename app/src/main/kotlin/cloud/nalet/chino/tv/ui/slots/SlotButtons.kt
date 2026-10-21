@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.slots
 
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -22,13 +23,10 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
@@ -101,19 +99,15 @@ private fun SlotButtonView(
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Accent at rest like chino-web's slot buttons, white on focus like the
-    // detail actions. Never disabled while it sends: a disabled button gives
-    // up focus — the view model ignores the press instead.
-    Button(
+    // Accent like chino-web's slot buttons: a filled button, its fill kept on
+    // focus. Never disabled while it sends: a disabled button gives up focus —
+    // the view model ignores the press instead.
+    ChinoButton(
         onClick = onClick,
         modifier = modifier,
-        shape = ButtonDefaults.shape(shape = RectangleShape),
-        colors = ButtonDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.primary,
-            contentColor = Color.White,
-            focusedContainerColor = Color.White,
-            focusedContentColor = Color.Black,
-        ),
+        container = MaterialTheme.colorScheme.primary,
+        content = Color.White,
+        filled = true,
     ) {
         val (icon, description) = when {
             button.kind == SlotKind.Link -> Lucide.QrCode to null

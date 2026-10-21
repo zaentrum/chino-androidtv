@@ -41,7 +41,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -68,11 +67,14 @@ import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Pencil
@@ -261,17 +263,12 @@ private fun HubContent(
 /** Focusable shelf header — "Name · count". OK opens the list's MORE view. */
 @Composable
 private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    // A plain button that names the list.
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .padding(start = 24.dp, end = 24.dp, top = 16.dp, bottom = 8.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else Color.Transparent)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -293,7 +290,7 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
         )
         Text(
             text = "· ${list.itemCount}",
-            color = ChinoMuted,
+            color = ChinoFocus.text(ChinoMuted, focus.focused),
             fontSize = 16.sp,
         )
     }
@@ -360,7 +357,8 @@ private fun MoreContent(
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.fillMaxSize(),
-                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = 8.dp, bottom = 32.dp),
+                // Room above the first row for a focused card's growth and ring.
+                contentPadding = PaddingValues(start = 24.dp, end = 24.dp, top = ChinoFocus.Room, bottom = 32.dp),
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
@@ -397,17 +395,11 @@ private fun HeaderIconButton(
     tint: Color = Color.White,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else ChinoSurface)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -428,17 +420,11 @@ private fun HeaderIconButton(
 
 @Composable
 private fun NewListChip(onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .height(40.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else ChinoSurface)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -453,7 +439,7 @@ private fun NewListChip(onClick: () -> Unit) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(Lucide.Plus, contentDescription = "New list", tint = ChinoAccent, modifier = Modifier.size(16.dp))
-        Text(text = "New list", color = ChinoText, fontSize = 14.sp)
+        Text(text = "New list", color = ChinoFocus.title(ChinoText, focus.focused), fontSize = 14.sp)
     }
 }
 
@@ -471,7 +457,8 @@ private fun NameDialog(
     var value by remember { mutableStateOf(initial) }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    var focused by remember { mutableStateOf(false) }
+    // The field takes the focus style as a row does.
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -492,13 +479,8 @@ private fun NameDialog(
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(46.dp)
-                    .clip(RectangleShape)
-                    .background(ChinoBg)
-                    .border(
-                        width = if (focused) 2.dp else 1.dp,
-                        color = if (focused) ChinoAccent else ChinoBorder,
-                        shape = RectangleShape,
-                    )
+                    .focusStyle(focus, FocusKind.Row, surface = ChinoBg)
+                    .border(1.dp, ChinoBorder, RectangleShape)
                     .padding(horizontal = 14.dp),
                 verticalAlignment = Alignment.CenterVertically,
             ) {
@@ -513,11 +495,10 @@ private fun NameDialog(
                         keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),
                         modifier = Modifier
                             .fillMaxWidth()
-                            .focusRequester(focusRequester)
-                            .onFocusChanged { focused = it.isFocused },
+                            .focusRequester(focusRequester),
                     )
                     if (value.isEmpty()) {
-                        Text(text = "List name…", color = ChinoMuted, fontSize = 16.sp)
+                        Text(text = "List name…", color = ChinoFocus.text(ChinoMuted, focus.focused), fontSize = 16.sp)
                     }
                 }
             }

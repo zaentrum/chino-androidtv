@@ -1,6 +1,5 @@
 package cloud.nalet.chino.tv.ui.onboarding
 
-import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -24,10 +23,8 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -38,12 +35,15 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.ui.theme.LogoMark
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -101,24 +101,22 @@ fun ServerSetupScreen(
                     enabled = !probing,
                 )
 
-                Button(
+                ChinoButton(
                     onClick = { viewModel.connect(url) },
                     enabled = !probing && url.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
-                    shape = ButtonDefaults.shape(shape = RectangleShape),
                 ) {
                     Text(text = if (probing) "Connecting…" else "Connect")
                 }
 
                 if (viewModel.presetUrl.isNotBlank() && url.trim() != viewModel.presetUrl) {
-                    Button(
+                    ChinoButton(
                         onClick = {
                             url = viewModel.presetUrl
                             viewModel.connect(viewModel.presetUrl)
                         },
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(text = "Use ${viewModel.presetUrl.substringAfter("://")}")
                     }
@@ -141,11 +139,10 @@ fun ServerSetupScreen(
                     ) {
                         Text(text = "Recent", color = ChinoMuted, fontSize = 14.sp)
                         recents.forEach { r ->
-                            Button(
+                            ChinoButton(
                                 onClick = { url = r; viewModel.connect(r) },
                                 enabled = !probing,
                                 modifier = Modifier.fillMaxWidth(),
-                                shape = ButtonDefaults.shape(shape = RectangleShape),
                             ) {
                                 Text(text = r.substringAfter("://"))
                             }
@@ -155,11 +152,10 @@ fun ServerSetupScreen(
 
                 // Change-server back-out — only on the Settings entry path.
                 if (onCancel != null) {
-                    Button(
+                    ChinoButton(
                         onClick = onCancel,
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(text = "Cancel")
                     }
@@ -181,18 +177,15 @@ private fun UrlField(
     // D-pad text entry; the IME "Go" key submits.
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    var focused by remember { mutableStateOf(false) }
+    // The field takes the focus style as a row does: its frame follows the
+    // text field's focus.
+    val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(48.dp)
-            .clip(RectangleShape)
-            .background(ChinoSurface)
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) ChinoAccent else ChinoBorder,
-                shape = RectangleShape,
-            )
+            .focusStyle(focus, FocusKind.Row, surface = ChinoSurface)
+            .border(1.dp, ChinoBorder, RectangleShape)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
@@ -211,15 +204,14 @@ private fun UrlField(
                 keyboardActions = KeyboardActions(onGo = { onSubmit() }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { focused = it.isFocused },
+                    .focusRequester(focusRequester),
             )
             if (value.isEmpty()) {
                 Text(
                     // Neutral placeholder — no operator-specific URL on the
                     // store build.
                     text = "https://media.example.com",
-                    color = ChinoMuted,
+                    color = ChinoFocus.text(ChinoMuted, focus.focused),
                     fontSize = 16.sp,
                 )
             }

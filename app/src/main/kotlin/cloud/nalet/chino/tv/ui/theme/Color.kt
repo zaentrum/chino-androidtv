@@ -24,3 +24,6 @@ val ChinoCyan = Color(0xFF00A4DC)         // cloud-cyan
 val ChinoSignalGreen = Color(0xFF2EA043)  // signal-green — watched marker
 val ChinoSignalAmber = Color(0xFFF2B233)  // signal-amber — intro segments
 val ChinoError = Color(0xFFFF6B6B)
+// The TV focus style (Focus.kt), the design system's tv focus (10-foot).
+val ChinoFocusRing = ChinoCyan            // nalet.focus-ring — cloud-cyan, the ring around a focused item
+val ChinoSurfaceFocus = Color(0xFF2A3142) // nalet.surface-focus — behind a focused row, plain button or chip

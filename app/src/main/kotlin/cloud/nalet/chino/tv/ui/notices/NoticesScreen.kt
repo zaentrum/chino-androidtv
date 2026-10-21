@@ -1,7 +1,11 @@
 package cloud.nalet.chino.tv.ui.notices
 
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,12 +35,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -44,8 +45,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -60,7 +59,6 @@ import cloud.nalet.chino.tv.ui.library.TvIconCell
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -210,12 +208,11 @@ private fun NoticesList(
                 )
                 Spacer(modifier = Modifier.weight(1f))
                 if (unread > 0) {
-                    Button(
+                    ChinoButton(
                         onClick = {
                             readAllPressed = true
                             onReadAll()
                         },
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Icon(Lucide.CheckCheck, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
@@ -274,23 +271,20 @@ private fun NoticeRow(
     val title = plainText(notice.title, lines = false)
     val body = plainText(notice.body, lines = true)
     val age = ageText(notice.createdAt, now)
-    var focused by remember { mutableStateOf(false) }
+    // The notice is a row in the focus style; its Delete beside it a button.
+    val focus = rememberItemFocus()
+    val focused = focus.focused
     Row(
         modifier = Modifier.fillMaxWidth(ROW_WIDTH),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        // Room for the row's growth beside its Delete, and for the Delete's.
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
     ) {
         Column(
             modifier = Modifier
                 .weight(1f)
-                .clip(RectangleShape)
-                .background(if (focused) ChinoBorderHi else ChinoSurface)
-                .then(
-                    if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                    else Modifier,
-                )
                 .focusRequester(focusRequester)
-                .onFocusChanged { focused = it.isFocused }
+                .focusStyle(focus, FocusKind.Row, surface = ChinoSurface)
                 .focusable()
                 .onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown &&
@@ -312,17 +306,18 @@ private fun NoticeRow(
                 if (unread) {
                     Box(modifier = Modifier.size(8.dp).background(ChinoAccent))
                 }
+                val meta = ChinoFocus.text(ChinoMuted, focused)
                 Text(
                     text = plainText(fromText(notice), lines = false),
-                    color = ChinoMuted,
+                    color = meta,
                     fontSize = 13.sp,
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
                     modifier = Modifier.weight(1f, fill = false),
                 )
                 if (age.isNotEmpty()) {
-                    Text(text = "·", color = ChinoMuted, fontSize = 13.sp)
-                    Text(text = age, color = ChinoMuted, fontSize = 13.sp, maxLines = 1)
+                    Text(text = "·", color = meta, fontSize = 13.sp)
+                    Text(text = age, color = meta, fontSize = 13.sp, maxLines = 1)
                 }
                 if (noticeItemId(notice) != null) {
                     Spacer(modifier = Modifier.weight(1f))
@@ -331,14 +326,14 @@ private fun NoticeRow(
             }
             Text(
                 text = title,
-                color = if (unread) Color.White else ChinoText,
+                color = if (unread) Color.White else ChinoFocus.title(ChinoText, focused),
                 fontSize = 17.sp,
                 fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
             )
             if (body.isNotEmpty()) {
-                Text(text = body, color = if (unread) ChinoText else ChinoMuted, fontSize = 14.sp)
+                Text(text = body, color = if (unread) ChinoText else ChinoFocus.text(ChinoMuted, focused), fontSize = 14.sp)
             }
         }
         TvIconCell(icon = Lucide.Trash2, contentDescription = "Delete notice: $title", onClick = onDelete)

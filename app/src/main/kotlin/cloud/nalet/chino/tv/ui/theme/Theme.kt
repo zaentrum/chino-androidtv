@@ -1,7 +1,12 @@
 package cloud.nalet.chino.tv.ui.theme
 
+import androidx.compose.foundation.IndicationNodeFactory
+import androidx.compose.foundation.LocalIndication
+import androidx.compose.foundation.interaction.InteractionSource
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.node.DelegatableNode
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.text.TextStyle
@@ -20,9 +25,11 @@ import androidx.tv.material3.darkColorScheme
  * tablet (a 2560px landscape ≈ 1280dp wide). Scaling the effective density by
  * 0.75 widens the TV canvas to ~1280dp so the layout reads at the same
  * density as the tablet. Scales dp AND sp uniformly
- * (sp px = sp · fontScale · density).
+ * (sp px = sp · fontScale · density). The design system's TV lengths are in
+ * the TV's own dp, 1/960 of the screen's width: [tvDp] turns them into this
+ * app's dp.
  */
-private const val UI_SCALE = 0.75f
+internal const val UI_SCALE = 0.75f
 
 /**
  * Terminal-style heading letter spacing from the design system (~-0.015em).
@@ -91,6 +98,15 @@ private val ChinoDarkColors = darkColorScheme(
     onError = ChinoBg,
 )
 
+/** A clickable's indication that draws nothing. Compose's default darkens a
+ *  focused clickable by a tenth and a pressed one by three tenths, which
+ *  would dim the focus style's surface and text. */
+private object NoIndication : IndicationNodeFactory {
+    override fun create(interactionSource: InteractionSource): DelegatableNode = object : Modifier.Node() {}
+    override fun equals(other: Any?): Boolean = other === this
+    override fun hashCode(): Int = System.identityHashCode(this)
+}
+
 @Composable
 fun ChinoTvTheme(content: @Composable () -> Unit) {
     // Headings/display/title text styles use JetBrains Mono (terminal look);
@@ -110,6 +126,10 @@ fun ChinoTvTheme(content: @Composable () -> Unit) {
                 density = base.density * UI_SCALE,
                 fontScale = base.fontScale,
             ),
+            // The focus style (Focus.kt) shows where the remote is, and
+            // nothing else: no overlay of a clickable's own on a focused or
+            // pressed item.
+            LocalIndication provides NoIndication,
             content = content,
         )
     }

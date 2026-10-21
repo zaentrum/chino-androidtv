@@ -20,6 +20,10 @@ zxing = "3.5.3"
 securityCrypto = "1.1.0-alpha06"
 lucide = "2.2.1"
 junit = "4.13.2"
+# Screenshot tests: Roborazzi renders composables on the JVM under
+# Robolectric's native graphics, no emulator.
+robolectric = "4.14.1"
+roborazzi = "1.43.0"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -60,6 +64,13 @@ zxing-core = { module = "com.google.zxing:core", version.ref = "zxing" }
 androidx-security-crypto = { module = "androidx.security:security-crypto", version.ref = "securityCrypto" }
 
 junit = { module = "junit:junit", version.ref = "junit" }
+robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-junit-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit-rule", version.ref = "roborazzi" }
+compose-ui-test-junit4 = { module = "androidx.compose.ui:ui-test-junit4" }
+compose-ui-test-manifest = { module = "androidx.compose.ui:ui-test-manifest" }
+coil-test = { module = "io.coil-kt:coil-test", version.ref = "coil" }
 
 # Lucide icons (Android variant). Matches chino-web's lucide-react family
 # glyph-for-glyph (House, Film, Tv, Settings, Search, Bell, User, Play,
@@ -72,3 +83,4 @@ android-application = { id = "com.android.application", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
+roborazzi = { id = "io.github.takahirom.roborazzi", version.ref = "roborazzi" }

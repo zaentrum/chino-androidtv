@@ -3,12 +3,18 @@ package cloud.nalet.chino.tv.ui.search
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChinoCard
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.shelfPadding
+import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -43,7 +49,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -52,7 +57,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -64,8 +68,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -179,20 +181,17 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
     // LibraryScreen chrome; leading Lucide.Search mirrors mobile/web.
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    var focused by remember { mutableStateOf(false) }
-    // Sized to match the top-bar search field (42dp / 8dp radius / 16sp) so the
+    // The field takes the focus style as a row does: its frame follows the
+    // text field's focus.
+    val focus = rememberItemFocus()
+    // Sized to match the top-bar search field (42dp, square, 16sp) so the
     // live input reads as the header search, like web.
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .height(42.dp)
-            .clip(RectangleShape)
-            .background(ChinoSurface)
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) ChinoAccent else ChinoBorder,
-                shape = RectangleShape,
-            )
+            .focusStyle(focus, FocusKind.Row, surface = ChinoSurface)
+            .border(1.dp, ChinoBorder, RectangleShape)
             .padding(horizontal = 14.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
@@ -222,13 +221,12 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
                         if (downTarget != null) Modifier.focusProperties { down = downTarget }
                         else Modifier,
                     )
-                    .focusRequester(focusRequester)
-                    .onFocusChanged { focused = it.isFocused },
+                    .focusRequester(focusRequester),
             )
             if (query.isEmpty()) {
                 Text(
                     text = "Search movies, shows…",
-                    color = ChinoMuted,
+                    color = ChinoFocus.text(ChinoMuted, focus.focused),
                     fontSize = 16.sp,
                 )
             }
@@ -323,9 +321,9 @@ private fun PeopleSection(
             fontWeight = FontWeight.Bold,
         )
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
-            contentPadding = PaddingValues(end = 32.dp, top = 2.dp, bottom = 2.dp),
-            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            contentPadding = shelfPadding(end = 32.dp, top = 2.dp, bottom = 2.dp),
+            modifier = Modifier.shelfRoom().fillMaxWidth(),
         ) {
             lazyItemsIndexed(
                 people,
@@ -353,20 +351,12 @@ private fun PersonChip(
     onClick: () -> Unit,
     focusRequester: FocusRequester? = null,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val base = Modifier
-        .width(220.dp)
-        .clip(RectangleShape)
-        .background(if (focused) ChinoBorderHi else ChinoSurface)
-        .then(
-            if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-            else Modifier,
-        )
-        .padding(12.dp)
-    val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
+    val focus = rememberItemFocus()
     Row(
-        modifier = m
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier
+            .width(220.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -375,7 +365,8 @@ private fun PersonChip(
                 ) {
                     onClick(); true
                 } else false
-            },
+            }
+            .padding(12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -396,7 +387,7 @@ private fun PersonChip(
             )
             Text(
                 text = "· ${if (person.credits == 1) "1 title" else "${person.credits} titles"}",
-                color = ChinoMuted,
+                color = ChinoFocus.text(ChinoMuted, focus.focused),
                 fontSize = 13.sp,
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
@@ -407,13 +398,11 @@ private fun PersonChip(
 
 @Composable
 private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
-    Card(
+    val focus = rememberItemFocus()
+    ChinoCard(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = Modifier
-            .clip(RectangleShape)
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier),
+        modifier = if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier,
+        focus = focus,
     ) {
         Column(modifier = Modifier.background(ChinoSurface)) {
             Box(
@@ -449,7 +438,7 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
             ) {
                 Text(
                     text = item.title,
-                    color = ChinoText,
+                    color = ChinoFocus.title(ChinoText, focus.focused),
                     fontSize = 16.sp,
                     fontWeight = FontWeight.Medium,
                     maxLines = 1,
@@ -457,13 +446,14 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                 )
                 val ratingText = item.rating?.let { String.format("%.1f", it) }
                 if (item.year != null || ratingText != null) {
+                    val meta = ChinoFocus.text(ChinoMuted, focus.focused)
                     Row(
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
-                        item.year?.let { Text(it.toString(), color = ChinoMuted, fontSize = 14.sp) }
+                        item.year?.let { Text(it.toString(), color = meta, fontSize = 14.sp) }
                         ratingText?.let {
-                            if (item.year != null) Text("•", color = ChinoMuted, fontSize = 14.sp)
+                            if (item.year != null) Text("•", color = meta, fontSize = 14.sp)
                             Text(it, color = ChinoAccent, fontSize = 14.sp)
                         }
                     }

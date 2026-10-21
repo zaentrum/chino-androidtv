@@ -1,5 +1,9 @@
 package cloud.nalet.chino.tv.ui.profile
 
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.focusable
@@ -20,13 +24,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
@@ -49,7 +50,6 @@ import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import coil.compose.AsyncImage
@@ -220,18 +220,13 @@ private fun HistoryRow(
     onClick: () -> Unit,
 ) {
     val isEpisode = item.kind == "episode"
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
+    val focused = focus.focused
     Row(
         modifier = Modifier
             .fillMaxWidth(0.85f)
             .padding(vertical = 4.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else ChinoSurface)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Row, surface = ChinoSurface)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -285,11 +280,11 @@ private fun HistoryRow(
                 ) {
                     if (epNum.isNotEmpty()) {
                         Text(text = epNum, color = ChinoAccent, fontSize = 13.sp)
-                        Text(text = "·", color = ChinoMuted, fontSize = 13.sp)
+                        Text(text = "·", color = ChinoFocus.text(ChinoMuted, focused), fontSize = 13.sp)
                     }
                     Text(
                         text = item.title,
-                        color = ChinoMuted,
+                        color = ChinoFocus.text(ChinoMuted, focused),
                         fontSize = 13.sp,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
@@ -305,11 +300,11 @@ private fun HistoryRow(
                         horizontalArrangement = Arrangement.spacedBy(6.dp),
                     ) {
                         item.year?.let {
-                            Text(it.toString(), color = ChinoMuted, fontSize = 13.sp)
+                            Text(it.toString(), color = ChinoFocus.text(ChinoMuted, focused), fontSize = 13.sp)
                         }
                         ratingText?.let {
                             if (item.year != null) {
-                                Text("•", color = ChinoMuted, fontSize = 13.sp)
+                                Text("•", color = ChinoFocus.text(ChinoMuted, focused), fontSize = 13.sp)
                             }
                             Text(it, color = ChinoAccent, fontSize = 13.sp)
                         }
@@ -318,7 +313,7 @@ private fun HistoryRow(
             }
         }
         watchedDateLabel(item.watchedAt)?.let {
-            Text(text = it, color = ChinoMuted, fontSize = 13.sp, maxLines = 1)
+            Text(text = it, color = ChinoFocus.text(ChinoMuted, focused), fontSize = 13.sp, maxLines = 1)
         }
     }
 }

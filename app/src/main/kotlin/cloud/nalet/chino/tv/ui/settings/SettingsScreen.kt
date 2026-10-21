@@ -1,6 +1,5 @@
 package cloud.nalet.chino.tv.ui.settings
 
-import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -33,7 +32,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.input.key.KeyEventType
@@ -42,9 +40,11 @@ import androidx.compose.ui.input.key.type
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.MaterialTheme
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 
@@ -179,19 +179,19 @@ fun SettingsScreen(
                         // Profile first (mirrors chino-mobile's Settings Account
                         // ordering): identity + watch history.
                         if (onProfile != null) {
-                            Button(onClick = onProfile, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                            ChinoButton(onClick = onProfile) {
                                 Text("Profile")
                             }
                         }
                         if (onSwitchAccount != null) {
-                            Button(onClick = onSwitchAccount, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                            ChinoButton(onClick = onSwitchAccount) {
                                 Text("Switch account")
                             }
                         }
                         // Last in the row: a screen of its own asks before
                         // anything is deleted.
                         if (onDeleteAccount != null) {
-                            Button(onClick = onDeleteAccount, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                            ChinoButton(onClick = onDeleteAccount) {
                                 Text("Delete Account")
                             }
                         }
@@ -209,7 +209,7 @@ fun SettingsScreen(
                     subtitle = serverHost?.let { "Connected to $it." }
                         ?: "Connect to a different Chino server.",
                 ) {
-                    Button(onClick = onChangeServer, shape = ButtonDefaults.shape(shape = RectangleShape)) {
+                    ChinoButton(onClick = onChangeServer) {
                         Text("Change server")
                     }
                 }
@@ -224,14 +224,13 @@ fun SettingsScreen(
                 subtitle = "Something not working? File a bug straight to the dev backlog — " +
                     "no typing needed, device and app details ride along automatically.",
             ) {
-                Button(
+                ChinoButton(
                     onClick = {
                         // Reset BEFORE showing so a stale Filed/Failed body from
                         // the previous report doesn't flash.
                         viewModel.resetBugReport()
                         showReportPanel = true
                     },
-                    shape = ButtonDefaults.shape(shape = RectangleShape),
                 ) {
                     Text("Report a problem")
                 }
@@ -291,10 +290,10 @@ private fun ReportProblemDialog(
             .background(Color(0xCC000000)),
         contentAlignment = Alignment.Center,
     ) {
+        // Not clipped: a focused row grows past the panel's edge.
         Column(
             modifier = Modifier
                 .width(440.dp)
-                .clip(RectangleShape)
                 .background(ChinoSurface)
                 .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(vertical = 16.dp),
@@ -354,23 +353,20 @@ private fun ReportProblemDialog(
 }
 
 /** Focusable dialog row — structural clone of the player's PlayerMenuRow
- *  (CENTER/ENTER select, blue focus tint) so the picker inherits the same
- *  DPAD model as every other panel. */
+ *  (CENTER/ENTER select, a row in the focus style) so the picker inherits the
+ *  same DPAD model as every other panel. */
 @Composable
 private fun ReportDialogRow(
     label: String,
     focusRequester: FocusRequester? = null,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val base = Modifier
-        .fillMaxWidth()
-        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
-        .padding(horizontal = 20.dp, vertical = 10.dp)
-    val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
+    val focus = rememberItemFocus()
     Row(
-        modifier = m
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -378,7 +374,8 @@ private fun ReportDialogRow(
                         e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
                     onClick(); true
                 } else false
-            },
+            }
+            .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Text(text = label, color = Color.White, fontSize = 15.sp)
@@ -419,18 +416,12 @@ private fun LangPickerRow(
         Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             options.forEach { (code, name) ->
                 val on = value == code
-                Button(
+                // A chip: filled in the accent while chosen, plain otherwise.
+                ChinoButton(
                     onClick = { onChange(code) },
-                    colors = if (on) ButtonDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = Color.White,
-                        focusedContainerColor = MaterialTheme.colorScheme.primary,
-                        focusedContentColor = Color.White,
-                    ) else ButtonDefaults.colors(
-                        containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                        contentColor = MaterialTheme.colorScheme.onSurface,
-                    ),
-                    shape = ButtonDefaults.shape(shape = RectangleShape),
+                    container = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+                    content = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
+                    filled = on,
                 ) {
                     Text(text = name)
                 }
@@ -492,23 +483,13 @@ private fun ToggleRow(
             )
         }
         // A two-state pill: ON/OFF. Inactive uses surface tint, active uses
-        // primary fill so the chip clearly reads as enabled.
-        Button(
+        // primary fill so the chip clearly reads as enabled; a filled one keeps
+        // its fill on focus.
+        ChinoButton(
             onClick = { onChange(!value) },
-            colors = if (value) {
-                ButtonDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    focusedContainerColor = MaterialTheme.colorScheme.primary,
-                    focusedContentColor = Color.White,
-                )
-            } else {
-                ButtonDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.surfaceVariant,
-                    contentColor = MaterialTheme.colorScheme.onSurface,
-                )
-            },
-            shape = ButtonDefaults.shape(shape = RectangleShape),
+            container = if (value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+            content = if (value) Color.White else MaterialTheme.colorScheme.onSurface,
+            filled = value,
         ) {
             Text(text = if (value) "ON" else "OFF", fontWeight = FontWeight.SemiBold)
         }
@@ -544,7 +525,7 @@ private fun StepperRow(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
-            Button(onClick = { if (value > min) onChange(value - 1) }, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("−") }
+            ChinoButton(onClick = { if (value > min) onChange(value - 1) }) { Text("−") }
             Box(
                 modifier = Modifier
                     .width(72.dp)
@@ -565,7 +546,7 @@ private fun StepperRow(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
-            Button(onClick = { if (value < max) onChange(value + 1) }, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("+") }
+            ChinoButton(onClick = { if (value < max) onChange(value + 1) }) { Text("+") }
         }
     }
 }

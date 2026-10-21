@@ -1,5 +1,10 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -51,7 +56,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -76,10 +80,8 @@ import androidx.media3.exoplayer.DefaultLoadControl
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.exoplayer.upstream.DefaultAllocator
 import androidx.media3.ui.PlayerView
-import androidx.tv.material3.Button
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Text
-import androidx.tv.material3.ButtonDefaults
 import cloud.nalet.chino.tv.KeyEventBus
 import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.data.model.Trailer
@@ -199,10 +201,9 @@ private fun NotAvailableScreen(link: Trailer?, onOpenLink: (Trailer) -> Unit) {
             color = Color.White,
         )
         if (link != null) {
-            Button(
+            ChinoButton(
                 onClick = { onOpenLink(link) },
                 modifier = Modifier.focusRequester(focus),
-                shape = ButtonDefaults.shape(shape = RectangleShape),
             ) {
                 androidx.tv.material3.Icon(Lucide.Youtube, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
@@ -264,11 +265,10 @@ private fun TerminalErrorScreen(
                     if (report is BugReportState.Failed) {
                         Text(text = report.message, color = ChinoError, fontSize = 13.sp)
                     }
-                    Button(
+                    ChinoButton(
                         // Swallow repeat presses while a submit is in flight.
                         onClick = { if (report !is BugReportState.Sending) onReport() },
                         modifier = Modifier.focusRequester(reportRow),
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(
                             if (report is BugReportState.Sending) "Sending the report…"
@@ -1435,11 +1435,11 @@ private fun MenuPopover(width: Dp, content: @Composable ColumnScope.() -> Unit) 
         modifier = Modifier.fillMaxSize().padding(end = 24.dp, bottom = 92.dp),
         contentAlignment = Alignment.BottomEnd,
     ) {
+        // Not clipped: a focused row grows past the menu's edge.
         Column(
             modifier = Modifier
                 .width(width)
                 .heightIn(max = 460.dp)
-                .clip(RectangleShape)
                 .background(ChinoSurface)
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 .verticalScroll(rememberScrollState())
@@ -1469,15 +1469,12 @@ private fun PlayerMenuRow(
     leading: (@Composable () -> Unit)? = null,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val base = Modifier
-        .fillMaxWidth()
-        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
-        .padding(horizontal = 16.dp, vertical = 10.dp)
-    val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
+    val focus = rememberItemFocus()
     Row(
-        modifier = m
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -1485,7 +1482,8 @@ private fun PlayerMenuRow(
                         e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
                     onClick(); true
                 } else false
-            },
+            }
+            .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
@@ -1500,7 +1498,13 @@ private fun PlayerMenuRow(
                 overflow = TextOverflow.Ellipsis,
             )
             if (secondary != null) {
-                Text(text = secondary, color = ChinoMuted, fontSize = 12.sp, maxLines = 1, overflow = TextOverflow.Ellipsis)
+                Text(
+                    text = secondary,
+                    color = ChinoFocus.text(ChinoMuted, focus.focused),
+                    fontSize = 12.sp,
+                    maxLines = 1,
+                    overflow = TextOverflow.Ellipsis,
+                )
             }
         }
     }
@@ -1666,22 +1670,15 @@ private fun SkipSegmentButton(
         "credits" -> "Skip Credits"
         else -> "Skip"
     }
-    var focused by remember { mutableStateOf(false) }
+    // Web's button is white-on-black: a filled button, its fill kept on focus.
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Row(
             modifier = Modifier
-                .clip(RectangleShape)
-                // Web's button is white-on-black; on focus we lift to the brand
-                // blue + ring so it reads at 10-ft like the other chrome.
-                .background(if (focused) ChinoAccent else Color.White)
-                .then(
-                    if (focused) Modifier.border(3.dp, ChinoAccent, RectangleShape)
-                    else Modifier,
-                )
-                .onFocusChanged { focused = it.isFocused }
+                .focusStyle(focus, FocusKind.Control, surface = Color.White, filled = true)
                 .focusable()
                 .onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown &&
@@ -1697,12 +1694,12 @@ private fun SkipSegmentButton(
             androidx.tv.material3.Icon(
                 imageVector = Lucide.SkipForward,
                 contentDescription = null,
-                tint = if (focused) Color.White else Color.Black,
+                tint = Color.Black,
                 modifier = Modifier.size(18.dp),
             )
             Text(
                 text = label,
-                color = if (focused) Color.White else Color.Black,
+                color = Color.Black,
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -1719,22 +1716,16 @@ private fun SkipSegmentButton(
 private fun NextEpisodeButton(
     onPlay: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    // Blue (this is the primary action, not a dismiss): a filled button, its
+    // fill kept on focus.
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier.fillMaxSize().padding(32.dp),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Row(
             modifier = Modifier
-                .clip(RectangleShape)
-                // Blue by default (this is the primary action, not a dismiss);
-                // focus deepens it + adds the ring for 10-ft legibility.
-                .background(ChinoAccent)
-                .then(
-                    if (focused) Modifier.border(3.dp, Color.White, RectangleShape)
-                    else Modifier,
-                )
-                .onFocusChanged { focused = it.isFocused }
+                .focusStyle(focus, FocusKind.Control, surface = ChinoAccent, filled = true)
                 .focusable()
                 .onKeyEvent { e ->
                     if (e.type == KeyEventType.KeyDown &&

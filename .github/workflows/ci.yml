@@ -63,8 +63,20 @@ jobs:
       - name: Set up Gradle
         uses: gradle/actions/setup-gradle@v4
 
-      - name: Unit tests
-        run: ./gradlew :app:testDebugUnitTest --stacktrace
+      # The unit tests, the screenshot tests among them: verifyRoborazziDebug
+      # runs testDebugUnitTest and compares each screenshot with its golden
+      # image in app/src/test/screenshots, failing where the focus style's
+      # look changed.
+      - name: Unit and screenshot tests
+        run: ./gradlew :app:verifyRoborazziDebug --stacktrace
+
+      - name: Upload screenshot differences
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-diffs
+          path: app/build/outputs/roborazzi
+          if-no-files-found: ignore
 
       - name: Assemble debug APK
         run: ./gradlew :app:assembleDebug --stacktrace

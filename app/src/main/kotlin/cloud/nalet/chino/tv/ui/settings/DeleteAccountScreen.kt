@@ -20,7 +20,6 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.LiveRegionMode
 import androidx.compose.ui.semantics.heading
 import androidx.compose.ui.semantics.liveRegion
@@ -28,8 +27,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.isFinal
@@ -148,27 +146,21 @@ fun DeleteAccountScreen(
                     modifier = Modifier.padding(top = 8.dp),
                     horizontalArrangement = Arrangement.spacedBy(16.dp),
                 ) {
-                    Button(
+                    ChinoButton(
                         // Never disabled: a disabled button would drop focus
                         // mid-request. A press while deleting does nothing.
                         onClick = { if (!deleting) onCancel() },
                         modifier = Modifier.focusRequester(cancelFocus),
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
                     ) {
                         Text(if (final) "Close" else "Cancel")
                     }
                     if (!final) {
-                        Button(
+                        // Filled in the error tint, which it keeps on focus.
+                        ChinoButton(
                             onClick = { viewModel.delete() },
-                            colors = ButtonDefaults.colors(
-                                containerColor = ChinoError.copy(alpha = 0.25f),
-                                contentColor = ChinoError,
-                                focusedContainerColor = ChinoError,
-                                focusedContentColor = Color.White,
-                                pressedContainerColor = ChinoError,
-                                pressedContentColor = Color.White,
-                            ),
-                            shape = ButtonDefaults.shape(shape = RectangleShape),
+                            container = ChinoError.copy(alpha = 0.25f),
+                            content = ChinoError,
+                            filled = true,
                         ) {
                             Text(if (deleting) "Deleting…" else "Delete Account")
                         }

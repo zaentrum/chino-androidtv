@@ -1,11 +1,9 @@
 package cloud.nalet.chino.tv.ui.auth
 
-import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
@@ -28,11 +26,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
-import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
@@ -40,8 +36,11 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import androidx.tv.material3.Icon
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
@@ -149,30 +148,22 @@ private fun AccountTile(
     onLongPress: () -> Unit,
     focusRequester: FocusRequester? = null,
 ) {
-    // Pre-render the most-recent tile (the one carrying a FocusRequester) as
-    // visually focused so there's no perceptible jump from "no border" to
-    // "blue ring" when the LaunchedEffect-driven focus request lands a frame
-    // later. onFocusChanged overrides this as soon as the real focus event
-    // arrives, so DPAD navigation continues to behave normally.
-    var focused by remember { mutableStateOf(focusRequester != null) }
-    // onFocusChanged fires `false` on first attach — BEFORE the LaunchedEffect's
-    // requestFocus lands — which would clear the pre-rendered ring for a frame
-    // and the user sees the selection "switch"/flicker in. Honour `false` only
-    // AFTER real focus has actually arrived, so the preselected avatar shows its
-    // ring from the very first frame with no jump.
-    var settled by remember { mutableStateOf(false) }
+    // A card, the avatar its artwork. The most-recent tile (the one carrying
+    // a FocusRequester) is drawn focused from the first frame, so there is no
+    // jump from no ring to a ring when the LaunchedEffect-driven focus request
+    // lands a frame later: onFocusChanged fires `false` on first attach —
+    // BEFORE that request lands — and ItemFocus honours `false` only once real
+    // focus has come, so the preselected tile does not flicker.
+    val focus = rememberItemFocus(preFocused = focusRequester != null)
     val focusModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .width(160.dp)
-            .clip(RectangleShape)
             .padding(8.dp)
             .then(focusModifier)
-            .onFocusChanged { st ->
-                if (st.isFocused) { focused = true; settled = true } else if (settled) focused = false
-            }
+            .focusStyle(focus, FocusKind.Card)
             // combinedClickable is itself focusable — a separate .focusable()
             // here created a SECOND focus node, so the first CENTER only moved
             // focus to the clickable node and the second actually selected
@@ -183,21 +174,14 @@ private fun AccountTile(
             ),
     ) {
         Box(
-            modifier = Modifier
-                .size(128.dp)
-                .clip(RectangleShape)
-                .then(
-                    if (focused) {
-                        Modifier.border(width = 4.dp, color = ChinoAccent, shape = RectangleShape)
-                    } else Modifier,
-                ),
+            modifier = Modifier.size(128.dp),
             contentAlignment = Alignment.Center,
         ) {
             Avatar(displayName = account.displayName, email = account.email, size = 120.dp)
         }
         Text(
             text = account.displayName,
-            color = if (focused) Color.White else ChinoText,
+            color = ChinoFocus.title(ChinoText, focus.focused),
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,
@@ -247,12 +231,9 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                     textAlign = TextAlign.Center,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Button(onClick = onDismiss, shape = ButtonDefaults.shape(shape = RectangleShape)) { Text("Cancel") }
-                    Button(
-                        onClick = onConfirm,
-                        colors = ButtonDefaults.colors(containerColor = ChinoError),
-                        shape = ButtonDefaults.shape(shape = RectangleShape),
-                    ) { Text("Remove") }
+                    ChinoButton(onClick = onDismiss) { Text("Cancel") }
+                    // Filled in the error colour, which it keeps on focus.
+                    ChinoButton(onClick = onConfirm, container = ChinoError, filled = true) { Text("Remove") }
                 }
             }
         }
@@ -261,15 +242,14 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
 
 @Composable
 private fun AddAccountTile(onClick: () -> Unit) {
-    var focused by remember { mutableStateOf(false) }
+    val focus = rememberItemFocus()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .width(160.dp)
-            .clip(RectangleShape)
             .padding(8.dp)
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Card)
             // clickable is focusable on its own — no separate .focusable()
             // (which would need two CENTER presses to activate).
             .clickable { onClick() },
@@ -277,13 +257,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
         Box(
             modifier = Modifier
                 .size(128.dp)
-                .clip(RectangleShape)
-                .background(Color(0x33FFFFFF))
-                .then(
-                    if (focused) {
-                        Modifier.border(width = 4.dp, color = ChinoAccent, shape = RectangleShape)
-                    } else Modifier,
-                ),
+                .background(Color(0x33FFFFFF)),
             contentAlignment = Alignment.Center,
         ) {
             Icon(
@@ -295,7 +269,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
         }
         Text(
             text = "Add account",
-            color = if (focused) Color.White else ChinoText,
+            color = ChinoFocus.title(ChinoText, focus.focused),
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,
             textAlign = TextAlign.Center,

@@ -3,6 +3,7 @@ plugins {
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
+    alias(libs.plugins.roborazzi)
 }
 
 // --- CI build inputs (all optional; defaults preserve local/dev behaviour) ---
@@ -142,6 +143,18 @@ android {
             "/META-INF/io.netty.versions.properties",
         )
     }
+
+    testOptions {
+        // The screenshot tests render under Robolectric, which needs the
+        // app's resources (fonts, strings).
+        unitTests.isIncludeAndroidResources = true
+    }
+}
+
+// The screenshot tests' golden images, committed: recordRoborazziDebug writes
+// them, verifyRoborazziDebug fails when a rendering no longer matches.
+roborazzi {
+    outputDir.set(file("src/test/screenshots"))
 }
 
 dependencies {
@@ -189,4 +202,13 @@ dependencies {
     // JVM unit tests for the pure logic (paging, credits, people, series
     // resume): no Android framework in them, so no Robolectric.
     testImplementation(libs.junit)
+    // Screenshot tests of the focus style: under Robolectric.
+    testImplementation(libs.robolectric)
+    testImplementation(libs.roborazzi)
+    testImplementation(libs.roborazzi.compose)
+    testImplementation(libs.roborazzi.junit.rule)
+    testImplementation(platform(libs.compose.bom))
+    testImplementation(libs.compose.ui.test.junit4)
+    testImplementation(libs.coil.test)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

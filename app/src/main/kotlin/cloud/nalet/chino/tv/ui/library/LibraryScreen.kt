@@ -53,10 +53,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Button
-import androidx.tv.material3.ButtonDefaults
-import androidx.tv.material3.Card
-import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
@@ -67,14 +63,22 @@ import cloud.nalet.chino.tv.data.model.episodeCode
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoCard
 import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.FocusKind
+import cloud.nalet.chino.tv.ui.theme.ItemFocus
 import cloud.nalet.chino.tv.ui.theme.LogoMark
 import cloud.nalet.chino.tv.ui.theme.PosterImage
+import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.shelfPadding
+import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.composables.icons.lucide.Bookmark
@@ -552,7 +556,8 @@ internal fun TvSideRail(
                     .fillMaxWidth()
                     .weight(1f)
                     .padding(start = 16.dp, end = 16.dp, top = 16.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp),
+                // Room between the items for a focused one's growth and ring.
+                verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
                 TvRailButton(icon = Lucide.House, label = "Home", isActive = activeType == null, onClick = onHome)
                 TvRailButton(icon = Lucide.Film, label = "Movies", isActive = activeType == "movie", onClick = onMovies)
@@ -572,32 +577,20 @@ internal fun TvSideRail(
 }
 
 @Composable
-private fun TvRailButton(
+internal fun TvRailButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
     isActive: Boolean,
     onClick: () -> Unit,
+    focus: ItemFocus = rememberItemFocus(),
 ) {
-    // 48dp rounded-square (matches mobile RailButton): active slot #161B22 so
-    // it stands out against the #0D1117 rail; DPAD focus bumps to #21262D + a
-    // blue ring. Icon blue when active/focused, else #8B949E.
-    var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // 48dp square (matches mobile RailButton): the active slot on a surface
+    // fill so it stands out against the rail, its icon in the accent. A nav
+    // item is a plain button in the focus style.
     Box(
         modifier = Modifier
             .size(48.dp)
-            .clip(RectangleShape)
-            .background(
-                when {
-                    focused -> ChinoBorderHi
-                    isActive -> ChinoSurface
-                    else -> Color.Transparent
-                },
-            )
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = if (isActive) ChinoSurface else Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
@@ -613,7 +606,7 @@ private fun TvRailButton(
         Icon(
             imageVector = icon,
             contentDescription = label,
-            tint = if (isActive || focused) ChinoAccent else ChinoMuted,
+            tint = if (isActive) ChinoAccent else ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(24.dp),
         )
     }
@@ -698,20 +691,15 @@ private fun TvSearchBar(
     focusRequester: FocusRequester? = null,
     downTarget: FocusRequester? = null,
 ) {
-    var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
+    // A field to look at, as the live one on the search screen: a row in the
+    // focus style.
+    val focus = rememberItemFocus()
     androidx.compose.foundation.layout.Row(
         modifier = modifier
-            // Web/mobile search field: 42dp tall, 8dp radius (NOT a pill),
-            // #161B22 fill, 1dp #30363D border (focus bumps it to 2dp blue),
-            // #C9D1D9 search glyph. (CDP-verified via the mobile SearchField.)
+            // Web/mobile search field: 42dp tall, square, surface fill, a 1dp
+            // border, the search glyph in fg-2. (CDP-verified via the mobile
+            // SearchField.)
             .height(42.dp)
-            .clip(RectangleShape)
-            .background(ChinoSurface)
-            .border(
-                width = if (focused) 2.dp else 1.dp,
-                color = if (focused) ChinoAccent else ChinoBorder,
-                shape = RectangleShape,
-            )
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             // DOWN from the search field goes to the hero Play (not a rail icon).
             .then(
@@ -719,7 +707,8 @@ private fun TvSearchBar(
                     Modifier.focusProperties { down = downTarget }
                 } else Modifier,
             )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Row, surface = ChinoSurface)
+            .border(1.dp, ChinoBorder, RectangleShape)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
@@ -742,7 +731,7 @@ private fun TvSearchBar(
         )
         Text(
             text = "Search movies, shows…",
-            color = ChinoMuted,
+            color = ChinoFocus.text(ChinoMuted, focus.focused),
             fontSize = 16.sp,
         )
     }
@@ -759,20 +748,14 @@ internal fun TvIconCell(
     onClick: () -> Unit,
     tint: Color = Color.White,
 ) {
-    var focused by remember { androidx.compose.runtime.mutableStateOf(false) }
-    // Web/mobile header icon button: 36×36, 8dp radius (NOT a circle),
-    // transparent at rest (just the white glyph), surface step + blue ring
-    // only on DPAD focus. (CDP-verified via the mobile IconCell.)
+    // Web/mobile header icon button: 36×36, square, transparent at rest (just
+    // the white glyph); a plain button in the focus style. (CDP-verified via
+    // the mobile IconCell.)
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(RectangleShape)
-            .background(if (focused) ChinoBorderHi else Color.Transparent)
-            .then(
-                if (focused) Modifier.border(2.dp, ChinoAccent, RectangleShape)
-                else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
+            .focusStyle(focus, FocusKind.Control, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
@@ -881,24 +864,15 @@ private fun FilterChipsRow(
     }
 }
 
+/** A filter chip: filled in the accent while it is on, plain while it is off. */
 @Composable
-internal fun FilterChip(label: String, active: Boolean, onClick: () -> Unit) {
-    Button(
+internal fun FilterChip(label: String, active: Boolean, focus: ItemFocus = rememberItemFocus(), onClick: () -> Unit) {
+    ChinoButton(
         onClick = onClick,
-        colors = if (active) {
-            ButtonDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.primary,
-                contentColor = Color.White,
-                focusedContainerColor = MaterialTheme.colorScheme.primary,
-                focusedContentColor = Color.White,
-            )
-        } else {
-            ButtonDefaults.colors(
-                containerColor = MaterialTheme.colorScheme.surface,
-                contentColor = MaterialTheme.colorScheme.onSurface,
-            )
-        },
-        shape = ButtonDefaults.shape(shape = RectangleShape),
+        container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
+        content = if (active) Color.White else MaterialTheme.colorScheme.onSurface,
+        filled = active,
+        focus = focus,
     ) {
         Text(text = label)
     }
@@ -919,9 +893,9 @@ private fun ContinueWatchingRow(
     onShowMenu: (CardMenuRequest) -> Unit = {},
 ) {
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(end = 32.dp, top = 12.dp, bottom = 12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
+        modifier = Modifier.shelfRoom().fillMaxWidth(),
     ) {
         tvRowItems(
             items = items,
@@ -983,20 +957,17 @@ private fun ContinueWatchingCard(
     val displayTitle = if (isEpisode && item.seriesTitle != null) item.seriesTitle!! else item.title
     val progress = if (showProgress && item.durationSec > 0)
         (item.positionSec.toFloat() / item.durationSec.toFloat()).coerceIn(0f, 1f) else null
-    var focused by remember { mutableStateOf(false) }
-    Card(
+    val focus = rememberItemFocus()
+    val focused = focus.focused
+    ChinoCard(
         onClick = onClick,
         // LONG-press of CENTER on a focused card opens the actions menu (web
         // parity: the MediaCard overflow menu) — "Mark as watched/unwatched"
         // on every card, plus "Remove from Continue Watching" on the in-
         // progress shelf. Short press still opens detail.
         onLongClick = onLongPress,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = Modifier
-            .width(180.dp)
-            .clip(RectangleShape)
-            .onFocusChanged { focused = it.isFocused },
+        modifier = Modifier.width(180.dp),
+        focus = focus,
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             Box(
@@ -1054,11 +1025,12 @@ private fun ContinueWatchingCard(
                     .padding(horizontal = 10.dp, vertical = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp),
             ) {
+                val meta = ChinoFocus.text(MaterialTheme.colorScheme.onSurfaceVariant, focused)
                 Text(
                     text = displayTitle,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = ChinoFocus.title(MaterialTheme.colorScheme.onSurface, focused),
                     maxLines = 1,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 )
@@ -1073,11 +1045,11 @@ private fun ContinueWatchingCard(
                             color = MaterialTheme.colorScheme.primary,
                         )
                         item.title.takeIf { it.isNotBlank() }?.let { ep ->
-                            Text("·", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                            Text("·", style = MaterialTheme.typography.bodySmall, color = meta)
                             Text(
                                 text = ep,
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = meta,
                                 maxLines = 1,
                                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                             )
@@ -1095,12 +1067,12 @@ private fun ContinueWatchingCard(
                             Text(
                                 text = y.toString(),
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = meta,
                             )
                         }
                         item.rating?.let { r ->
                             if (item.year != null) {
-                                Text("•", style = MaterialTheme.typography.bodySmall, color = MaterialTheme.colorScheme.onSurfaceVariant)
+                                Text("•", style = MaterialTheme.typography.bodySmall, color = meta)
                             }
                             Text(
                                 text = String.format("%.1f", r),
@@ -1118,7 +1090,7 @@ private fun ContinueWatchingCard(
                     Text(
                         text = if (hasRemove) "Hold OK for options" else "Hold OK to mark watched",
                         style = MaterialTheme.typography.bodySmall,
-                        color = ChinoMuted,
+                        color = ChinoFocus.text(ChinoMuted, focused),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
@@ -1240,7 +1212,7 @@ private fun HeroBanner(
                 .padding(start = 48.dp, bottom = 64.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Button(
+            ChinoButton(
                 onClick = onPlay,
                 // Hero Play is the home's default focus target; requester is
                 // driven from LibraryContent so BACK from the player lands here.
@@ -1255,32 +1227,20 @@ private fun HeroBanner(
                         if (upTarget != null) Modifier.focusProperties { up = upTarget }
                         else Modifier,
                     ),
-                shape = ButtonDefaults.shape(shape = RectangleShape),
-                colors = ButtonDefaults.colors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = Color.White,
-                    // Brighter blue on DPAD focus (#79C0FF) so the focused
-                    // state actually reads at 10ft — the resting #58A6FF and a
-                    // matching focus colour were indistinguishable. Pairs with
-                    // tv Button's default focus scale-up.
-                    focusedContainerColor = ChinoAccent,
-                    focusedContentColor = Color.White,
-                ),
+                // Filled: its fill stays on focus, the ring around it.
+                container = MaterialTheme.colorScheme.primary,
+                content = Color.White,
+                filled = true,
             ) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Play", fontSize = 16.sp)
             }
-            Button(
+            ChinoButton(
                 onClick = onMoreInfo,
                 modifier = if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier,
-                shape = ButtonDefaults.shape(shape = RectangleShape),
-                colors = ButtonDefaults.colors(
-                    containerColor = Color.White.copy(alpha = 0.2f),
-                    contentColor = Color.White,
-                    focusedContainerColor = Color.White.copy(alpha = 0.3f),
-                    focusedContentColor = Color.White,
-                ),
+                container = Color.White.copy(alpha = 0.2f),
+                content = Color.White,
             ) {
                 Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
@@ -1309,33 +1269,6 @@ private fun HeroBanner(
     }
 }
 
-/** Shared icon-plus-label button for the LibraryScreen's top action row. */
-@Composable
-private fun ChromeButton(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    onClick: () -> Unit,
-) {
-    Button(
-        onClick = onClick,
-        colors = ButtonDefaults.colors(
-            containerColor = MaterialTheme.colorScheme.surface,
-            contentColor = MaterialTheme.colorScheme.onSurface,
-            focusedContainerColor = MaterialTheme.colorScheme.surfaceVariant,
-            focusedContentColor = MaterialTheme.colorScheme.onBackground,
-        ),
-        shape = ButtonDefaults.shape(shape = RectangleShape),
-    ) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            modifier = Modifier.size(18.dp),
-        )
-        androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
-        Text(text = label)
-    }
-}
-
 @Composable
 internal fun ItemGrid(
     items: List<Item>,
@@ -1355,9 +1288,9 @@ internal fun ItemGrid(
     // lands cleanly on the next row and the outer page glides up via
     // bringIntoView.
     LazyRow(
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        contentPadding = PaddingValues(end = 32.dp, top = 12.dp, bottom = 12.dp),
-        modifier = Modifier.fillMaxWidth(),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
+        modifier = Modifier.shelfRoom().fillMaxWidth(),
     ) {
         tvRowItems(items, key = { it.id }) { item ->
             PosterCard(
@@ -1391,13 +1324,9 @@ internal fun ItemGrid(
 
 @Composable
 internal fun SeeAllCard(onClick: () -> Unit) {
-    Card(
+    ChinoCard(
         onClick = onClick,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = Modifier
-            .width(180.dp)
-            .clip(RectangleShape),
+        modifier = Modifier.width(180.dp),
     ) {
         Column(
             modifier = Modifier
@@ -1426,11 +1355,12 @@ internal fun SeeAllCard(onClick: () -> Unit) {
 }
 
 @Composable
-private fun PosterCard(
+internal fun PosterCard(
     item: Item,
     posterUrl: String,
     onItemSelected: (String) -> Unit,
     onLongPress: () -> Unit = {},
+    focus: ItemFocus = rememberItemFocus(),
 ) {
     // Card body: poster on top in 2:3, meta strip below with title + year.
     // Matches chino-web MediaCard layout — title outside the poster, not
@@ -1438,17 +1368,13 @@ private fun PosterCard(
     // Fixed 180dp width because the parent is a TvLazyRow (Netflix-style
     // horizontal shelf); the previous 6-col grid measured cards via the
     // grid's column-width.
-    var focused by remember { mutableStateOf(false) }
-    Card(
+    val focused = focus.focused
+    ChinoCard(
         onClick = { onItemSelected(item.id) },
         // Hold-OK opens the card actions menu (web MediaCard overflow parity).
         onLongClick = onLongPress,
-        scale = CardDefaults.scale(focusedScale = 1.05f),
-        shape = CardDefaults.shape(shape = RectangleShape),
-        modifier = Modifier
-            .width(180.dp)
-            .clip(RectangleShape)
-            .onFocusChanged { focused = it.isFocused },
+        modifier = Modifier.width(180.dp),
+        focus = focus,
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
             Box(
@@ -1494,11 +1420,12 @@ private fun PosterCard(
                     text = item.title,
                     style = MaterialTheme.typography.bodyMedium,
                     fontWeight = FontWeight.Medium,
-                    color = MaterialTheme.colorScheme.onSurface,
+                    color = ChinoFocus.title(MaterialTheme.colorScheme.onSurface, focused),
                     maxLines = 1,
                 )
                 // Year · rating, both in muted style — matches chino-web
                 // MediaCard's small bodySm meta row.
+                val meta = ChinoFocus.text(MaterialTheme.colorScheme.onSurfaceVariant, focused)
                 androidx.compose.foundation.layout.Row(
                     horizontalArrangement = Arrangement.spacedBy(6.dp),
                 ) {
@@ -1506,7 +1433,7 @@ private fun PosterCard(
                         Text(
                             text = y.toString(),
                             style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant,
+                            color = meta,
                         )
                     }
                     item.rating?.let { r ->
@@ -1514,7 +1441,7 @@ private fun PosterCard(
                             Text(
                                 text = "•",
                                 style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                color = meta,
                             )
                         }
                         Text(
@@ -1531,7 +1458,7 @@ private fun PosterCard(
                     Text(
                         text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
                         style = MaterialTheme.typography.bodySmall,
-                        color = ChinoMuted,
+                        color = ChinoFocus.text(ChinoMuted, focused),
                         maxLines = 1,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                     )
@@ -1590,10 +1517,10 @@ internal fun CardActionsMenu(
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
+        // Not clipped: a focused row grows past the menu's edge.
         Column(
             modifier = Modifier
                 .width(320.dp)
-                .clip(RectangleShape)
                 .background(ChinoSurface)
                 .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
                 // Swallow scrim clicks that land on the card itself.
@@ -1631,19 +1558,16 @@ private fun CardActionRow(
     focusRequester: FocusRequester?,
     onSelected: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
-    val base = Modifier
-        .fillMaxWidth()
-        .background(if (focused) ChinoAccent.copy(alpha = 0.22f) else Color.Transparent)
-        .padding(horizontal = 16.dp, vertical = 12.dp)
-    val m = if (focusRequester != null) base.focusRequester(focusRequester) else base
+    val focus = rememberItemFocus()
     val fg = when {
         action.destructive -> ChinoError
         else -> Color.White
     }
     androidx.compose.foundation.layout.Row(
-        modifier = m
-            .onFocusChanged { focused = it.isFocused }
+        modifier = Modifier
+            .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -1653,7 +1577,8 @@ private fun CardActionRow(
                     onSelected(); true
                 } else false
             }
-            .clickable(onClick = onSelected),
+            .clickable(onClick = onSelected)
+            .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -1693,20 +1618,13 @@ private fun AccountAvatarButton(
     account: cloud.nalet.chino.tv.data.auth.Account,
     onClick: () -> Unit,
 ) {
-    var focused by remember { mutableStateOf(false) }
+    // A button: the avatar is its face. One focus target, the clickable — a
+    // focusable() before it was a second one that took the first OK.
+    val focus = rememberItemFocus()
     Box(
         modifier = Modifier
             .size(36.dp)
-            .clip(RectangleShape)
-            .then(
-                if (focused) Modifier.border(
-                    width = 2.dp,
-                    color = ChinoAccent,
-                    shape = RectangleShape,
-                ) else Modifier,
-            )
-            .onFocusChanged { focused = it.isFocused }
-            .focusable()
+            .focusStyle(focus, FocusKind.Control)
             .clickable(onClick = onClick),
         contentAlignment = Alignment.Center,
     ) {
