@@ -67,7 +67,29 @@ data class Item(
     /** On a person's filmography only: their roles on this title, in
      *  katalog-api's credit order (["director", "writer"]). */
     val roles: List<String> = emptyList(),
+    /** On a search's titles only (GET v1/search): how the title matched the
+     *  query — exact, prefix, words, alternative, similar or plot. Decoded,
+     *  shown nowhere: the results' order already says it. */
+    val match: String? = null,
+    /** On an episode a search found only: its series. No screen shows an
+     *  episode hit yet (ui/search/CatalogSearch.kt, SEARCH_TYPES). */
+    val series: SearchSeries? = null,
 ) : FileMember
+
+/**
+ * The series of an episode a search found ([Item.series]), as chino-api's
+ * v1/search sends it: its id and title, whether the series matched the query
+ * by its own title in the same search, and its poster (chino-api's
+ * /v1/items/{id}/poster route). Every field has a default, so one short of a
+ * field never fails the search.
+ */
+@Serializable
+data class SearchSeries(
+    val id: String = "",
+    val title: String = "",
+    val matched: Boolean = false,
+    @SerialName("poster_url") val posterUrl: String? = null,
+)
 
 @Serializable
 data class Subtitle(

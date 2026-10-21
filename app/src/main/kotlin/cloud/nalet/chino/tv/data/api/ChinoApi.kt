@@ -64,8 +64,26 @@ interface ChinoApi {
     suspend fun similar(@Path("id") id: String, @Query("limit") limit: Int? = 12): ItemsPage
 
     /**
+     * One search of the catalog: the titles of [types] (comma separated:
+     * movie, series, episode) ranked TOGETHER by how they match [q], best
+     * first, and the people whose names match it, ranked apart — [limit]
+     * titles (at most 100) and [people] people (at most 50). Render both in
+     * the order chino-api returns them: no client re-rank, no grouping by
+     * type. A chino-api older than this route answers 404, and
+     * [cloud.nalet.chino.tv.ui.search.searchCatalog] searches as before.
+     */
+    @GET("v1/search")
+    suspend fun search(
+        @Query("q") q: String,
+        @Query("types") types: String,
+        @Query("limit") limit: Int? = null,
+        @Query("people") people: Int? = null,
+    ): SearchResponse
+
+    /**
      * People search — accent/case-insensitive name match, server-ranked.
-     * Powers the Search "Cast & crew" people row. `credits` is the number of
+     * The Search "Cast & crew" row's people from a chino-api older than
+     * [search], which answers them itself. `credits` is the number of
      * titles the person is credited on. Render the returned order as-is (no
      * client re-rank), same as the title search.
      */
@@ -551,7 +569,8 @@ data class GenresResponse(val genres: List<String> = emptyList())
  *  titles they're credited on (rendered "· N titles"), left out when 0.
  *  `profile_url` — chino-api's portrait route, set only when `has_profile` —
  *  loads with the stream token, as posters do; without one the UI shows an
- *  initials avatar. */
+ *  initials avatar. `match`, how the name matched the query, comes with
+ *  v1/search's people only and is shown nowhere. */
 @Serializable
 data class Person(
     val id: String,
@@ -559,12 +578,23 @@ data class Person(
     val credits: Int = 0,
     @SerialName("has_profile") val hasProfile: Boolean = false,
     @SerialName("profile_url") val profileUrl: String? = null,
+    val match: String? = null,
 )
 
 @Serializable
 data class PeopleResponse(
     val people: List<Person> = emptyList(),
     val total: Int = 0,
+)
+
+/** GET /v1/search: the titles, films and series ranked together (best first,
+ *  whatever the type), each the [Item] the lists send plus how it matched;
+ *  and the people, ranked apart, as /v1/people sends them. Both lists are in
+ *  the order to show them. */
+@Serializable
+data class SearchResponse(
+    val items: List<Item> = emptyList(),
+    val people: List<Person> = emptyList(),
 )
 
 /** Person surface payload: the person, what the catalog knows about them —

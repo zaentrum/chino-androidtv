@@ -19,8 +19,6 @@ import cloud.nalet.chino.tv.ui.slots.SlotActionState
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.async
-import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -33,10 +31,11 @@ sealed interface SearchUiState {
     data object Empty : SearchUiState                          // no query yet
     data object Searching : SearchUiState
     data class Results(
-        // Movies + series merged into one grid (movies first), matching the
-        // single merged results grid chino-mobile/web render. Rendered in the
-        // SERVER's relevance order (exact > prefix > FTS rank > alpha) — no
-        // client-side re-rank.
+        // Films and series in one grid (chino-mobile/web render a single
+        // results grid too), ranked TOGETHER by the server: v1/search puts
+        // the best match first, whatever its type. Rendered in the SERVER's
+        // order — no client-side re-rank, no grouping by type. (An older
+        // chino-api without v1/search: its films, then its series.)
         val items: List<Item>,
         // Matching people for the "Cast & crew" row. Server-ranked; rendered
         // as-is. Empty when no people match (the row hides).
@@ -101,24 +100,13 @@ class SearchViewModel(
             delay(250)
             _state.value = SearchUiState.Searching
             try {
-                // Fan out movies + series + people in parallel. Movies+series are
-                // merged into one grid (movies first) — chino-mobile/web render a
-                // single results grid rather than per-type shelves. People feed
-                // the "Cast & crew" row. The server already ranks each list
-                // (exact > prefix > FTS rank > alpha), so we render every list in
-                // the order chino-api returns — NO client-side relevance re-sort.
-                val (titles, people) = coroutineScope {
-                    val mDef = async { api.listItems(q = q, limit = PAGE_SIZE, type = "movie") }
-                    val sDef = async { api.listItems(q = q, limit = PAGE_SIZE, type = "series") }
-                    // People search is best-effort: an older chino-api without the
-                    // endpoint (404) just leaves the row empty rather than failing
-                    // the whole search.
-                    val pDef = async {
-                        runCatching { api.searchPeople(q = q, limit = PEOPLE_LIMIT).people }
-                            .getOrDefault(emptyList())
-                    }
-                    (mDef.await().items + sDef.await().items) to pDef.await()
-                }
+                // One search of the catalog (searchCatalog, v1/search): the
+                // titles — films and series ranked together, best first — for
+                // the one grid, and the people for the "Cast & crew" row,
+                // ranked apart. Both are rendered in the order chino-api
+                // returns them — NO client-side re-sort, no grouping by type.
+                // An older chino-api without v1/search is searched as before.
+                val (titles, people) = searchCatalog(api, q)
                 telemetry.event(
                     "search_submit",
                     extra = mapOf(
@@ -186,11 +174,6 @@ class SearchViewModel(
     }
 
     companion object {
-        private const val PAGE_SIZE = 60
-        // Cap the people row — it sits above the title grid, so a long list
-        // would push the titles below the fold.
-        private const val PEOPLE_LIMIT = 12
-
         fun factory(container: AppContainer) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =

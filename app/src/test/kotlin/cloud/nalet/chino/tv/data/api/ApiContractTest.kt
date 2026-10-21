@@ -2,6 +2,7 @@ package cloud.nalet.chino.tv.data.api
 
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.ItemsPage
+import cloud.nalet.chino.tv.data.model.SearchSeries
 import kotlinx.serialization.KSerializer
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -28,6 +29,62 @@ class ApiContractTest {
         )
         assertEquals(listOf("m1"), page.items.map { it.id })
         assertEquals("movie", page.items[0].kind)
+    }
+
+    @Test
+    fun `a search answers its titles in one ranked order, each with how it matched, and its people`() {
+        val found = decode(
+            SearchResponse.serializer(),
+            """{"product":"chino","items":[
+                 {"id":"m1","type":"movie","title":"Sintel","year":2010,"rating":7.4,
+                  "poster_url":"/api/v1/items/m1/poster","backdrop_url":"/api/v1/items/m1/backdrop",
+                  "watched_at":"2026-10-01T20:00:00Z","match":"exact"},
+                 {"id":"s1","type":"series","title":"Sintel Tales","year":2012,"poster_url":"/api/v1/items/s1/poster","match":"prefix"},
+                 {"id":"m2","type":"movie","title":"Sintel Returns","poster_url":"/api/v1/items/m2/poster","match":"prefix"},
+                 {"id":"e1","type":"episode","title":"The Sintel Scale","season_number":5,"episode_number":14,"parent_id":"se5",
+                  "match":"words","series":{"id":"s2","title":"Dragon Keepers","matched":true,"poster_url":"/api/v1/items/s2/poster"}},
+                 {"id":"m3","type":"movie","title":"Sintering"}],
+               "people":[
+                 {"id":"p1","name":"Colin Levy","credits":3,"has_profile":true,"profile_url":"/api/v1/people/p1/profile","match":"prefix"},
+                 {"id":"p2","name":"Halina Reijn","has_profile":false}],
+               "source":"katalog"}""",
+        )
+        // Films and series ranked together, in the server's order — not films, then series.
+        assertEquals(listOf("m1", "s1", "m2", "e1", "m3"), found.items.map { it.id })
+        assertEquals(listOf("movie", "series", "movie", "episode", "movie"), found.items.map { it.kind })
+        // How each matched; a title without it (a server searching as before) is null.
+        assertEquals(listOf("exact", "prefix", "prefix", "words", null), found.items.map { it.match })
+        // The same Item the lists send.
+        val film = found.items[0]
+        assertEquals(2010, film.year)
+        assertEquals(7.4, film.rating!!, 0.0)
+        assertEquals("2026-10-01T20:00:00Z", film.watchedAt)
+        // Only an episode names its series, with its season and episode numbers.
+        assertEquals(listOf(null, null, null, "s2", null), found.items.map { it.series?.id })
+        val episode = found.items[3]
+        assertEquals(SearchSeries(id = "s2", title = "Dragon Keepers", matched = true, posterUrl = "/api/v1/items/s2/poster"), episode.series)
+        assertEquals(5, episode.seasonNumber)
+        assertEquals(14, episode.episodeNumber)
+
+        // The people, ranked apart, as /v1/people sends them, plus how the name matched.
+        assertEquals(listOf("p1", "p2"), found.people.map { it.id })
+        assertEquals(listOf("prefix", null), found.people.map { it.match })
+        assertEquals(3, found.people[0].credits)
+        assertEquals("/api/v1/people/p1/profile", found.people[0].profileUrl)
+        assertEquals(0, found.people[1].credits)
+        assertFalse(found.people[1].hasProfile)
+
+        // A series short of fields still decodes, and the search with it.
+        val short = decode(SearchResponse.serializer(), """{"items":[{"id":"e2","type":"episode","title":"T","series":{"id":"s3"}}]}""")
+        assertEquals(SearchSeries(id = "s3"), short.items.single().series)
+        // Nothing found: both lists empty.
+        val nothing = decode(SearchResponse.serializer(), """{"product":"chino","items":[],"people":[],"source":"katalog"}""")
+        assertTrue(nothing.items.isEmpty())
+        assertTrue(nothing.people.isEmpty())
+        // The lists' items carry neither field.
+        val listed = decode(ItemsPage.serializer(), """{"items":[{"id":"m1","type":"movie","title":"Sintel"}]}""").items.single()
+        assertNull(listed.match)
+        assertNull(listed.series)
     }
 
     @Test
