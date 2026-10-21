@@ -55,11 +55,11 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
-import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.input.key.Key
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.type
@@ -78,6 +78,13 @@ import cloud.nalet.chino.tv.ui.person.PersonPortrait
 import cloud.nalet.chino.tv.ui.slots.SlotButtons
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.Search
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.text.TextRange
+import androidx.compose.ui.text.input.TextFieldValue
 
 @Composable
 fun SearchScreen(
@@ -97,10 +104,53 @@ fun SearchScreen(
     val state by viewModel.state.collectAsState()
     val emptySlot by viewModel.emptySlot.collectAsState()
     val slotActionStates by viewModel.slotActionStates.collectAsState()
-    // DOWN from the search field jumps straight to the first result card
-    // (not the rail). Wired via focusProperties on the input + a requester on
-    // the first card — only while results are showing. With no results, it
-    // goes to the first of the addons' buttons under the message, if any.
+    SearchContent(
+        query = q,
+        state = state,
+        emptySlot = emptySlot,
+        slotActionStates = slotActionStates,
+        onQueryChange = viewModel::onQueryChange,
+        onSlotAction = viewModel::onSlotAction,
+        onItemSelected = onItemSelected,
+        onPersonSelected = onPersonSelected,
+        onHomeNav = onHomeNav,
+        onMoviesNav = onMoviesNav,
+        onSeriesNav = onSeriesNav,
+        onSettings = onSettings,
+        onWatchlist = onWatchlist,
+        onAccountClick = onAccountClick,
+        noticesBell = noticesBell,
+        activeAccount = activeAccount,
+    )
+}
+
+/** The search screen as its [state] has it: the rail, the top bar with the
+ *  live field, and what the search found. */
+@Composable
+internal fun SearchContent(
+    query: String,
+    state: SearchUiState,
+    emptySlot: List<cloud.nalet.chino.tv.data.SlotButton>,
+    slotActionStates: Map<String, cloud.nalet.chino.tv.ui.slots.SlotActionState>,
+    onQueryChange: (String) -> Unit,
+    onSlotAction: (cloud.nalet.chino.tv.data.SlotButton) -> Unit,
+    onItemSelected: (String) -> Unit,
+    onPersonSelected: (String) -> Unit = {},
+    onHomeNav: () -> Unit = {},
+    onMoviesNav: () -> Unit = {},
+    onSeriesNav: () -> Unit = {},
+    onSettings: () -> Unit = {},
+    onWatchlist: () -> Unit = {},
+    onAccountClick: () -> Unit = {},
+    noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
+    activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
+) {
+    val q = query
+    // DOWN from the search field goes to the first row of what was found:
+    // the first of the cast & crew where they show, else the first title;
+    // with no match, the first of the addons' buttons under the message, if
+    // any; else nowhere. Only LEFT leaves the field for the rail
+    // (SearchInput). A requester on the first chip or card.
     val firstResultFocus = remember { FocusRequester() }
     val firstSlotFocus = remember { FocusRequester() }
     // Integrated into the app shell — rail + top bar — with the LIVE search
@@ -124,9 +174,10 @@ fun SearchScreen(
                     searchSlot = {
                         SearchInput(
                             query = q,
-                            onChange = viewModel::onQueryChange,
+                            onChange = onQueryChange,
                             downTarget = when {
-                                state is SearchUiState.Results -> firstResultFocus
+                                state is SearchUiState.Results && (state.people.isNotEmpty() || state.items.isNotEmpty()) ->
+                                    firstResultFocus
                                 state == SearchUiState.NoMatches && emptySlot.isNotEmpty() -> firstSlotFocus
                                 else -> null
                             },
@@ -148,7 +199,7 @@ fun SearchScreen(
                                 SlotButtons(
                                     buttons = emptySlot,
                                     actionStates = slotActionStates,
-                                    onAction = viewModel::onSlotAction,
+                                    onAction = onSlotAction,
                                     firstFocus = firstSlotFocus,
                                     modifier = Modifier.padding(top = 16.dp),
                                 )
@@ -184,6 +235,11 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
     // The field takes the focus style as a row does: its frame follows the
     // text field's focus.
     val focus = rememberItemFocus()
+    val focusManager = LocalFocusManager.current
+    // The text and where the cursor is: LEFT and RIGHT move the cursor, and
+    // leave the field only from its start and its end.
+    var field by remember { mutableStateOf(TextFieldValue(query, TextRange(query.length))) }
+    if (field.text != query) field = TextFieldValue(query, TextRange(query.length))
     // Sized to match the top-bar search field (42dp, square, 16sp) so the
     // live input reads as the header search, like web.
     Row(
@@ -204,8 +260,11 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
         )
         Box(modifier = Modifier.weight(1f)) {
             BasicTextField(
-                value = query,
-                onValueChange = onChange,
+                value = field,
+                onValueChange = {
+                    field = it
+                    if (it.text != query) onChange(it.text)
+                },
                 singleLine = true,
                 textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
                 cursorBrush = SolidColor(ChinoAccent),
@@ -217,10 +276,26 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
                 keyboardActions = KeyboardActions(onSearch = { runCatching { downTarget?.requestFocus() } }),
                 modifier = Modifier
                     .fillMaxWidth()
-                    .then(
-                        if (downTarget != null) Modifier.focusProperties { down = downTarget }
-                        else Modifier,
-                    )
+                    // The remote's keys before the text field takes them - it
+                    // would move its cursor with every one: DOWN to the first
+                    // row of what was found, or nowhere; UP nowhere; LEFT from
+                    // the field's start to the rail, the only way there; RIGHT
+                    // from its end on to the bell and the account.
+                    .onPreviewKeyEvent { e ->
+                        if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
+                        val atStart = field.selection.collapsed && field.selection.start == 0
+                        val atEnd = field.selection.collapsed && field.selection.end == field.text.length
+                        when (e.key) {
+                            Key.DirectionDown -> {
+                                runCatching { downTarget?.requestFocus() }
+                                true
+                            }
+                            Key.DirectionUp -> true
+                            Key.DirectionLeft -> atStart && focusManager.moveFocus(FocusDirection.Left).let { true }
+                            Key.DirectionRight -> atEnd && focusManager.moveFocus(FocusDirection.Right).let { true }
+                            else -> false
+                        }
+                    }
                     .focusRequester(focusRequester),
             )
             if (query.isEmpty()) {
