@@ -14,8 +14,10 @@ import kotlin.math.pow
  * way WCAG 2.2 does: the ring at least 3:1 against everything around a
  * focused item (SC 1.4.11, 2.4.13) - the page, the surfaces its neighbours
  * sit on, the focused surface a row's ring is drawn on - and the text on the
- * focused surface at least 4.5:1 (SC 1.4.3). Where the design system's token
- * suite publishes a pair, the number here is its number.
+ * focused surface at least 4.5:1 (SC 1.4.3), as are the label of a filled
+ * button, which keeps its fill on focus, and the dimmest text at rest. Where
+ * the design system's token suite publishes a pair, the number here is its
+ * number.
  */
 class FocusContrastTest {
 
@@ -26,6 +28,23 @@ class FocusContrastTest {
         assertEquals(ChinoFocusRing, ChinoFocus.Ring)
         assertEquals(ChinoSurfaceFocus, ChinoFocus.Surface)
         assertEquals(ChinoAccent, ChinoFocus.CameFrom) // --cloud-blue
+        assertEquals(Color(0xFF7B8597), ChinoDim) // --fg-dim
+    }
+
+    @Test
+    fun `a filled button's label is the page's colour, readable on its fill`() {
+        // Play, Resume and the other filled blue buttons and chips (white
+        // was 2.53:1 there), and Remove's red.
+        assertPair("the label on cloud-blue", ChinoBg, ChinoAccent, published = 7.58, min = 4.5)
+        assertAtLeast("the label on the error colour", ChinoBg, ChinoError, 4.5)
+    }
+
+    @Test
+    fun `the dimmest text is readable on the canvas, if not on the focused surface`() {
+        // On the focused surface it is brightened to fg-muted (below).
+        assertPair("fg-dim on bg", ChinoDim, ChinoBg, published = 5.15, min = 4.5)
+        assertPair("fg-dim on surface", ChinoDim, ChinoSurface, published = 4.87, min = 4.5)
+        assertPair("fg-dim on surface-2", ChinoDim, ChinoSurfaceHi, published = 4.63, min = 4.5)
     }
 
     @Test

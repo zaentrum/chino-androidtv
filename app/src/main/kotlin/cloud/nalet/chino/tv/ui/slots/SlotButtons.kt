@@ -106,7 +106,7 @@ private fun SlotButtonView(
         onClick = onClick,
         modifier = modifier,
         container = MaterialTheme.colorScheme.primary,
-        content = Color.White,
+        content = MaterialTheme.colorScheme.onPrimary,
         filled = true,
     ) {
         val (icon, description) = when {

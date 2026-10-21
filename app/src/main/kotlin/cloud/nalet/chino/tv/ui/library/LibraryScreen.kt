@@ -870,7 +870,7 @@ internal fun FilterChip(label: String, active: Boolean, focus: ItemFocus = remem
     ChinoButton(
         onClick = onClick,
         container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        content = if (active) Color.White else MaterialTheme.colorScheme.onSurface,
+        content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
         filled = active,
         focus = focus,
     ) {
@@ -1229,7 +1229,7 @@ private fun HeroBanner(
                     ),
                 // Filled: its fill stays on focus, the ring around it.
                 container = MaterialTheme.colorScheme.primary,
-                content = Color.White,
+                content = MaterialTheme.colorScheme.onPrimary,
                 filled = true,
             ) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))

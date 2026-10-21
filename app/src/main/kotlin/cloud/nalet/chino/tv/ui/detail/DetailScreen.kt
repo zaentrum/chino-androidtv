@@ -466,13 +466,13 @@ private fun DetailActions(
 }
 
 /** The detail's emphasized action, Play or Resume: a filled button, its fill
- *  kept on focus. */
+ *  kept on focus, its label in the page's colour. */
 @Composable
 internal fun PlayButton(label: String, onClick: () -> Unit, focus: ItemFocus = rememberItemFocus()) {
     ChinoButton(
         onClick = onClick,
         container = MaterialTheme.colorScheme.primary,
-        content = Color.White,
+        content = MaterialTheme.colorScheme.onPrimary,
         filled = true,
         focus = focus,
     ) {

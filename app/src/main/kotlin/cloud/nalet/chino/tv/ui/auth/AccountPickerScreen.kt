@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -232,8 +233,11 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
                     ChinoButton(onClick = onDismiss) { Text("Cancel") }
-                    // Filled in the error colour, which it keeps on focus.
-                    ChinoButton(onClick = onConfirm, container = ChinoError, filled = true) { Text("Remove") }
+                    // Filled in the error colour, which it keeps on focus; its
+                    // label in the page's colour, as on a filled blue button.
+                    ChinoButton(onClick = onConfirm, container = ChinoError, content = ChinoBg, filled = true) {
+                        Text("Remove")
+                    }
                 }
             }
         }

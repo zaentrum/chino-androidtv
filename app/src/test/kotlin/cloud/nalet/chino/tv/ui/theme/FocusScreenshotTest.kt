@@ -24,8 +24,11 @@ import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
+import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
+import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
 import androidx.test.core.app.ApplicationProvider
 import androidx.tv.material3.Icon
@@ -38,6 +41,9 @@ import cloud.nalet.chino.tv.ui.detail.PlayButton
 import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.PosterCard
 import cloud.nalet.chino.tv.ui.library.TvRailButton
+import cloud.nalet.chino.tv.ui.settings.AUDIO_LANGS
+import cloud.nalet.chino.tv.ui.settings.LangPickerRow
+import cloud.nalet.chino.tv.ui.settings.Section
 import coil.Coil
 import coil.ImageLoader
 import coil.annotation.ExperimentalCoilApi
@@ -63,7 +69,8 @@ import org.robolectric.annotation.GraphicsMode
 /**
  * The focus style, kind by kind, at rest and focused: a row (an episode, and
  * the one the page was opened on), a card (a poster), a filled and a plain
- * button, a chip and a nav item, each beside neighbours at rest. Rendered on
+ * button, a chip and a nav item, each beside neighbours at rest, and
+ * Settings' row of language chips with one focused. Rendered on
  * the JVM under Robolectric's native graphics, at the TV's 960 × 540 dp
  * (1920 × 1080 px), in the app's theme.
  *
@@ -112,14 +119,22 @@ class FocusScreenshotTest {
     @Test fun navAtRest() = shot("focus_nav_rest") { Nav(focus = null) }
     @Test fun navFocused() = shot("focus_nav_focused", focus = 1) { Nav(focus = it) }
 
+    // Settings' language chips go on to a second line where one is too
+    // narrow for them: Nederlands focused, on one line, its ring clear of its
+    // neighbours.
+    @Test fun languageChipFocused() =
+        shot("focus_settings_languages_focused", focusText = "Nederlands") { Languages() }
+
     /**
      * Renders [content] in the theme on the page background, moves the
-     * remote's focus to item [focus] (none for the look at rest) and takes
-     * the picture once the ring and the growth have settled.
+     * remote's focus to item [focus], or to the item that reads [focusText]
+     * (neither for the look at rest), and takes the picture once the ring and
+     * the growth have settled.
      */
     private fun shot(
         name: String,
         focus: Int? = null,
+        focusText: String? = null,
         content: @Composable (Pair<Int, FocusRequester>?) -> Unit,
     ) {
         val target = FocusRequester()
@@ -134,6 +149,10 @@ class FocusScreenshotTest {
         compose.waitForIdle()
         if (focus != null) {
             compose.runOnIdle { target.requestFocus() }
+            compose.waitForIdle()
+        }
+        if (focusText != null) {
+            compose.onNodeWithText(focusText).performSemanticsAction(SemanticsActions.RequestFocus)
             compose.waitForIdle()
         }
         compose.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = options)
@@ -212,6 +231,22 @@ class FocusScreenshotTest {
                 Box(Modifier.requester(focus, i)) {
                     TvRailButton(icon = icon, label = label, isActive = active, onClick = {})
                 }
+            }
+        }
+    }
+
+    @Composable
+    private fun Languages() {
+        // As Settings lays it out: the section in the column beside the rail
+        // (1280 dp less the rail's 80 and the column's 2 × 24), on the page's
+        // surface, Original chosen.
+        Box(Modifier.width(1152.dp).background(ChinoSurface)) {
+            Section(
+                title = "Audio",
+                subtitle = "Default audio language. Picks the closest matching track on each item. " +
+                    "Original keeps whatever the source marks as the default track.",
+            ) {
+                LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
             }
         }
     }

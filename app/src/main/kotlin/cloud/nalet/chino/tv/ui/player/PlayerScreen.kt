@@ -6,6 +6,7 @@ import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
@@ -1738,15 +1739,16 @@ private fun NextEpisodeButton(
             verticalAlignment = Alignment.CenterVertically,
             horizontalArrangement = Arrangement.spacedBy(8.dp),
         ) {
+            // The label in the page's colour, as on every filled blue button.
             androidx.tv.material3.Icon(
                 imageVector = Lucide.SkipForward,
                 contentDescription = null,
-                tint = Color.White,
+                tint = ChinoBg,
                 modifier = Modifier.size(18.dp),
             )
             Text(
                 text = "Next episode",
-                color = Color.White,
+                color = ChinoBg,
                 fontWeight = FontWeight.SemiBold,
             )
         }

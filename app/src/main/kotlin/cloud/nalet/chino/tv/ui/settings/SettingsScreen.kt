@@ -11,6 +11,8 @@ import androidx.compose.foundation.focusable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
@@ -42,6 +44,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
@@ -397,10 +400,11 @@ private val LANG_CHOICES = listOf(
     "nl" to "Nederlands",
 )
 private val SUB_LANGS = listOf("off" to "Off") + LANG_CHOICES
-private val AUDIO_LANGS = listOf("orig" to "Original") + LANG_CHOICES
+internal val AUDIO_LANGS = listOf("orig" to "Original") + LANG_CHOICES
 
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
-private fun LangPickerRow(
+internal fun LangPickerRow(
     label: String,
     value: String,
     options: List<Pair<String, String>>,
@@ -413,14 +417,20 @@ private fun LangPickerRow(
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+        // The chips go on to another line where they do not fit on one, each
+        // on one line, and 12 dp apart: a focused one's ring and growth stay
+        // clear of its neighbours.
+        FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            verticalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        ) {
             options.forEach { (code, name) ->
                 val on = value == code
                 // A chip: filled in the accent while chosen, plain otherwise.
                 ChinoButton(
                     onClick = { onChange(code) },
                     container = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    content = if (on) Color.White else MaterialTheme.colorScheme.onSurface,
+                    content = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
                     filled = on,
                 ) {
                     Text(text = name)
@@ -431,7 +441,7 @@ private fun LangPickerRow(
 }
 
 @Composable
-private fun Section(
+internal fun Section(
     title: String,
     subtitle: String,
     content: @Composable () -> Unit,
@@ -488,7 +498,7 @@ private fun ToggleRow(
         ChinoButton(
             onClick = { onChange(!value) },
             container = if (value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-            content = if (value) Color.White else MaterialTheme.colorScheme.onSurface,
+            content = if (value) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             filled = value,
         ) {
             Text(text = if (value) "ON" else "OFF", fontWeight = FontWeight.SemiBold)
