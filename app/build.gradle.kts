@@ -54,7 +54,7 @@ android {
         // each device its form factor by manifest features (leanback vs touch),
         // not by versionCode.
         versionCode = (ciVersionCode ?: 4) + 2_000_000
-        versionName = "0.1.4"
+        versionName = "0.1.5"
         resValue("string", "app_name", "Chino")
 
         // Neutral bring-your-own-server client: everything below is an internal,
