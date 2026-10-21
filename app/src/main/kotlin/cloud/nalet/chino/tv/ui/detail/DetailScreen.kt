@@ -367,7 +367,7 @@ private fun DetailContent(
  *  Trailer, then the watchlist / watched / like toggles as ICON CIRCLES
  *  (Plus/Eye/Heart, tinted when active) rather than wide labeled buttons. */
 @Composable
-private fun DetailActions(
+internal fun DetailActions(
     item: Item,
     /** "Play", "Resume 12:34", "Resume S02E03", "Play S02E04". */
     primaryLabel: String,
@@ -482,7 +482,8 @@ internal fun PlayButton(label: String, onClick: () -> Unit, focus: ItemFocus = r
     }
 }
 
-/** An icon-only toggle: filled in its colour while on, plain while off. */
+/** An icon-only toggle: filled in its colour while on, its icon then in the
+ *  page's colour, and plain while off. */
 @Composable
 private fun DetailActionCircle(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
@@ -495,7 +496,7 @@ private fun DetailActionCircle(
         onClick = onClick,
         modifier = Modifier.size(44.dp),
         container = if (active) activeColor else Color.White.copy(alpha = 0.1f),
-        content = Color.White,
+        content = if (active) ChinoBg else Color.White,
         filled = active,
         contentPadding = PaddingValues(0.dp),
     ) {
@@ -1086,7 +1087,7 @@ private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
         Icon(
             imageVector = if (watched) Lucide.Check else Lucide.Eye,
             contentDescription = if (watched) "Mark episode as unwatched" else "Mark episode as watched",
-            tint = if (watched) Color.White else ChinoFocus.title(ChinoMuted, focus.focused),
+            tint = if (watched) ChinoBg else ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(18.dp),
         )
     }

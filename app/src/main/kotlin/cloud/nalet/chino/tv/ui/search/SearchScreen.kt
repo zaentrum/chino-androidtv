@@ -428,7 +428,7 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                             .background(ChinoSignalGreen)
                             .padding(horizontal = 6.dp, vertical = 2.dp),
                     ) {
-                        Text(text = "✓", color = Color.White, fontWeight = FontWeight.Bold, fontSize = 12.sp)
+                        Text(text = "✓", color = ChinoBg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
                     }
                 }
             }

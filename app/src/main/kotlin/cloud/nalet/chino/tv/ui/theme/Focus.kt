@@ -136,11 +136,14 @@ object ChinoFocus {
 
     /** Text under a focused item's title, one step brighter: fg-muted becomes
      *  fg-2 and fg-dim becomes fg-muted (fg-dim never sits on the focused
-     *  surface). Other colours stay. */
+     *  surface). The error's red, which does not read on the focused surface
+     *  (3.88:1), becomes fg; an icon beside it keeps the red, which is enough
+     *  for an icon. Other colours stay. */
     fun text(rest: Color, focused: Boolean): Color = when {
         !focused -> rest
         rest == ChinoMuted -> ChinoText
         rest == ChinoDim -> ChinoMuted
+        rest == ChinoError -> ChinoFg
         else -> rest
     }
 

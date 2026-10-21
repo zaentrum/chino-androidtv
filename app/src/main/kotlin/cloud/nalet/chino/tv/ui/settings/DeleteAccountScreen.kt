@@ -34,6 +34,7 @@ import cloud.nalet.chino.tv.data.isFinal
 import cloud.nalet.chino.tv.data.text
 import cloud.nalet.chino.tv.data.title
 import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoErrorBg
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 
@@ -155,10 +156,11 @@ fun DeleteAccountScreen(
                         Text(if (final) "Close" else "Cancel")
                     }
                     if (!final) {
-                        // Filled in the error tint, which it keeps on focus.
+                        // Filled in the error's tint, which it keeps on focus:
+                        // red on its tint, as the design system has it.
                         ChinoButton(
                             onClick = { viewModel.delete() },
-                            container = ChinoError.copy(alpha = 0.25f),
+                            container = ChinoErrorBg,
                             content = ChinoError,
                             filled = true,
                         ) {

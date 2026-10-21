@@ -14,10 +14,10 @@ import kotlin.math.pow
  * way WCAG 2.2 does: the ring at least 3:1 against everything around a
  * focused item (SC 1.4.11, 2.4.13) - the page, the surfaces its neighbours
  * sit on, the focused surface a row's ring is drawn on - and the text on the
- * focused surface at least 4.5:1 (SC 1.4.3), as are the label of a filled
- * button, which keeps its fill on focus, and the dimmest text at rest. Where
- * the design system's token suite publishes a pair, the number here is its
- * number.
+ * focused surface at least 4.5:1 (SC 1.4.3), as are a label on a filled
+ * colour, which keeps its fill on focus, the error's red and the dimmest text
+ * at rest. Where the design system's token suite publishes a pair, the number
+ * here is its number.
  */
 class FocusContrastTest {
 
@@ -29,14 +29,39 @@ class FocusContrastTest {
         assertEquals(ChinoSurfaceFocus, ChinoFocus.Surface)
         assertEquals(ChinoAccent, ChinoFocus.CameFrom) // --cloud-blue
         assertEquals(Color(0xFF7B8597), ChinoDim) // --fg-dim
+        assertEquals(Color(0xFFF85149), ChinoError) // --state-error
+        assertEquals(Color(0xFF25171C), ChinoErrorBg) // --state-error-bg
+        assertEquals(Color(0xFF2EA043), ChinoSignalGreen) // --signal-green, --state-success
+        assertEquals(Color(0xFFF2B233), ChinoSignalAmber) // --signal-amber, --state-warning
     }
 
     @Test
-    fun `a filled button's label is the page's colour, readable on its fill`() {
-        // Play, Resume and the other filled blue buttons and chips (white
-        // was 2.53:1 there), and Remove's red.
-        assertPair("the label on cloud-blue", ChinoBg, ChinoAccent, published = 7.58, min = 4.5)
-        assertAtLeast("the label on the error colour", ChinoBg, ChinoError, 4.5)
+    fun `a label or an icon on a filled colour is the page's colour, readable on its fill`() {
+        // Play, Resume, the other filled blue buttons and chips and the blue
+        // badges (white was 2.53:1 there); the green watched marks (white
+        // 3.37); Remove and the liked heart on the red (white 3.35). The
+        // design system publishes each colour's pair with bg as its text on
+        // bg, the same two colours.
+        assertPair("bg on cloud-blue", ChinoBg, ChinoAccent, published = 7.58, min = 4.5)
+        assertPair("bg on the error's red", ChinoBg, ChinoError, published = 5.71, min = 4.5)
+        assertPair("bg on signal-green", ChinoBg, ChinoSignalGreen, published = 5.68, min = 4.5)
+        assertPair("bg on signal-amber", ChinoBg, ChinoSignalAmber, published = 10.21, min = 4.5)
+    }
+
+    @Test
+    fun `the error's red reads on the canvas and on its tint, and is fg on the focused surface`() {
+        assertPair("error on bg", ChinoError, ChinoBg, published = 5.71, min = 4.5)
+        assertPair("error on surface", ChinoError, ChinoSurface, published = 5.41, min = 4.5)
+        assertPair("error on surface-2", ChinoError, ChinoSurfaceHi, published = 5.14, min = 4.5)
+        // Delete Account's button: red on the error's tint.
+        assertPair("error on its tint", ChinoError, ChinoErrorBg, published = 5.14, min = 4.5)
+        // A destructive entry focused: its red label would not read on the
+        // focused surface, so it is fg there; its icon keeps the red, enough
+        // for an icon.
+        assertTrue(contrast(ChinoError, ChinoSurfaceFocus) < 4.5)
+        assertEquals(ChinoFg, ChinoFocus.text(ChinoError, focused = true))
+        assertEquals(ChinoError, ChinoFocus.text(ChinoError, focused = false))
+        assertAtLeast("a red icon on surface-focus", ChinoError, ChinoSurfaceFocus, 3.0)
     }
 
     @Test
@@ -78,10 +103,10 @@ class FocusContrastTest {
         assertEquals(Color.White, ChinoFocus.title(Color.White, focused = true))
         assertEquals(ChinoText, ChinoFocus.title(ChinoText, focused = false))
         // The other colours text keeps on a focused row: white titles, the
-        // accent's episode codes and ratings, a destructive entry's red.
+        // accent's episode codes and ratings. (A destructive entry's red
+        // becomes fg: above.)
         assertAtLeast("white on surface-focus", Color.White, ChinoSurfaceFocus, 4.5)
         assertAtLeast("accent on surface-focus", ChinoAccent, ChinoSurfaceFocus, 4.5)
-        assertAtLeast("error on surface-focus", ChinoError, ChinoSurfaceFocus, 4.5)
     }
 
     @Test

@@ -414,7 +414,8 @@ private fun HeaderIconButton(
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
-        Text(text = label, color = tint, fontSize = 14.sp)
+        // Delete's red label is fg while focused, its icon red.
+        Text(text = label, color = ChinoFocus.text(tint, focus.focused), fontSize = 14.sp)
     }
 }
 

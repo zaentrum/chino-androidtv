@@ -18,6 +18,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -25,8 +26,9 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.input.InputMode
 import androidx.compose.ui.platform.LocalInputModeManager
 import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.test.hasContentDescription
+import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
-import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.unit.dp
@@ -35,12 +37,16 @@ import androidx.tv.material3.Icon
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.model.Item
+import cloud.nalet.chino.tv.ui.browse.PosterGridCard
+import cloud.nalet.chino.tv.ui.detail.DetailActions
 import cloud.nalet.chino.tv.ui.detail.EpisodeResume
 import cloud.nalet.chino.tv.ui.detail.EpisodeRow
 import cloud.nalet.chino.tv.ui.detail.PlayButton
 import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.PosterCard
+import cloud.nalet.chino.tv.ui.library.RatingBadge
 import cloud.nalet.chino.tv.ui.library.TvRailButton
+import cloud.nalet.chino.tv.ui.notices.BellWithCount
 import cloud.nalet.chino.tv.ui.settings.AUDIO_LANGS
 import cloud.nalet.chino.tv.ui.settings.LangPickerRow
 import cloud.nalet.chino.tv.ui.settings.Section
@@ -70,7 +76,9 @@ import org.robolectric.annotation.GraphicsMode
  * The focus style, kind by kind, at rest and focused: a row (an episode, and
  * the one the page was opened on), a card (a poster), a filled and a plain
  * button, a chip and a nav item, each beside neighbours at rest, and
- * Settings' row of language chips with one focused. Rendered on
+ * Settings' row of language chips with one focused; and the labels and icons
+ * on filled colours, in the page's colour (the detail's toggles, the badges).
+ * Rendered on
  * the JVM under Robolectric's native graphics, at the TV's 960 × 540 dp
  * (1920 × 1080 px), in the app's theme.
  *
@@ -123,18 +131,25 @@ class FocusScreenshotTest {
     // narrow for them: Nederlands focused, on one line, its ring clear of its
     // neighbours.
     @Test fun languageChipFocused() =
-        shot("focus_settings_languages_focused", focusText = "Nederlands") { Languages() }
+        shot("focus_settings_languages_focused", focusLabel = "Nederlands") { Languages() }
+
+    // A label or an icon on a filled colour is the page's colour: the
+    // detail's actions with every toggle on, and the liked one focused, its
+    // fill kept; the badges on cards, the hero's rating and the bell's count.
+    @Test fun filledActionsAtRest() = shot("fills_detail_actions_rest") { Actions() }
+    @Test fun filledActionFocused() = shot("fills_detail_actions_focused", focusLabel = "Liked") { Actions() }
+    @Test fun badges() = shot("fills_badges") { Badges() }
 
     /**
      * Renders [content] in the theme on the page background, moves the
-     * remote's focus to item [focus], or to the item that reads [focusText]
-     * (neither for the look at rest), and takes the picture once the ring and
-     * the growth have settled.
+     * remote's focus to item [focus], or to the item that reads or is named
+     * [focusLabel] (neither for the look at rest), and takes the picture once
+     * the ring and the growth have settled.
      */
     private fun shot(
         name: String,
         focus: Int? = null,
-        focusText: String? = null,
+        focusLabel: String? = null,
         content: @Composable (Pair<Int, FocusRequester>?) -> Unit,
     ) {
         val target = FocusRequester()
@@ -151,8 +166,9 @@ class FocusScreenshotTest {
             compose.runOnIdle { target.requestFocus() }
             compose.waitForIdle()
         }
-        if (focusText != null) {
-            compose.onNodeWithText(focusText).performSemanticsAction(SemanticsActions.RequestFocus)
+        if (focusLabel != null) {
+            compose.onNode(hasText(focusLabel) or hasContentDescription(focusLabel))
+                .performSemanticsAction(SemanticsActions.RequestFocus)
             compose.waitForIdle()
         }
         compose.onRoot().captureRoboImage("src/test/screenshots/$name.png", roborazziOptions = options)
@@ -247,6 +263,50 @@ class FocusScreenshotTest {
                     "Original keeps whatever the source marks as the default track.",
             ) {
                 LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
+            }
+        }
+    }
+
+    @Composable
+    private fun Actions() {
+        // The detail's actions: Resume filled blue, then the toggles on - in a
+        // list and watched (green), liked (red).
+        DetailActions(
+            item = Item(id = "p1", title = "Quiet Orchard", kind = "movie", year = 2021, watchedAt = "2026-10-01T20:00:00Z"),
+            primaryLabel = "Resume 12:34",
+            canResume = true,
+            inWatchlist = true,
+            liked = true,
+            onPlay = {},
+            onToggleWatchlist = {},
+            onOpenListPicker = {},
+            onToggleLike = {},
+            onToggleWatched = {},
+            onTrailerLaunch = {},
+            onPlayTrailer = {},
+        )
+    }
+
+    @Composable
+    private fun Badges() {
+        // A browse card saved (blue) and watched (green), a shelf's poster
+        // watched, the hero's rating (blue) and the bell's unread count (blue).
+        Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room), verticalAlignment = Alignment.Top) {
+            PosterGridCard(
+                item = posters[0].copy(watchedAt = "2026-10-01T20:00:00Z"),
+                posterUrl = "https://artwork.test/p1",
+                onClick = {},
+                saved = true,
+                modifier = Modifier.width(180.dp),
+            )
+            PosterCard(
+                item = posters[1].copy(watchedAt = "2026-10-01T20:00:00Z"),
+                posterUrl = "https://artwork.test/p2",
+                onItemSelected = {},
+            )
+            Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
+                RatingBadge(rating = 7.4)
+                BellWithCount(unread = 3, onClick = {})
             }
         }
     }

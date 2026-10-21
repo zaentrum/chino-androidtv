@@ -11,7 +11,6 @@ import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.semantics.clearAndSetSemantics
 import androidx.compose.ui.text.font.FontWeight
@@ -28,6 +27,7 @@ import cloud.nalet.chino.tv.data.badgeText
 import cloud.nalet.chino.tv.data.bellLabel
 import cloud.nalet.chino.tv.ui.library.TvIconCell
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import com.composables.icons.lucide.Bell
 import com.composables.icons.lucide.Lucide
 import kotlinx.coroutines.delay
@@ -64,16 +64,22 @@ internal fun NoticesBellCell(bell: NoticesBell, account: Account) {
     }
     val state by bell.notices.state.collectAsState()
     if (!state.showsFor(account.id)) return
-    val unread = state.list.unread
+    BellWithCount(unread = state.list.unread, onClick = bell.open)
+}
+
+/** The bell, with the count of unread notices over its corner where there are
+ *  any: filled in the accent, the number in the page's colour. */
+@Composable
+internal fun BellWithCount(unread: Int, onClick: () -> Unit) {
     Box {
-        TvIconCell(icon = Lucide.Bell, contentDescription = bellLabel(unread), onClick = bell.open)
+        TvIconCell(icon = Lucide.Bell, contentDescription = bellLabel(unread), onClick = onClick)
         val badge = badgeText(unread)
         if (badge.isNotEmpty()) {
             // The count over the bell's corner: read by the cell's label, so
             // not twice here.
             Text(
                 text = badge,
-                color = Color.White,
+                color = ChinoBg,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Bold,
                 textAlign = TextAlign.Center,

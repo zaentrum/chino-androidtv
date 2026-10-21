@@ -15,6 +15,7 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Text
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import coil.compose.AsyncImage
 import java.security.MessageDigest
 
@@ -58,9 +59,11 @@ fun Avatar(
             .background(bg),
         contentAlignment = Alignment.Center,
     ) {
+        // The initial on its colour in the page's colour, as every glyph on
+        // a filled colour is.
         Text(
             text = initial,
-            color = Color.White,
+            color = ChinoBg,
             fontSize = (size.value * 0.4f).sp,
             fontWeight = FontWeight.SemiBold,
         )

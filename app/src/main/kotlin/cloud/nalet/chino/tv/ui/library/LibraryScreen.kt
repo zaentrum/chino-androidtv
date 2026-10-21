@@ -996,7 +996,7 @@ private fun ContinueWatchingCard(
                     ) {
                         Text(
                             text = "✓",
-                            color = Color.White,
+                            color = ChinoBg,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -1100,6 +1100,24 @@ private fun ContinueWatchingCard(
     }
 }
 
+/** The hero's rating: filled in the accent, its number in the page's colour. */
+@Composable
+internal fun RatingBadge(rating: Double) {
+    Box(
+        modifier = Modifier
+            .clip(RectangleShape)
+            .background(MaterialTheme.colorScheme.primary)
+            .padding(horizontal = 8.dp, vertical = 2.dp),
+    ) {
+        Text(
+            text = String.format("%.1f", rating),
+            color = MaterialTheme.colorScheme.onPrimary,
+            fontSize = 14.sp,
+            fontWeight = FontWeight.SemiBold,
+        )
+    }
+}
+
 @Composable
 private fun HeroBanner(
     item: Item,
@@ -1176,19 +1194,7 @@ private fun HeroBanner(
                 item.year?.let { y -> Text(y.toString(), color = Color.White, fontSize = 16.sp) }
                 item.rating?.let { r ->
                     if (item.year != null) Text("•", color = Color.White)
-                    Box(
-                        modifier = Modifier
-                            .clip(RectangleShape)
-                            .background(MaterialTheme.colorScheme.primary)
-                            .padding(horizontal = 8.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = String.format("%.1f", r),
-                            color = Color.White,
-                            fontSize = 14.sp,
-                            fontWeight = FontWeight.SemiBold,
-                        )
-                    }
+                    RatingBadge(r)
                 }
             }
             item.overview?.let { o ->
@@ -1404,7 +1410,7 @@ internal fun PosterCard(
                     ) {
                         Text(
                             text = "✓",
-                            color = Color.White,
+                            color = ChinoBg,
                             fontWeight = FontWeight.Bold,
                             style = MaterialTheme.typography.bodyMedium,
                         )
@@ -1590,7 +1596,8 @@ private fun CardActionRow(
         )
         Text(
             text = action.label,
-            color = fg,
+            // A destructive one's red label is fg while focused, its icon red.
+            color = ChinoFocus.text(fg, focus.focused),
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,
