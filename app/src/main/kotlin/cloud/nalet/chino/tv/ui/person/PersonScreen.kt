@@ -66,8 +66,6 @@ import cloud.nalet.chino.tv.ui.detail.formatRoles
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import kotlinx.coroutines.launch
-import cloud.nalet.chino.tv.data.api.LoadFailure
-import cloud.nalet.chino.tv.ui.theme.GoneError
 
 /**
  * Person / Filmography surface, chino-web's PersonPage on a TV. Rail +
@@ -120,20 +118,15 @@ fun PersonScreen(
                     )
                     when (val s = state) {
                         PersonUiState.Loading -> Centered("Loading…")
-                        is PersonUiState.Error -> if (s.failure.kind == LoadFailure.Kind.NotFound) {
-                            // Gone: no try brings it back.
-                            GoneError(
-                                title = "this person isn't in the library anymore",
-                                reason = s.failure.reason,
-                                onBack = onBack,
-                            )
-                        } else {
-                            LoadError(
-                                title = "couldn't load this person",
-                                failure = s.failure,
-                                onRetry = viewModel::load,
-                            )
-                        }
+                        // Back where the person is gone or not the viewer's to
+                        // see, which no try mends.
+                        is PersonUiState.Error -> LoadError(
+                            title = "couldn't load this person",
+                            failure = s.failure,
+                            onRetry = viewModel::load,
+                            what = "this person",
+                            onBack = onBack,
+                        )
                         is PersonUiState.Ready -> Filmography(
                             s = s,
                             onItemSelected = onItemSelected,

@@ -4,6 +4,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
@@ -24,6 +25,7 @@ import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
 import cloud.nalet.chino.tv.ui.theme.LogoMark
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.LocalSignIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import cloud.nalet.chino.tv.ui.auth.AuthViewModel
@@ -266,446 +268,462 @@ fun ChinoTvNavHost(container: AppContainer) {
         }
     }
 
-    NavHost(navController = navController, startDestination = start) {
-        composable(Routes.SERVER) {
-            val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
-            val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
-            cloud.nalet.chino.tv.ui.onboarding.ServerSetupScreen(
-                viewModel = vm,
-                onConnected = {
-                    // The AppContainer's lazy clients (OIDC/Retrofit) were built from
-                    // the previous (default) server config; save() doesn't rebuild
-                    // them. Restart the process so the graph re-reads the just-saved
-                    // server — the boot gate then routes to AUTH on the new server.
-                    val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
-                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    appCtx.startActivity(intent)
-                    Runtime.getRuntime().exit(0)
-                },
-            )
+    // A sign-in that no longer holds after the silent refresh (SignInLapses):
+    // no error screen - straight to sign-in, for the account chosen. The
+    // error screens' own "sign in" (LocalSignIn, where a screen could not be
+    // spared) goes the same way.
+    val goToSignIn: () -> Unit = {
+        navController.navigate(Routes.AUTH) {
+            popUpTo(0) // wipe the entire backstack
+            launchSingleTop = true
         }
-        composable(Routes.SERVER_CHANGE) {
-            val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.changeServerFactory(container))
-            val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
-            cloud.nalet.chino.tv.ui.onboarding.ServerSetupScreen(
-                viewModel = vm,
-                onConnected = {
-                    // Same restart path as the first-run SERVER route: the lazy
-                    // OIDC/Retrofit clients were built from the OLD server config,
-                    // and save() (plus the account wipe the VM just did) doesn't
-                    // rebuild them. Restart the process so the graph re-reads the
-                    // just-saved server; the boot gate then routes to AUTH because
-                    // accounts were cleared.
-                    val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
-                    intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                    appCtx.startActivity(intent)
-                    Runtime.getRuntime().exit(0)
-                },
-                onCancel = { navController.popBackStack() },
-            )
-        }
-        composable(Routes.ZAP) {
-            // Full-screen channel-surf — no rail / top bar (unlike every other
-            // destination). BACK returns home; CENTER expands into the real
-            // player at the current scene via ?resume=.
-            val vm: cloud.nalet.chino.tv.ui.zap.ZapViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.zap.ZapViewModel.factory(container))
-            cloud.nalet.chino.tv.ui.zap.ZapScreen(
-                viewModel = vm,
-                onExpand = { id, resume -> navController.navigate(Routes.player(id, resumeSec = resume)) },
-                onHome = {
-                    navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } }
-                },
-            )
-        }
-        composable(Routes.AUTH) {
-            val vm: AuthViewModel = viewModel(factory = AuthViewModel.factory(container))
-            DeviceCodeScreen(
-                viewModel = vm,
-                onAuthenticated = {
-                    navController.navigate(Routes.LIBRARY) {
-                        popUpTo(0) // clear AUTH + any stale screens
-                    }
-                },
-            )
-        }
-        composable(Routes.PICKER) {
-            AccountPickerScreen(
-                accountStore = container.accountStore,
-                onPicked = {
-                    navController.navigate(Routes.LIBRARY) {
-                        popUpTo(Routes.PICKER) { inclusive = true }
-                    }
-                },
-                onAddAccount = {
-                    navController.navigate(Routes.AUTH)
-                },
-            )
-        }
-        composable(Routes.LIBRARY) {
-            val vm: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
-            // APP-START warm: prefetch the first upcoming Zap card so opening
-            // Zap is instant. Idempotent per process (guarded inside the
-            // container) and fully off the main thread — a cold home never
-            // waits on it.
-            LaunchedEffect(Unit) { container.warmFirstZapCard() }
-            // Drain crash reports a previous process wrote on its way down.
-            // The library only mounts once an account is active, so the
-            // bearer the submit needs is available (chino-mobile drains from
-            // its signed-in shell the same way). Idempotent per process —
-            // BugReporter guards internally, so re-entering home doesn't
-            // re-walk the directory.
-            LaunchedEffect(Unit) { container.bugReporter.flushPending() }
-            LibraryScreen(
-                viewModel = vm,
-                onItemSelected = { itemId -> navController.navigate(Routes.detail(itemId)) },
-                onHeroPlay = { itemId -> navController.navigate(Routes.player(itemId)) { launchSingleTop = true } },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) {
-                        popUpTo(Routes.LIBRARY) { inclusive = false }
-                    }
-                },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onZap = { navController.navigate(Routes.ZAP) },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.MOVIES) {
-            val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "movie"), key = "browse/movie")
-            cloud.nalet.chino.tv.ui.browse.BrowseScreen(
-                viewModel = vm,
-                pageTitle = "Movies",
-                type = "movie",
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = {},
-                onSeriesNav = { navController.navigate(Routes.SERIES) { popUpTo(Routes.MOVIES) { inclusive = true } } },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.SERIES) {
-            val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "series"), key = "browse/series")
-            cloud.nalet.chino.tv.ui.browse.BrowseScreen(
-                viewModel = vm,
-                pageTitle = "Shows",
-                type = "series",
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) { popUpTo(Routes.SERIES) { inclusive = true } } },
-                onSeriesNav = {},
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.WATCHLIST) {
-            val vm: WatchlistViewModel = viewModel(factory = WatchlistViewModel.factory(container))
-            WatchlistScreen(
-                viewModel = vm,
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onZapNav = { navController.navigate(Routes.ZAP) },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.NOTICES) {
-            val vm: NoticesViewModel = viewModel(factory = NoticesViewModel.factory(container))
-            NoticesScreen(
-                viewModel = vm,
-                // A notice about a title opens its detail screen. launchSingleTop:
-                // a remote can deliver one OK twice.
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) { launchSingleTop = true } },
-                noticesBell = noticesBell,
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.SETTINGS) {
-            val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
-            SettingsScreen(
-                viewModel = vm,
-                onSwitchAccount = {
-                    navController.navigate(Routes.PICKER) {
-                        popUpTo(Routes.LIBRARY) { inclusive = false }
-                    }
-                },
-                // Profile + watch-history (web/mobile parity) — reached from
-                // the Account section. launchSingleTop so re-pressing the row
-                // doesn't stack copies.
-                onProfile = { navController.navigate(Routes.PROFILE) { launchSingleTop = true } },
-                onDeleteAccount = if (activeAccount != null) {
-                    { navController.navigate(Routes.DELETE_ACCOUNT) { launchSingleTop = true } }
-                } else null,
-                onChangeServer = { navController.navigate(Routes.SERVER_CHANGE) },
-                serverHost = container.serverConfig.baseUrl
-                    .substringAfter("://")
-                    .substringBefore("/")
-                    .takeIf { it.isNotBlank() },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.DELETE_ACCOUNT) {
-            val vm: cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
-            cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
-                viewModel = vm,
-                onCancel = { navController.popBackStack() },
-                // Deleted and signed out: back to the start, the back stack
-                // gone with the account — who's watching when others are
-                // signed in on this TV, else sign-in.
-                onSignedOut = { othersRemain ->
-                    navController.navigate(if (othersRemain) Routes.PICKER else Routes.AUTH) {
-                        popUpTo(0)
-                        launchSingleTop = true
-                    }
-                },
-            )
-        }
-        composable(Routes.PROFILE) {
-            val vm: cloud.nalet.chino.tv.ui.profile.ProfileViewModel =
-                viewModel(factory = cloud.nalet.chino.tv.ui.profile.ProfileViewModel.factory(container))
-            cloud.nalet.chino.tv.ui.profile.ProfileScreen(
-                viewModel = vm,
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(Routes.SEARCH) {
-            val vm: SearchViewModel = viewModel(factory = SearchViewModel.factory(container))
-            SearchScreen(
-                viewModel = vm,
-                onItemSelected = { itemId -> navController.navigate(Routes.detail(itemId)) },
-                onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                // launchSingleTop: the rail Watchlist button routes here from
-                // every screen — re-pressing it while the hub is already on
-                // top must not stack a second copy.
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-            )
-        }
-        composable(
-            route = Routes.DETAIL,
-            arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
-            val vm: DetailViewModel = viewModel(
-                factory = DetailViewModel.factory(container, itemId),
-                key = "detail/$itemId",
-            )
-            DetailScreen(
-                viewModel = vm,
-                onPlay = { id, resumeSec ->
-                    // launchSingleTop: the Detail Play button is a tv-material3
-                    // Button that fires onClick on DPAD_CENTER key-UP; the BRAVIA
-                    // remote can deliver that activation twice, which without this
-                    // guard pushes a SECOND player/{id} entry. The duplicate
-                    // DETAIL/PLAYER pair is what makes BACK loop back into the
-                    // player instead of reaching home (Stube #151).
-                    navController.navigate(
-                        Routes.player(id, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0)),
-                    ) {
-                        launchSingleTop = true
-                    }
-                },
-                onPlayEpisode = { episodeId ->
-                    navController.navigate(Routes.player(episodeId)) { launchSingleTop = true }
-                },
-                // launchSingleTop: a doubled DPAD_CENTER must not stack two.
-                onPlayTrailer = { id, extraId ->
-                    navController.navigate(Routes.trailer(id, extraId)) { launchSingleTop = true }
-                },
-                onSimilarSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(
-            route = Routes.TRAILER,
-            arguments = listOf(
-                navArgument("itemId") { type = NavType.StringType },
-                navArgument("extraId") { type = NavType.StringType },
-            ),
-        ) { backStackEntry ->
-            val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
-            val extraId = backStackEntry.arguments?.getString("extraId").orEmpty()
-            // The full player, in extra mode: what it asks the server for is
-            // the title's detail alone (PlayMode.Extra).
-            val vm: PlayerViewModel = viewModel(
-                factory = PlayerViewModel.factory(container, PlayMode.Extra(itemId, extraId)),
-                key = "trailer/$itemId/$extraId",
-            )
-            PlayerScreen(
-                viewModel = vm,
-                // The chrome's Home, as for a title.
-                onHome = {
-                    navController.navigate(Routes.LIBRARY) {
-                        popUpTo(Routes.LIBRARY) { inclusive = true }
-                    }
-                },
-                // At the trailer's end. Only while it is still the screen on
-                // top: a BACK that came first has popped it already.
-                onClose = {
-                    if (navController.currentBackStackEntry?.id == backStackEntry.id) {
-                        navController.popBackStack()
-                    }
-                },
-            )
-        }
-        composable(
-            route = Routes.PERSON,
-            arguments = listOf(navArgument("personId") { type = NavType.StringType }),
-        ) { backStackEntry ->
-            val personId = backStackEntry.arguments?.getString("personId").orEmpty()
-            val vm: PersonViewModel = viewModel(
-                factory = PersonViewModel.factory(container, personId),
-                key = "person/$personId",
-            )
-            PersonScreen(
-                viewModel = vm,
-                onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
-                onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
-                onMoviesNav = { navController.navigate(Routes.MOVIES) },
-                onSeriesNav = { navController.navigate(Routes.SERIES) },
-                onSearch = { navController.navigate(Routes.SEARCH) },
-                onSettings = { navController.navigate(Routes.SETTINGS) },
-                onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
-                onAccountClick = {
-                    navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
-                },
-                noticesBell = noticesBell,
-                activeAccount = activeAccount,
-                onBack = { navController.popBackStack() },
-            )
-        }
-        composable(
-            route = Routes.PLAYER,
-            arguments = listOf(
-                navArgument("itemId") { type = NavType.StringType },
-                navArgument("fromStart") { type = NavType.BoolType; defaultValue = false },
-                navArgument("fromBinge") { type = NavType.BoolType; defaultValue = false },
-                navArgument("resume") { type = NavType.IntType; defaultValue = 0 },
-            ),
-        ) { backStackEntry ->
-            val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
-            val fromStart = backStackEntry.arguments?.getBoolean("fromStart") ?: false
-            val fromBinge = backStackEntry.arguments?.getBoolean("fromBinge") ?: false
-            // Zap hands off with ?resume=<scene sec> so the full player resumes
-            // at the channel-surf playhead, not the saved progress (0 for a
-            // never-watched teaser). >0 wins over the server progress lookup.
-            val resume = backStackEntry.arguments?.getInt("resume") ?: 0
-            val vm: PlayerViewModel = viewModel(
-                factory = PlayerViewModel.factory(container, PlayMode.Title(itemId, fromStart, fromBinge, resume)),
-                // Include fromStart + fromBinge in the key so navigating to
-                // the SAME episode with a different entry mode (Resume → Play
-                // from start, or manual Next → auto-play-next) rebuilds the
-                // VM and re-runs prepare() with the new flags instead of
-                // reusing the cached Ready state.
-                key = "player/$itemId/fromStart=$fromStart/fromBinge=$fromBinge/resume=$resume",
-            )
-            PlayerScreen(
-                viewModel = vm,
-                // Explicit Home affordance in the full-screen player chrome
-                // (no persistent rail there). Pops the whole player/detail
-                // stack and lands on the library root, matching the home-nav
-                // used by the other screens' rail buttons.
-                onHome = {
-                    navController.navigate(Routes.LIBRARY) {
-                        popUpTo(Routes.LIBRARY) { inclusive = true }
-                    }
-                },
-                onPlayNext = { nextId ->
-                    // Auto-chain into the next episode in binge mode so the
-                    // VM pre-skips its intro. Manual prev/next buttons in the
-                    // chrome route through the same callback but we can't
-                    // distinguish here — both feel like "user wants the next
-                    // episode now", so both get the pre-skip. If we want a
-                    // different behavior for the chrome buttons later we'd
-                    // need to thread a separate callback through.
-                    navController.navigate(Routes.player(nextId, fromBinge = true)) {
-                        popUpTo(Routes.PLAYER) { inclusive = true }
-                    }
-                },
-            )
+    }
+    LaunchedEffect(Unit) {
+        container.signInLapses.lapses.collect { goToSignIn() }
+    }
+
+    CompositionLocalProvider(LocalSignIn provides goToSignIn) {
+        NavHost(navController = navController, startDestination = start) {
+            composable(Routes.SERVER) {
+                val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
+                val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                cloud.nalet.chino.tv.ui.onboarding.ServerSetupScreen(
+                    viewModel = vm,
+                    onConnected = {
+                        // The AppContainer's lazy clients (OIDC/Retrofit) were built from
+                        // the previous (default) server config; save() doesn't rebuild
+                        // them. Restart the process so the graph re-reads the just-saved
+                        // server — the boot gate then routes to AUTH on the new server.
+                        val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
+                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        appCtx.startActivity(intent)
+                        Runtime.getRuntime().exit(0)
+                    },
+                )
+            }
+            composable(Routes.SERVER_CHANGE) {
+                val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.changeServerFactory(container))
+                val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
+                cloud.nalet.chino.tv.ui.onboarding.ServerSetupScreen(
+                    viewModel = vm,
+                    onConnected = {
+                        // Same restart path as the first-run SERVER route: the lazy
+                        // OIDC/Retrofit clients were built from the OLD server config,
+                        // and save() (plus the account wipe the VM just did) doesn't
+                        // rebuild them. Restart the process so the graph re-reads the
+                        // just-saved server; the boot gate then routes to AUTH because
+                        // accounts were cleared.
+                        val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
+                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
+                        appCtx.startActivity(intent)
+                        Runtime.getRuntime().exit(0)
+                    },
+                    onCancel = { navController.popBackStack() },
+                )
+            }
+            composable(Routes.ZAP) {
+                // Full-screen channel-surf — no rail / top bar (unlike every other
+                // destination). BACK returns home; CENTER expands into the real
+                // player at the current scene via ?resume=.
+                val vm: cloud.nalet.chino.tv.ui.zap.ZapViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.zap.ZapViewModel.factory(container))
+                cloud.nalet.chino.tv.ui.zap.ZapScreen(
+                    viewModel = vm,
+                    onExpand = { id, resume -> navController.navigate(Routes.player(id, resumeSec = resume)) },
+                    onHome = {
+                        navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } }
+                    },
+                )
+            }
+            composable(Routes.AUTH) {
+                val vm: AuthViewModel = viewModel(factory = AuthViewModel.factory(container))
+                DeviceCodeScreen(
+                    viewModel = vm,
+                    onAuthenticated = {
+                        navController.navigate(Routes.LIBRARY) {
+                            popUpTo(0) // clear AUTH + any stale screens
+                        }
+                    },
+                )
+            }
+            composable(Routes.PICKER) {
+                AccountPickerScreen(
+                    accountStore = container.accountStore,
+                    onPicked = {
+                        navController.navigate(Routes.LIBRARY) {
+                            popUpTo(Routes.PICKER) { inclusive = true }
+                        }
+                    },
+                    onAddAccount = {
+                        navController.navigate(Routes.AUTH)
+                    },
+                )
+            }
+            composable(Routes.LIBRARY) {
+                val vm: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
+                // APP-START warm: prefetch the first upcoming Zap card so opening
+                // Zap is instant. Idempotent per process (guarded inside the
+                // container) and fully off the main thread — a cold home never
+                // waits on it.
+                LaunchedEffect(Unit) { container.warmFirstZapCard() }
+                // Drain crash reports a previous process wrote on its way down.
+                // The library only mounts once an account is active, so the
+                // bearer the submit needs is available (chino-mobile drains from
+                // its signed-in shell the same way). Idempotent per process —
+                // BugReporter guards internally, so re-entering home doesn't
+                // re-walk the directory.
+                LaunchedEffect(Unit) { container.bugReporter.flushPending() }
+                LibraryScreen(
+                    viewModel = vm,
+                    onItemSelected = { itemId -> navController.navigate(Routes.detail(itemId)) },
+                    onHeroPlay = { itemId -> navController.navigate(Routes.player(itemId)) { launchSingleTop = true } },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) {
+                            popUpTo(Routes.LIBRARY) { inclusive = false }
+                        }
+                    },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onZap = { navController.navigate(Routes.ZAP) },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.MOVIES) {
+                val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "movie"), key = "browse/movie")
+                cloud.nalet.chino.tv.ui.browse.BrowseScreen(
+                    viewModel = vm,
+                    pageTitle = "Movies",
+                    type = "movie",
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = {},
+                    onSeriesNav = { navController.navigate(Routes.SERIES) { popUpTo(Routes.MOVIES) { inclusive = true } } },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.SERIES) {
+                val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "series"), key = "browse/series")
+                cloud.nalet.chino.tv.ui.browse.BrowseScreen(
+                    viewModel = vm,
+                    pageTitle = "Shows",
+                    type = "series",
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) { popUpTo(Routes.SERIES) { inclusive = true } } },
+                    onSeriesNav = {},
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.WATCHLIST) {
+                val vm: WatchlistViewModel = viewModel(factory = WatchlistViewModel.factory(container))
+                WatchlistScreen(
+                    viewModel = vm,
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.NOTICES) {
+                val vm: NoticesViewModel = viewModel(factory = NoticesViewModel.factory(container))
+                NoticesScreen(
+                    viewModel = vm,
+                    // A notice about a title opens its detail screen. launchSingleTop:
+                    // a remote can deliver one OK twice.
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) { launchSingleTop = true } },
+                    noticesBell = noticesBell,
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.SETTINGS) {
+                val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
+                SettingsScreen(
+                    viewModel = vm,
+                    onSwitchAccount = {
+                        navController.navigate(Routes.PICKER) {
+                            popUpTo(Routes.LIBRARY) { inclusive = false }
+                        }
+                    },
+                    // Profile + watch-history (web/mobile parity) — reached from
+                    // the Account section. launchSingleTop so re-pressing the row
+                    // doesn't stack copies.
+                    onProfile = { navController.navigate(Routes.PROFILE) { launchSingleTop = true } },
+                    onDeleteAccount = if (activeAccount != null) {
+                        { navController.navigate(Routes.DELETE_ACCOUNT) { launchSingleTop = true } }
+                    } else null,
+                    onChangeServer = { navController.navigate(Routes.SERVER_CHANGE) },
+                    serverHost = container.serverConfig.baseUrl
+                        .substringAfter("://")
+                        .substringBefore("/")
+                        .takeIf { it.isNotBlank() },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.DELETE_ACCOUNT) {
+                val vm: cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
+                cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
+                    viewModel = vm,
+                    onCancel = { navController.popBackStack() },
+                    // Deleted and signed out: back to the start, the back stack
+                    // gone with the account — who's watching when others are
+                    // signed in on this TV, else sign-in.
+                    onSignedOut = { othersRemain ->
+                        navController.navigate(if (othersRemain) Routes.PICKER else Routes.AUTH) {
+                            popUpTo(0)
+                            launchSingleTop = true
+                        }
+                    },
+                )
+            }
+            composable(Routes.PROFILE) {
+                val vm: cloud.nalet.chino.tv.ui.profile.ProfileViewModel =
+                    viewModel(factory = cloud.nalet.chino.tv.ui.profile.ProfileViewModel.factory(container))
+                cloud.nalet.chino.tv.ui.profile.ProfileScreen(
+                    viewModel = vm,
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(Routes.SEARCH) {
+                val vm: SearchViewModel = viewModel(factory = SearchViewModel.factory(container))
+                SearchScreen(
+                    viewModel = vm,
+                    onItemSelected = { itemId -> navController.navigate(Routes.detail(itemId)) },
+                    onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    // launchSingleTop: the rail Watchlist button routes here from
+                    // every screen — re-pressing it while the hub is already on
+                    // top must not stack a second copy.
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                )
+            }
+            composable(
+                route = Routes.DETAIL,
+                arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
+                val vm: DetailViewModel = viewModel(
+                    factory = DetailViewModel.factory(container, itemId),
+                    key = "detail/$itemId",
+                )
+                DetailScreen(
+                    viewModel = vm,
+                    onPlay = { id, resumeSec ->
+                        // launchSingleTop: the Detail Play button is a tv-material3
+                        // Button that fires onClick on DPAD_CENTER key-UP; the BRAVIA
+                        // remote can deliver that activation twice, which without this
+                        // guard pushes a SECOND player/{id} entry. The duplicate
+                        // DETAIL/PLAYER pair is what makes BACK loop back into the
+                        // player instead of reaching home (Stube #151).
+                        navController.navigate(
+                            Routes.player(id, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0)),
+                        ) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onPlayEpisode = { episodeId ->
+                        navController.navigate(Routes.player(episodeId)) { launchSingleTop = true }
+                    },
+                    // launchSingleTop: a doubled DPAD_CENTER must not stack two.
+                    onPlayTrailer = { id, extraId ->
+                        navController.navigate(Routes.trailer(id, extraId)) { launchSingleTop = true }
+                    },
+                    onSimilarSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onPersonSelected = { personId -> navController.navigate(Routes.person(personId)) },
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = Routes.TRAILER,
+                arguments = listOf(
+                    navArgument("itemId") { type = NavType.StringType },
+                    navArgument("extraId") { type = NavType.StringType },
+                ),
+            ) { backStackEntry ->
+                val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
+                val extraId = backStackEntry.arguments?.getString("extraId").orEmpty()
+                // The full player, in extra mode: what it asks the server for is
+                // the title's detail alone (PlayMode.Extra).
+                val vm: PlayerViewModel = viewModel(
+                    factory = PlayerViewModel.factory(container, PlayMode.Extra(itemId, extraId)),
+                    key = "trailer/$itemId/$extraId",
+                )
+                PlayerScreen(
+                    viewModel = vm,
+                    // The chrome's Home, as for a title.
+                    onHome = {
+                        navController.navigate(Routes.LIBRARY) {
+                            popUpTo(Routes.LIBRARY) { inclusive = true }
+                        }
+                    },
+                    // At the trailer's end. Only while it is still the screen on
+                    // top: a BACK that came first has popped it already.
+                    onClose = {
+                        if (navController.currentBackStackEntry?.id == backStackEntry.id) {
+                            navController.popBackStack()
+                        }
+                    },
+                )
+            }
+            composable(
+                route = Routes.PERSON,
+                arguments = listOf(navArgument("personId") { type = NavType.StringType }),
+            ) { backStackEntry ->
+                val personId = backStackEntry.arguments?.getString("personId").orEmpty()
+                val vm: PersonViewModel = viewModel(
+                    factory = PersonViewModel.factory(container, personId),
+                    key = "person/$personId",
+                )
+                PersonScreen(
+                    viewModel = vm,
+                    onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
+                    onMoviesNav = { navController.navigate(Routes.MOVIES) },
+                    onSeriesNav = { navController.navigate(Routes.SERIES) },
+                    onSearch = { navController.navigate(Routes.SEARCH) },
+                    onSettings = { navController.navigate(Routes.SETTINGS) },
+                    onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onAccountClick = {
+                        navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
+                    },
+                    noticesBell = noticesBell,
+                    activeAccount = activeAccount,
+                    onBack = { navController.popBackStack() },
+                )
+            }
+            composable(
+                route = Routes.PLAYER,
+                arguments = listOf(
+                    navArgument("itemId") { type = NavType.StringType },
+                    navArgument("fromStart") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("fromBinge") { type = NavType.BoolType; defaultValue = false },
+                    navArgument("resume") { type = NavType.IntType; defaultValue = 0 },
+                ),
+            ) { backStackEntry ->
+                val itemId = backStackEntry.arguments?.getString("itemId").orEmpty()
+                val fromStart = backStackEntry.arguments?.getBoolean("fromStart") ?: false
+                val fromBinge = backStackEntry.arguments?.getBoolean("fromBinge") ?: false
+                // Zap hands off with ?resume=<scene sec> so the full player resumes
+                // at the channel-surf playhead, not the saved progress (0 for a
+                // never-watched teaser). >0 wins over the server progress lookup.
+                val resume = backStackEntry.arguments?.getInt("resume") ?: 0
+                val vm: PlayerViewModel = viewModel(
+                    factory = PlayerViewModel.factory(container, PlayMode.Title(itemId, fromStart, fromBinge, resume)),
+                    // Include fromStart + fromBinge in the key so navigating to
+                    // the SAME episode with a different entry mode (Resume → Play
+                    // from start, or manual Next → auto-play-next) rebuilds the
+                    // VM and re-runs prepare() with the new flags instead of
+                    // reusing the cached Ready state.
+                    key = "player/$itemId/fromStart=$fromStart/fromBinge=$fromBinge/resume=$resume",
+                )
+                PlayerScreen(
+                    viewModel = vm,
+                    // Explicit Home affordance in the full-screen player chrome
+                    // (no persistent rail there). Pops the whole player/detail
+                    // stack and lands on the library root, matching the home-nav
+                    // used by the other screens' rail buttons.
+                    onHome = {
+                        navController.navigate(Routes.LIBRARY) {
+                            popUpTo(Routes.LIBRARY) { inclusive = true }
+                        }
+                    },
+                    onPlayNext = { nextId ->
+                        // Auto-chain into the next episode in binge mode so the
+                        // VM pre-skips its intro. Manual prev/next buttons in the
+                        // chrome route through the same callback but we can't
+                        // distinguish here — both feel like "user wants the next
+                        // episode now", so both get the pre-skip. If we want a
+                        // different behavior for the chrome buttons later we'd
+                        // need to thread a separate callback through.
+                        navController.navigate(Routes.player(nextId, fromBinge = true)) {
+                            popUpTo(Routes.PLAYER) { inclusive = true }
+                        }
+                    },
+                )
+            }
         }
     }
 }

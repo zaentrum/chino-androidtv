@@ -155,8 +155,13 @@ class FocusScreenshotTest {
         LibraryError(focusFirst = true, failure = LoadFailure(LoadFailure.Kind.Server, "HTTP 503 Service Unavailable"))
     }
     // Not in the library any more: no try brings it back, so back, focused.
-    @Test fun goneTitleFocused() = shot("gone_title_focused") { Gone("this title isn't in the library anymore") }
-    @Test fun gonePersonFocused() = shot("gone_person_focused") { Gone("this person isn't in the library anymore") }
+    @Test fun goneTitleFocused() = shot("gone_title_focused") { Gone("this title") }
+    @Test fun gonePersonFocused() = shot("gone_person_focused") { Gone("this person") }
+    // Signed out, where going to sign-in by itself could not spare a screen:
+    // sign in, focused.
+    @Test fun signedOutFocused() = shot("signed_out_focused") {
+        LibraryError(focusFirst = true, failure = LoadFailure(LoadFailure.Kind.SignedOut, "HTTP 401 Unauthorized"))
+    }
 
     /**
      * Renders [content] in the theme on the page background, moves the
@@ -305,10 +310,16 @@ class FocusScreenshotTest {
     }
 
     @Composable
-    private fun Gone(title: String) {
+    private fun Gone(what: String) {
         // A detail page's or a person's, filling the screen; the server's 404.
         Box(Modifier.fillMaxSize().background(ChinoSurface)) {
-            GoneError(title = title, reason = "HTTP 404 Not Found", onBack = {})
+            LoadError(
+                title = "couldn't load $what",
+                failure = LoadFailure(LoadFailure.Kind.NotFound, "HTTP 404 Not Found"),
+                onRetry = {},
+                what = what,
+                onBack = {},
+            )
         }
     }
 

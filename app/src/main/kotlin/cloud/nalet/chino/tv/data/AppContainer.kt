@@ -6,6 +6,7 @@ import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.data.auth.OidcDeviceClient
+import cloud.nalet.chino.tv.data.auth.SignInLapses
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.auth.TokenManager
 import cloud.nalet.chino.tv.data.auth.TokenStore
@@ -98,13 +99,22 @@ class AppContainer(context: Context) {
         }
     }
 
-    val tokenManager: TokenManager by lazy { TokenManager(accountStore, oidcDeviceClient) }
+    /** An account's sign-in that no longer holds, after the silent refresh:
+     *  the NavHost goes to sign-in for it. */
+    val signInLapses = SignInLapses()
+
+    val tokenManager: TokenManager by lazy {
+        TokenManager(accountStore, oidcDeviceClient, onLapsed = signInLapses::lapsed)
+    }
 
     private val retrofit by lazy {
         RetrofitFactory.create(
             baseUrl = serverConfig.baseUrl,
             tokenProvider = tokenManager::validAccessTokenBlocking,
             forceRefresh = tokenManager::forceRefreshBlocking,
+            onRefusedAfterRefresh = {
+                accountStore.snapshotBlocking().activeAccount?.id?.let(signInLapses::lapsed)
+            },
         )
     }
 

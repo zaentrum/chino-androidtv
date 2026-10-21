@@ -18,7 +18,18 @@
     <!-- A screen whose content did not load (LoadError). -->
     <string name="load_error_body">Check the connection to the server, then try again.</string>
     <string name="load_error_body_server">The server ran into a problem. Try again in a moment.</string>
+    <string name="load_error_body_busy">The server is busy. Try again in a moment.</string>
+    <string name="load_error_body_rejected">The server didn\'t accept the request. Check for an app update, then try again.</string>
     <string name="load_error_retry">try again</string>
     <string name="load_error_back">back</string>
     <string name="load_error_details">details</string>
+    <!-- What the screen shows, gone (404, 410): "this title isn't in the library anymore". -->
+    <string name="gone_title">%1$s isn\'t in the library anymore</string>
+    <!-- No access (403): "you don't have access to this title"; "this" where the screen does not know. -->
+    <string name="forbidden_title">you don\'t have access to %1$s</string>
+    <string name="forbidden_this">this</string>
+    <!-- Signed out (401), where going to sign-in by itself could not spare a screen. -->
+    <string name="signed_out_title">you\'re signed out</string>
+    <string name="signed_out_body">Sign in again to keep watching.</string>
+    <string name="signed_out_action">sign in</string>
 </resources>

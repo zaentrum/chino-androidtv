@@ -30,7 +30,8 @@ object RetrofitFactory {
         baseUrl: String,
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
-    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh).build())
+        onRefusedAfterRefresh: () -> Unit = {},
+    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh, onRefusedAfterRefresh).build())
 
     /** Retrofit over [client], decoding as every chino-api response is decoded. */
     internal fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
@@ -53,11 +54,13 @@ object RetrofitFactory {
         .build()
 
     /** The client every chino-api call goes through: the bearer on every
-     *  request, one refresh-and-retry on a 401. Internal: tests answer on
-     *  top of exactly this client. */
+     *  request, one refresh-and-retry on a 401, and [onRefusedAfterRefresh]
+     *  where chino-api refuses the fresh token too. Internal: tests answer
+     *  on top of exactly this client. */
     internal fun httpClient(
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
+        onRefusedAfterRefresh: () -> Unit = {},
     ): OkHttpClient.Builder {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
@@ -76,10 +79,14 @@ object RetrofitFactory {
             // the refresh_token for a fresh access_token and replay the request once.
             // If forceRefresh returns null (refresh itself failed), returning null
             // makes OkHttp give up and propagate the 401 to the app, which sends the
-            // user back to AUTH.
+            // user back to AUTH: the token manager says the sign-in lapsed, and so
+            // does a fresh token chino-api refuses too (onRefusedAfterRefresh).
             .authenticator(object : Authenticator {
                 override fun authenticate(route: Route?, response: Response): Request? {
-                    if (response.request.header("X-Auth-Retry") != null) return null
+                    if (response.request.header("X-Auth-Retry") != null) {
+                        onRefusedAfterRefresh()
+                        return null
+                    }
                     val fresh = forceRefresh() ?: return null
                     return response.request.newBuilder()
                         .header("Authorization", "Bearer $fresh")

@@ -12,7 +12,8 @@ import kotlinx.coroutines.sync.withLock
  *   It returns a token guaranteed to be valid for at least [REFRESH_SLACK_MS] longer,
  *   refreshing under a mutex if the cached one is too close to expiry.
  * - [forceRefreshBlocking] is the Authenticator's path on a 401: try once more with a
- *   fresh token, give up if that fails too (the user falls back to picker / AUTH).
+ *   fresh token, give up if that fails too: the account's sign-in lapsed ([onLapsed]),
+ *   and the app goes to sign-in for it (SignInLapses).
  *
  * When the user switches accounts via the picker, [AccountStore.setActive] flips the
  * active id and subsequent calls here naturally read tokens for the new account —
@@ -21,6 +22,10 @@ import kotlinx.coroutines.sync.withLock
 class TokenManager(
     private val accounts: AccountStore,
     private val oidc: OidcDeviceClient,
+    /** The account's sign-in lapsed: no refresh token, or the provider refused
+     *  it. Not where the provider could not be reached - the refresh throws
+     *  then, the connection's failure. */
+    private val onLapsed: (accountId: String) -> Unit = {},
 ) {
     private val mutex = Mutex()
 
@@ -53,8 +58,14 @@ class TokenManager(
     fun forceRefreshBlocking(): String? = runBlocking {
         mutex.withLock {
             val latest = accounts.activeAccount.first() ?: return@runBlocking null
-            val rt = latest.refreshToken ?: return@runBlocking null
-            val refreshed = oidc.refresh(rt) ?: return@runBlocking null
+            val rt = latest.refreshToken ?: run {
+                onLapsed(latest.id)
+                return@runBlocking null
+            }
+            val refreshed = oidc.refresh(rt) ?: run {
+                onLapsed(latest.id)
+                return@runBlocking null
+            }
             accounts.updateTokensForBlocking(latest.id, refreshed)
             refreshed.accessToken
         }
