@@ -3,6 +3,8 @@ package cloud.nalet.chino.tv.ui.player
 import androidx.media3.common.MimeTypes
 import cloud.nalet.chino.tv.data.api.InfoTrack
 import cloud.nalet.chino.tv.data.api.SidecarSubtitle
+import java.text.Collator
+import java.util.Locale
 
 /*
  * The subtitles of a playback: which tracks the player loads, how the menu
@@ -21,17 +23,20 @@ import cloud.nalet.chino.tv.data.api.SidecarSubtitle
  * viewer's preferred subtitle language (Settings), then those in each of the
  * subtitle languages the server is set up for (GET /subtitles/languages, its
  * setting's order); then one entry, "more languages", that opens the rest of
- * the title's tracks - a packaged title's too, whose package keeps what its
- * source brought. Where the server names no subtitle languages (an older
- * one, none set), every track is listed directly instead, without "more
- * languages": the preferred language first, then the others in the file's
- * order, a language's tracks together - its AI ones, and those with a region
- * or script of it, included. Within a language the plain track comes first,
- * then the one for the deaf and hard of hearing, then the foreign-language
- * parts only, then one the platform made ("· AI"). Tracks that would read
- * the same - one language, one name - show once, never numbered: one inside
- * the file before one the server attached, a text one before a picture one,
- * otherwise the first in the file.
+ * the title's tracks, in alphabetical order of their languages' names - a
+ * packaged title's too, whose package keeps what its source brought. Where
+ * the server names no subtitle languages (an older one, none set), every
+ * track is listed directly instead, without "more languages": the preferred
+ * language first, then the others in the file's order, a language's tracks
+ * together - its AI ones, and those with a region or script of it, included.
+ * Within a language each region or script has a run of its own, the bare
+ * name first and the others in alphabetical order; within a run the plain
+ * track comes first, then the one for the deaf and hard of hearing, then the
+ * foreign-language parts only, then one the platform made ("· AI"). Tracks
+ * that would read the same show once, never numbered: one inside the file
+ * before one the server attached, a text one before a picture one, otherwise
+ * the first in the file; an untagged one that reads as a language ("English"
+ * on "und") stands for its twin, in its language.
  *
  * What comes on by itself: the viewer's preferred subtitle language, where
  * the title has it and the audio is in another language; else the
@@ -265,21 +270,53 @@ fun subtitleEntry(track: SubtitleTrackInfo): SubtitleEntry {
 }
 
 /**
+ * Which of two tracks that read the same the menu shows, [a] the one that
+ * comes first: the file's own, timed to this file, before a sidecar; else a
+ * text one before a picture one; else the first. Where the one shown is
+ * tagged with no language and reads as one only by its title ("English" on
+ * an "und" track), it takes the other's tag, so it is listed with that
+ * language and comes on by it. chino-web's better and standsForBoth.
+ */
+private fun standsForBoth(a: SubtitleEntry, b: SubtitleEntry): SubtitleEntry {
+    val kept = when {
+        a.sidecar != b.sidecar -> if (a.sidecar) b else a
+        a.image != b.image -> if (a.image) b else a
+        else -> a
+    }
+    val other = if (kept === a) b else a
+    return if (kept.tag.isEmpty() && other.tag.isNotEmpty()) kept.copy(tag = other.tag) else kept
+}
+
+/** English alphabetical order, accents after their letters ("Māori"). */
+private val ALPHABETICAL: Collator = Collator.getInstance(Locale.ENGLISH)
+
+/**
  * The menu of [tracks] (in the player's order) for a viewer whose subtitle
  * language is [preferred] (Settings: a code or "off") on a server set up for
- * [serverLanguages] (BCP 47 tags, its order; none from an older server): the
- * preferred language's tracks, then each server language's, in [top]; the
- * rest in [more] - or, where the server names no language, after them in
- * [top], with [more] empty. The rest by language in the file's order: the
- * file's own tracks (a package's renditions, an original's streams) before
- * the sidecars attached to it, each in the player's order; a language's
- * tracks together, those with a script or region of it among them, each
- * script or region together, a track in no language last. Within a
- * language: the very one before its variants ("Chinese (Simplified)" for
- * zh-Hans before an unmarked "Chinese"), then plain, for the deaf and hard
- * of hearing, foreign-language parts only, then the platform's ("· AI").
- * Two of one language that read the same show once, in the first's place:
- * a file's own before an attached one, a text one before a picture one.
+ * [serverLanguages] (BCP 47 tags, its order; none from an older server)
+ * (docs/chino, subtitles: the menu):
+ *
+ * - [top]: the preferred language's tracks, then each server language's; a
+ *   language with a region or script takes the tracks of the language that
+ *   name none ("zh-Hans" an unmarked "Chinese"), never another region or
+ *   script ("zh-Hant").
+ * - [more]: the rest, the languages in alphabetical order of their names, a
+ *   track in no language by its own.
+ * - Where the server names no language, no [more]: every track on [top], the
+ *   preferred language first, then the others in the file's order - the
+ *   file's own tracks (a package's renditions, an original's streams) before
+ *   the sidecars attached to it, a track in no language in its place - and
+ *   a language's tracks together: the rest of a language on top, another
+ *   region or script of it, right after it ("Chinese (Traditional)" after
+ *   the viewer's "Chinese (Simplified)").
+ *
+ * Within a language each region or script has a run of its own, the bare
+ * name first, the others in alphabetical order ("Chinese", "Chinese
+ * (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)"); within
+ * a run plain, for the deaf and hard of hearing, foreign-language parts only,
+ * then the platform's ("· AI"), each in the file's order. Tracks that would
+ * read the same show once, in the first's place, never numbered
+ * ([standsForBoth]).
  */
 fun subtitleMenu(
     tracks: List<SubtitleTrackInfo>,
@@ -290,44 +327,60 @@ fun subtitleMenu(
     // The file's order: its own tracks before the sidecars attached to it.
     val fileOrder = compareBy<Item> { it.entry.sidecar }.thenBy { it.order }
     val inFile = tracks.mapIndexed { i, t -> Item(subtitleEntry(t), i) }.sortedWith(fileOrder)
-    // One of each language and name: a text one before a picture one, else
-    // the first in the file.
-    val unique = inFile.groupBy { it.entry.tag + "\u0000" + it.entry.label }.values
-        .map { same -> same.firstOrNull { !it.entry.image } ?: same.first() }
-        .sortedWith(fileOrder)
+    // One of each name, in the place of the first of them.
+    val byLabel = LinkedHashMap<String, Item>()
+    for (item in inFile) {
+        val seen = byLabel[item.entry.label]
+        byLabel[item.entry.label] = if (seen == null) item else seen.copy(entry = standsForBoth(seen.entry, item.entry))
+    }
+    val unique = byLabel.values.toList()
+    // A language's tracks: a run per region or script, the bare name first,
+    // the others by their names; in a run by kind, then in the file's order.
     val kinds = compareBy<Item> { it.entry.ai }.thenBy { it.entry.kind }.then(fileOrder)
+    fun runs(group: List<Item>): List<Item> {
+        val tags = group.map { it.entry.tag }.distinct()
+        val bare = tags.filter { it == normalizeLang(it) }
+        val named = (tags - bare.toSet()).sortedWith(compareBy(ALPHABETICAL) { languageName(it) })
+        return (bare + named).flatMap { tag -> group.filter { it.entry.tag == tag }.sortedWith(kinds) }
+    }
     val wants = buildList {
         if (asksForSubtitles(preferred)) add(languageTag(preferred))
         serverLanguages.map(::languageTag).filter { it.isNotEmpty() }.forEach { add(it) }
     }.distinct()
     val placed = HashSet<Item>()
-    val top = ArrayList<Item>()
+    // On top, one block per language asked for, by its base language.
+    val blocks = ArrayList<Pair<String, List<Item>>>()
     for (want in wants) {
-        val group = unique.filter { it !in placed }.mapNotNull { item -> languageMatch(want, item.entry.tag)?.let { item to it } }
-        val tags = group.map { it.first.entry.tag }.distinct()
-        group.sortedWith(
-            compareBy<Pair<Item, Int>> { it.second }
-                .thenBy { tags.indexOf(it.first.entry.tag) }
-                .thenBy(kinds) { it.first },
-        ).forEach { (item, _) ->
-            top += item
-            placed += item
-        }
+        val group = unique.filter { it !in placed && languageMatch(want, it.entry.tag) != null }
+        placed += group
+        if (group.isNotEmpty()) blocks += normalizeLang(want) to runs(group)
     }
-    val rest = unique.filter { it !in placed }
-    val languages = rest.map { normalizeLang(it.entry.tag) }.filter { it.isNotEmpty() }.distinct()
-    val tags = rest.map { it.entry.tag }.distinct()
-    val others = rest.sortedWith(
-        compareBy<Item> { item -> normalizeLang(item.entry.tag).let { if (it.isEmpty()) Int.MAX_VALUE else languages.indexOf(it) } }
-            .thenBy { tags.indexOf(it.entry.tag) }
-            .then(kinds),
-    )
+    // The rest by language, each in the place it first comes in the file; a
+    // track in no language on its own.
+    val rest = LinkedHashMap<String, MutableList<Item>>()
+    for (item in unique.filter { it !in placed }) {
+        val base = normalizeLang(item.entry.tag)
+        rest.getOrPut(base.ifEmpty { "\u0000${item.order}" }) { ArrayList() } += item
+    }
+    val groups = rest.values.map { group -> normalizeLang(group.first().entry.tag) to runs(group) }
     // Nothing to set apart the few that matter from the rest on a server that
     // names no language: "off" and "more languages" alone would hide every
     // track behind a press.
     val noMore = serverLanguages.none { languageTag(it).isNotEmpty() }
-    return if (noMore) SubtitleMenu(top = (top + others).map { it.entry }, more = emptyList())
-    else SubtitleMenu(top = top.map { it.entry }, more = others.map { it.entry })
+    if (!noMore) {
+        // A language by its name, a track in no language by its label.
+        val more = groups.sortedWith(
+            compareBy(ALPHABETICAL) { (base, items) -> if (base.isEmpty()) items.first().entry.label else languageName(base) },
+        )
+        return SubtitleMenu(top = blocks.flatMap { it.second }.map { it.entry }, more = more.flatMap { it.second }.map { it.entry })
+    }
+    // All on top: the rest of a language right after its last block there,
+    // the other languages after them in the file's order.
+    for (group in groups) {
+        val at = if (group.first.isEmpty()) -1 else blocks.indexOfLast { it.first == group.first }
+        if (at >= 0) blocks.add(at + 1, group) else blocks += group
+    }
+    return SubtitleMenu(top = blocks.flatMap { it.second }.map { it.entry }, more = emptyList())
 }
 
 /**
