@@ -175,6 +175,10 @@ fun DetailScreen(
             is DetailUiState.Ready -> DetailContent(
                 s = s,
                 inWatchlist = viewModel.displayItemId in savedItems,
+                listsName = listControlName(
+                    memberships[viewModel.displayItemId].orEmpty(),
+                    lists.firstOrNull { it.isDefault },
+                ),
                 liked = viewModel.displayItemId in likes,
                 onPlay = play,
                 onToggleWatchlist = { viewModel.toggleWatchlist(it) },
@@ -212,6 +216,8 @@ fun DetailScreen(
 private fun DetailContent(
     s: DetailUiState.Ready,
     inWatchlist: Boolean,
+    /** What the add-to-list control is called now ([listControlName]). */
+    listsName: String,
     liked: Boolean,
     onPlay: (resume: Boolean) -> Unit,
     onToggleWatchlist: (Boolean) -> Unit,
@@ -324,6 +330,7 @@ private fun DetailContent(
                     primaryLabel = primaryLabel,
                     canResume = canResume,
                     inWatchlist = inWatchlist,
+                    listsName = listsName,
                     liked = liked,
                     onPlay = onPlay,
                     onToggleWatchlist = onToggleWatchlist,
@@ -379,9 +386,11 @@ private fun DetailContent(
     }
 }
 
-/** Detail action row — web parity: a labeled primary (Play/Resume) + optional
- *  Trailer, then the watchlist / watched / like toggles as ICON CIRCLES
- *  (Plus/Eye/Heart, tinted when active) rather than wide labeled buttons. */
+/** Detail action row, the order and states every app has: Play (or Resume) ·
+ *  Start over · Trailer, then add to list "+" with its "⌄" · watched · liked
+ *  as icon buttons - in a list cloud-blue with a dark check, watched green
+ *  with a dark eye, liked the design system's red with a dark heart, plain
+ *  while off. Their names say the state. */
 @Composable
 internal fun DetailActions(
     item: Item,
@@ -390,6 +399,8 @@ internal fun DetailActions(
     /** The primary resumes a saved position — "Start over" is offered too. */
     canResume: Boolean,
     inWatchlist: Boolean,
+    /** The add-to-list control's name ([listControlName]). */
+    listsName: String = if (inWatchlist) "In 1 list" else "Add to a list",
     liked: Boolean,
     onPlay: (resume: Boolean) -> Unit,
     onToggleWatchlist: (Boolean) -> Unit,
@@ -450,24 +461,27 @@ internal fun DetailActions(
         // a plain CENTER adds to the default list when the item is in no list
         // (icon → Check), or clears it from every list when already saved. The
         // adjacent caret opens the DPAD-navigable AddToList picker to choose a
-        // specific list. Tinted emerald when the item is in >=1 list.
+        // specific list. Cloud-blue when the item is in >=1 list: green is
+        // watched, right beside it.
         DetailActionCircle(
             icon = if (inWatchlist) Lucide.Check else Lucide.Plus,
-            contentDescription = if (inWatchlist) "Saved — press to remove" else "Add to watchlist",
+            contentDescription = listsName,
             active = inWatchlist,
+            activeColor = ChinoAccent,
             onClick = { onToggleWatchlist(!inWatchlist) },
         )
         DetailActionCircle(
             icon = Lucide.ChevronDown,
-            contentDescription = "Add to a list",
+            contentDescription = "Choose lists",
             active = false,
             onClick = onOpenListPicker,
         )
-        // Watched TOGGLE (web parity): filled green Check when watched, outline
-        // Eye when not. CENTER flips it — POST to mark, DELETE to un-mark.
+        // Watched TOGGLE (web parity): green with a dark eye when watched, the
+        // eye outlined when not. CENTER flips it — POST to mark, DELETE to
+        // un-mark.
         DetailActionCircle(
-            icon = if (watched) Lucide.Check else Lucide.Eye,
-            contentDescription = if (watched) "Mark as unwatched" else "Mark as watched",
+            icon = Lucide.Eye,
+            contentDescription = if (watched) "Watched" else "Mark as watched",
             active = watched,
             onClick = onToggleWatched,
         )
@@ -496,6 +510,16 @@ internal fun PlayButton(label: String, onClick: () -> Unit, focus: ItemFocus = r
         Spacer(Modifier.width(8.dp))
         Text(text = label, fontWeight = FontWeight.SemiBold)
     }
+}
+
+/** What the add-to-list control is called: "Add to a list" in none, "In your
+ *  Watchlist" in the default list alone (by its name), "In 2 lists" in
+ *  several - [memberOf] the ids of the lists that hold the title. */
+internal fun listControlName(memberOf: Set<String>, defaultList: cloud.nalet.chino.tv.data.api.Watchlist?): String = when {
+    memberOf.isEmpty() -> "Add to a list"
+    memberOf.size == 1 && defaultList != null && defaultList.id in memberOf -> "In your ${defaultList.name}"
+    memberOf.size == 1 -> "In 1 list"
+    else -> "In ${memberOf.size} lists"
 }
 
 /** An icon-only toggle: filled in its colour while on, its icon then in the
@@ -1044,8 +1068,8 @@ internal fun EpisodeRow(
             }
         }
         // Per-episode watched TOGGLE — its own DPAD focus target on the row's
-        // trailing edge (RIGHT from the play row reaches it). Green filled
-        // Check when watched, subtle grey Eye when not; CENTER flips it
+        // trailing edge (RIGHT from the play row reaches it). Green with a
+        // dark eye when watched, subtle grey eye when not; CENTER flips it
         // (POST/DELETE) with optimistic UI. Web shows the same control as a
         // hover button over the still; on TV a focusable trailing circle reads
         // better at 10ft and stays in the remote's focus order.
@@ -1073,14 +1097,14 @@ private fun EpisodeAddToListButton(onClick: () -> Unit) {
     ) {
         Icon(
             imageVector = Lucide.Plus,
-            contentDescription = "Add episode to a list",
+            contentDescription = "Add to a list",
             tint = ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(18.dp),
         )
     }
 }
 
-/** Filled green while the episode is watched, plain while it is not. */
+/** Green with a dark eye while the episode is watched, plain while it is not. */
 @Composable
 private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
     val focus = rememberItemFocus()
@@ -1101,8 +1125,8 @@ private fun EpisodeWatchedToggle(watched: Boolean, onToggle: () -> Unit) {
         contentAlignment = Alignment.Center,
     ) {
         Icon(
-            imageVector = if (watched) Lucide.Check else Lucide.Eye,
-            contentDescription = if (watched) "Mark episode as unwatched" else "Mark episode as watched",
+            imageVector = Lucide.Eye,
+            contentDescription = if (watched) "Watched" else "Mark as watched",
             tint = if (watched) ChinoBg else ChinoFocus.title(ChinoMuted, focus.focused),
             modifier = Modifier.size(18.dp),
         )

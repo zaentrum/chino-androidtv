@@ -326,7 +326,7 @@ class FocusScreenshotTest {
     @Composable
     private fun Actions() {
         // The detail's actions: Resume filled blue, then the toggles on - in a
-        // list and watched (green), liked (red).
+        // list (blue, a dark check), watched (green, a dark eye), liked (red).
         DetailActions(
             item = Item(id = "p1", title = "Quiet Orchard", kind = "movie", year = 2021, watchedAt = "2026-10-01T20:00:00Z"),
             primaryLabel = "Resume 12:34",
