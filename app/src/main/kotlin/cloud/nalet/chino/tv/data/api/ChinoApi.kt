@@ -294,6 +294,16 @@ interface ChinoApi {
     suspend fun itemSubtitles(@Path("id") id: String): SubtitlesResponse
 
     /**
+     * The subtitle languages the server is set up for, BCP 47 tags in its
+     * setting's order (`{"languages": ["en", "de", "zh-Hans"]}`, empty when
+     * none is set): what the subtitle menu lists first. Asked once a session
+     * ([cloud.nalet.chino.tv.data.SubtitleLanguages]); a server older than
+     * the route answers 404, which is no languages.
+     */
+    @GET("v1/subtitles/languages")
+    suspend fun subtitleLanguages(): SubtitleLanguagesResponse
+
+    /**
      * Pre-playback probe: chino-stream's transcode decision + container/codec
      * metadata + the ladder of qualities the server can serve. Result is
      * dispatched off `caps=` (same vocabulary the master URL uses), so we
@@ -486,6 +496,31 @@ data class SubtitlesResponse(
     val subtitles: List<SidecarSubtitle> = emptyList(),
 )
 
+/** GET /v1/subtitles/languages: the server's subtitle languages, its order. */
+@Serializable
+data class SubtitleLanguagesResponse(
+    val languages: List<String> = emptyList(),
+)
+
+/**
+ * A track /play/info lists (`subtitle_tracks`): for a title played from its
+ * original file, a stream of the file - its [index] among the file's
+ * subtitle streams, which /items/{id}/play/subtitles/{index}.vtt extracts as
+ * WebVTT - its codec, language and the [name] chino-stream gives it
+ * ("English · SDH", "Chinese · Simplified"). A packaged title's rows are its
+ * manifest's and carry no index: its subtitles are its sidecars.
+ */
+@Serializable
+data class InfoTrack(
+    val index: Int? = null,
+    val codec: String? = null,
+    val language: String? = null,
+    val name: String? = null,
+    val title: String? = null,
+    val forced: Boolean = false,
+    val default: Boolean = false,
+)
+
 /**
  * An entry of /play/info's qualities: what ?q= the master is asked with to
  * get it, and what a menu calls it. A packaged title lists Auto ("auto")
@@ -523,6 +558,9 @@ data class PlayInfo(
     /** null (empty here) when there is nothing to pick: see [QualityRung]. */
     val qualities: List<QualityRung> = emptyList(),
     @SerialName("default_quality") val defaultQuality: String? = null,
+    /** The file's subtitle streams ([InfoTrack]); a packaged title's rows
+     *  have no index. */
+    @SerialName("subtitle_tracks") val subtitleTracks: List<InfoTrack> = emptyList(),
 )
 
 @Serializable

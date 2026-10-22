@@ -259,6 +259,39 @@ class ApiContractTest {
         // A package of one rendition: nothing to pick.
         val single = decode(PlayInfo.serializer(), """{"mode":"packaged","qualities":null,"default_quality":"auto"}""")
         assertEquals(emptyList<QualityRung>(), single.qualities)
+        // A package's subtitle rows carry no stream index: its sidecars are its subtitles.
+        assertNull(info.subtitleTracks.single().index)
+        assertEquals("eng", info.subtitleTracks.single().language)
+    }
+
+    @Test
+    fun `a title played from its file lists the file's subtitle streams by index`() {
+        // chino-stream's infoTracks: index, codec, language, name and title,
+        // forced and default only where true.
+        val info = decode(
+            PlayInfo.serializer(),
+            """{"mode":"transcode","subtitle_tracks":[
+               {"codec":"subrip","index":0,"language":"eng","name":"English","title":"English"},
+               {"codec":"subrip","index":1,"language":"eng","name":"English · SDH","title":"English · SDH"},
+               {"codec":"subrip","index":4,"language":"chi","name":"Chinese · Simplified","title":"Chinese · Simplified"},
+               {"codec":"subrip","index":7,"language":"ger","name":"German (forced)","title":"German (forced)","forced":true,"default":true}]}""",
+        )
+        assertEquals(listOf(0, 1, 4, 7), info.subtitleTracks.map { it.index })
+        assertEquals("Chinese · Simplified", info.subtitleTracks[2].name)
+        assertEquals(listOf(false, false, false, true), info.subtitleTracks.map { it.forced })
+        assertTrue(info.subtitleTracks[3].default)
+        // An older chino-stream lists none.
+        assertEquals(emptyList<InfoTrack>(), decode(PlayInfo.serializer(), """{"mode":"remux"}""").subtitleTracks)
+    }
+
+    @Test
+    fun `the server's subtitle languages, in its order`() {
+        assertEquals(
+            listOf("en", "de", "zh-Hans"),
+            decode(SubtitleLanguagesResponse.serializer(), """{"languages":["en","de","zh-Hans"]}""").languages,
+        )
+        assertEquals(emptyList<String>(), decode(SubtitleLanguagesResponse.serializer(), """{"languages":[]}""").languages)
+        assertEquals(emptyList<String>(), decode(SubtitleLanguagesResponse.serializer(), """{"languages":null}""").languages)
     }
 
     @Test

@@ -130,6 +130,12 @@ class AppContainer(context: Context) {
     /** Shared watchlist + likes cache across DetailScreen and any future surfaces. */
     val userFlags: UserFlagsRepository by lazy { UserFlagsRepository(chinoApi) }
 
+    /** The server's subtitle languages, asked once a session: the subtitle
+     *  menu lists them first. Built by the player, once signed in. */
+    val subtitleLanguages: SubtitleLanguages by lazy {
+        SubtitleLanguages { chinoApi.subtitleLanguages().languages }
+    }
+
     /** Sends the actions addons put in a UI slot: a POST with the bearer that
      *  follows no redirect (see [SlotActions]). Built on first use, by the
      *  Search screen — which only exists once an account is signed in. */

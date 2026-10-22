@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -42,6 +43,16 @@ sealed interface PlayerUiState {
         // URLs have the stream token appended already so ExoPlayer can fetch
         // them without OIDC headers (matches the <track src> path on web).
         val sidecarSubtitles: List<SidecarSubtitle>,
+        /** Every subtitle the player side-loads: the sidecars, then the text
+         *  streams of the original file /play/info lists (SubtitleChoices.kt),
+         *  each URL with the stream token. */
+        val sideLoadedSubtitles: List<SideLoadedSubtitle> = emptyList(),
+        /** Settings' subtitle language as this playback found it: a code, or
+         *  "off". */
+        val subtitlePreference: String = "off",
+        /** The server's subtitle languages (BCP 47, its order): what the menu
+         *  lists after the viewer's; none from an older server. */
+        val serverSubtitleLanguages: List<String> = emptyList(),
         // Series parent id (the item the user originally entered from) so we
         // know where to ask for the next episode. Null for movies and extras.
         val parentSeriesId: String?,
@@ -140,6 +151,9 @@ class PlayerViewModel(
      *  is routed when asked ([AppContainer.playCaps]): read at every
      *  prepare, off the main thread. */
     private val playCaps: () -> PlayCaps,
+    /** The server's subtitle languages, asked once a session
+     *  ([cloud.nalet.chino.tv.data.SubtitleLanguages]). */
+    private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
 ) : ViewModel() {
 
     private val itemId: String = mode.itemId
@@ -198,15 +212,10 @@ class PlayerViewModel(
     /** An extra's trailer_play has gone out. */
     private var started = false
 
-    /** The viewer turned the subtitles Off in the menu: no forced subtitle
-     *  comes on by itself for the rest of this playback, its reloads
-     *  included (ForcedSubtitles.kt). */
-    var subtitlesOff: Boolean = false
-        private set
-
-    fun turnSubtitlesOff() {
-        subtitlesOff = true
-    }
+    /** Who decides the subtitles, and the one on (SubtitleChoices.kt): kept
+     *  across the players this screen builds, so a reload switches the same
+     *  one on and the viewer's pick - their Off included - holds. */
+    val subtitleSession = SubtitleSession()
 
     init { prepare(quality = null) }
 
@@ -252,7 +261,10 @@ class PlayerViewModel(
                 // A reload's, Zap's or Play from start's own second; else the
                 // saved progress decides (startFrom, below).
                 val explicitStart = startSec(mode, atSec)
-                val (item, saved, segments, rawSubs, info) = coroutineScope {
+                // Settings' subtitle language as it is now, read once: what
+                // comes on by itself is decided with it (SubtitleChoices.kt).
+                val subtitlePreference = runCatching { settingsStore.flow.first().preferredSubLang }.getOrDefault("off")
+                val (item, saved, segments, rawSubs, info, serverLanguages) = coroutineScope {
                     // An extra's detail is read above.
                     val itemDef = async { if (extra != null) null else runCatching { api.getItem(itemId) }.getOrNull() }
                     // When the user clicked "Play from start", skip the
@@ -276,12 +288,18 @@ class PlayerViewModel(
                             api.playInfo(itemId, caps = capsParam.ifEmpty { null }, quality = quality)
                         }.getOrNull()
                     }
+                    // The server's subtitle languages: once a session, none
+                    // where it cannot say (an older server, no answer).
+                    val languagesDef = async {
+                        if (!requests.subtitles) emptyList() else runCatching { subtitleLanguages() }.getOrDefault(emptyList())
+                    }
                     PrepareBundle(
                         item = itemDef.await(),
                         resume = progressDef.await(),
                         segments = segDef.await(),
                         rawSubs = subDef.await(),
                         info = infoDef.await(),
+                        serverLanguages = languagesDef.await(),
                     )
                 }
                 // The server's resume point - none for a title the viewer
@@ -360,6 +378,12 @@ class PlayerViewModel(
                     // menu showed 0/0 even though the merge succeeded.
                     s.copy(url = "$absUrl${sep}stream=$token")
                 }
+                // The original file's text streams, as /play/info lists them:
+                // each extracted by chino-stream at its index, under the same
+                // stream token.
+                val sideLoaded = sideLoadedSubtitles(tokenizedSubs, info?.subtitleTracks.orEmpty()) { index ->
+                    "$base/v1/items/$itemId/play/subtitles/$index.vtt?stream=$token"
+                }
                 // Trickplay scrub-preview cues — only packaged items have the
                 // sprite tree (the analyzer emits it alongside the CMAF). For
                 // anything else the fetch would 404, so skip it and let the
@@ -397,6 +421,9 @@ class PlayerViewModel(
                     preSkippedIntro = preSkip,
                     segments = segments,
                     sidecarSubtitles = tokenizedSubs,
+                    sideLoadedSubtitles = sideLoaded,
+                    subtitlePreference = subtitlePreference,
+                    serverSubtitleLanguages = serverLanguages,
                     parentSeriesId = parentSeriesId,
                     playInfo = info,
                     currentQuality = resolvedQuality,
@@ -445,6 +472,7 @@ class PlayerViewModel(
         val segments: List<Segment>,
         val rawSubs: List<SidecarSubtitle>,
         val info: PlayInfo?,
+        val serverLanguages: List<String>,
     )
 
     /**
@@ -823,6 +851,7 @@ class PlayerViewModel(
                     streamHttpClient = container.streamHttpClient,
                     baseUrl = container.baseUrl,
                     playCaps = container::playCaps,
+                    subtitleLanguages = container.subtitleLanguages::get,
                 )
             }
         }

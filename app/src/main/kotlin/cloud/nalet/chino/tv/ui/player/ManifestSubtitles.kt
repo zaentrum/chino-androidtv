@@ -1,7 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
 import cloud.nalet.chino.tv.data.api.SidecarSubtitle
-import java.util.Locale
 
 /*
  * A master's SUBTITLES renditions beside the sidecars. Pure:
@@ -17,7 +16,7 @@ import java.util.Locale
  * renditions the sidecars already have — same language, same kind (regular,
  * SDH or forced). A rendition the sidecars do not have stays: with the
  * sidecar list missing, the master's are the subtitles, and a FORCED one is
- * the forced subtitle of its language where no sidecar is (ForcedSubtitles.kt
+ * the forced subtitle of its language where no sidecar is (SubtitleChoices.kt
  * says when it comes on; Media3 switches none on by itself). chino-web leaves
  * a master's SUBTITLES alone the same way.
  */
@@ -25,15 +24,12 @@ import java.util.Locale
 /** What a subtitle track is for. */
 enum class SubtitleKind { REGULAR, FORCED, SDH }
 
-private val FORCED_WORD = Regex("""\bforced\b""", RegexOption.IGNORE_CASE)
-private val SDH_WORD = Regex("""\b(sdh|cc|hearing impaired)\b""", RegexOption.IGNORE_CASE)
-
 /** A sidecar's kind, from its label: the catalog names a track by its title
  *  ("Forced", "SDH"), which the packager's rendition NAMEs carry too. What
  *  an older chino-api's sidecars are known by; see [sidecarKinds]. */
 fun sidecarKind(label: String): SubtitleKind = when {
-    FORCED_WORD.containsMatchIn(label) -> SubtitleKind.FORCED
-    SDH_WORD.containsMatchIn(label) -> SubtitleKind.SDH
+    saysForced(label) -> SubtitleKind.FORCED
+    isSdhSubtitle(label) -> SubtitleKind.SDH
     else -> SubtitleKind.REGULAR
 }
 
@@ -52,7 +48,7 @@ fun sidecarKinds(sidecars: List<SidecarSubtitle>): List<SubtitleKind> {
         when {
             !saysForced -> sidecarKind(s.label)
             s.forced -> SubtitleKind.FORCED
-            SDH_WORD.containsMatchIn(s.label) -> SubtitleKind.SDH
+            isSdhSubtitle(s.label) -> SubtitleKind.SDH
             else -> SubtitleKind.REGULAR
         }
     }
@@ -63,11 +59,14 @@ fun sidecarKinds(sidecars: List<SidecarSubtitle>): List<SubtitleKind> {
 fun renditionKind(name: String?, forced: Boolean, characteristics: String?): SubtitleKind = when {
     forced -> SubtitleKind.FORCED
     characteristics.orEmpty().contains("public.accessibility.") -> SubtitleKind.SDH
-    SDH_WORD.containsMatchIn(name.orEmpty()) -> SubtitleKind.SDH
+    isSdhSubtitle(name) -> SubtitleKind.SDH
     else -> SubtitleKind.REGULAR
 }
 
-/** Whether a SUBTITLES rendition stays in the master beside [sidecars]. */
+/** Whether a SUBTITLES rendition stays in the master beside [sidecars]: it
+ *  goes where a sidecar is the same subtitle - its language, with the script
+ *  or region either names ("zh-Hant" is no "zh-Hans"; [sameLanguage]), and
+ *  its kind. */
 fun keepRendition(
     language: String?,
     name: String?,
@@ -76,9 +75,9 @@ fun keepRendition(
     sidecars: List<SidecarSubtitle>,
 ): Boolean {
     val kind = renditionKind(name, forced, characteristics)
-    val lang = languageKey(language)
+    val tag = subtitleTag(language, name).tag
     val kinds = sidecarKinds(sidecars)
-    return sidecars.indices.none { languageKey(sidecars[it].lang) == lang && kinds[it] == kind }
+    return sidecars.indices.none { kinds[it] == kind && sameLanguage(tag, subtitleTag(sidecars[it].lang, sidecars[it].label).tag) }
 }
 
 /**
@@ -117,27 +116,3 @@ fun withoutDuplicateSubtitles(master: String, sidecars: List<SidecarSubtitle>): 
         if (gone == null) line else line.withoutAttribute(gone)
     }
 }
-
-/** The ISO 639-1 code of a language tag — "en" of "eng", "en-US", "EN" —
- *  or its primary subtag where there is none; null for none or "und". */
-fun languageKey(tag: String?): String? {
-    val primary = tag?.trim()?.lowercase()?.split('-', '_')?.firstOrNull()
-        ?.takeIf { it.isNotEmpty() && it != "und" } ?: return null
-    if (primary.length != 3) return primary
-    return BIBLIOGRAPHIC[primary] ?: ISO_639_2[primary] ?: primary
-}
-
-/** ISO 639-2/T codes ("deu") to ISO 639-1 ("de"). */
-private val ISO_639_2: Map<String, String> by lazy {
-    Locale.getISOLanguages().associateBy { code ->
-        runCatching { Locale(code).isO3Language }.getOrDefault(code)
-    }
-}
-
-/** ISO 639-2/B codes, which Locale does not know ("ger", "fre"). */
-private val BIBLIOGRAPHIC = mapOf(
-    "alb" to "sq", "arm" to "hy", "baq" to "eu", "bur" to "my", "chi" to "zh",
-    "cze" to "cs", "dut" to "nl", "fre" to "fr", "geo" to "ka", "ger" to "de",
-    "gre" to "el", "ice" to "is", "mac" to "mk", "mao" to "mi", "may" to "ms",
-    "per" to "fa", "rum" to "ro", "slo" to "sk", "tib" to "bo", "wel" to "cy",
-)

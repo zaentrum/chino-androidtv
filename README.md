@@ -59,11 +59,22 @@ real values always come from the connected server at runtime.
   beside the stereo ones, and the 5.1 track of the language plays first where
   the TV's audio output takes 5.1, the stereo one where it is stereo. Zap
   plays in stereo
-- Forced subtitles: where the subtitles as set put none on — Off, or no track
-  in the language chosen — the forced track in the language of the audio
-  comes on by itself (a text one before a picture one), and goes with the
-  audio into another language; Off in the subtitle menu keeps it off for the
-  rest of the playback
+- Subtitles, one at a time, with one look for every title: white text with a
+  black outline and nothing behind it, 5.33 % of the picture's height, centred
+  at the bottom within 80 % of its width and inside the TV's safe area; a
+  file's own colours, boxes, sizes and places are ignored, and Android's
+  caption settings win where you have switched them on (accessibility). The
+  menu lists "off", then your subtitle language (Settings), then the subtitle
+  languages your server is set up for (`/api/v1/subtitles/languages`), then
+  "more languages" with the rest of the title's tracks - its sidecars and,
+  for a title played from its original file, the file's own text streams,
+  each fetched only once it is switched on. A track is named by its language,
+  its script or region in brackets, and its kind in words ("Chinese
+  (Simplified)", "English · for deaf and hard of hearing"); two that read the
+  same show once. What comes on by itself: your subtitle language where the
+  title has it, else the foreign-language parts only in the language of the
+  audio, which follow the audio into another language; nothing else, and a
+  pick in the menu, Off included, holds for the rest of the playback
 - Trailers: a trailer your server has plays in the app's one player, with the
   controls, quality, audio and subtitle menus and remote a title has, from the
   start with sound, and closes at its end; it writes no progress, so Continue
@@ -101,8 +112,9 @@ never overwrites a release you installed.
 # JVM unit tests (paging, credits, people, series resume, the API contract,
 # what a search asks the server for, account deletion, addon slots, notices,
 # trailers, what the player asks the server for a title and for a trailer,
-# the caps, the 5.1 audio, the forced subtitle, the playback quality reports
-# and the focus style's contrast):
+# the caps, the 5.1 audio, the subtitles - their menu, names, look and what
+# comes on by itself - the playback quality reports and the focus style's
+# contrast):
 ./gradlew :app:testDebugUnitTest
 
 # The same, and the focus style's screenshots compared with their golden

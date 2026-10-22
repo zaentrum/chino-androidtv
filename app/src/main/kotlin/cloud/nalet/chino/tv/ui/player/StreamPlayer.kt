@@ -67,12 +67,13 @@ class StreamLoadErrorPolicy : DefaultLoadErrorHandlingPolicy() {
 
 /**
  * An ExoPlayer for chino-stream's HLS: its sources from [mediaSourceFactory]
- * (over [streamDataSourceFactory], retrying by [StreamLoadErrorPolicy]), and
+ * (over [streamDataSourceFactory], retrying by [StreamLoadErrorPolicy]),
  * adaptive video that starts on the master's first variant, the one
  * chino-stream warmed when the master was fetched
- * ([firstVariantTrackSelector]).
+ * ([firstVariantTrackSelector]), and subtitles laid out by the one look
+ * ([StreamRenderersFactory], SubtitleStyle.kt).
  */
 fun streamPlayerBuilder(context: Context, mediaSourceFactory: MediaSource.Factory): ExoPlayer.Builder =
-    ExoPlayer.Builder(context)
+    ExoPlayer.Builder(context, StreamRenderersFactory(context))
         .setMediaSourceFactory(mediaSourceFactory)
         .setTrackSelector(firstVariantTrackSelector(context))

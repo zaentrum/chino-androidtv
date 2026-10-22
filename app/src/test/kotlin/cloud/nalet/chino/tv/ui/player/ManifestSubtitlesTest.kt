@@ -148,6 +148,18 @@ class ManifestSubtitlesTest {
     }
 
     @Test
+    fun `a script or a region makes another subtitle, one only one names does not`() {
+        // A Simplified Chinese sidecar is no copy of a Traditional rendition,
+        // tagged so or named so.
+        assertTrue(keepRendition("zh-Hant", "Chinese (Traditional)", false, null, listOf(sidecar("zh-Hans"))))
+        assertTrue(keepRendition("zh", "Chinese · Traditional", false, null, listOf(sidecar("zh-Hans"))))
+        assertFalse(keepRendition("zh", "Chinese · Simplified", false, null, listOf(sidecar("zh-Hans"))))
+        assertTrue(keepRendition("pt-PT", "Portuguese", false, null, listOf(sidecar("pt-BR"))))
+        // English is English, with a region on one side only.
+        assertFalse(keepRendition("en-US", "English", false, null, listOf(sidecar("eng"))))
+    }
+
+    @Test
     fun `languages compare by their ISO 639-1 code`() {
         assertEquals("en", languageKey("eng"))
         assertEquals("en", languageKey("en-US"))

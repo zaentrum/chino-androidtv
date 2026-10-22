@@ -60,6 +60,7 @@ import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.input.key.KeyEventType
 import androidx.compose.ui.input.key.onKeyEvent
 import androidx.compose.ui.input.key.onPreviewKeyEvent
@@ -74,7 +75,6 @@ import androidx.media3.common.MediaItem
 import androidx.media3.common.MimeTypes
 import androidx.media3.common.Player
 import androidx.media3.common.TrackSelectionOverride
-import androidx.media3.common.TrackSelectionParameters
 import androidx.media3.common.Tracks
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.exoplayer.DefaultLoadControl
@@ -89,6 +89,7 @@ import cloud.nalet.chino.tv.data.model.Trailer
 import cloud.nalet.chino.tv.ui.settings.BugReportState
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerLinkLabel
+import com.composables.icons.lucide.ChevronDown
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.SkipForward
 import com.composables.icons.lucide.Youtube
@@ -302,37 +303,23 @@ private fun ExoPlayback(
         // segment fetch (streamDataSourceFactory, StreamPlayer.kt).
         val appContainer = (context.applicationContext as cloud.nalet.chino.tv.ChinoTvApp).container
         val httpFactory = streamDataSourceFactory(appContainer).apply { qoe?.let { setTransferListener(it) } }
-        // Sidecar subs from /v1/items/{id}/subtitles attached as
-        // side-loaded tracks. Format drives MIME so Media3 picks the
-        // right decoder: TEXT_VTT goes through PgsDecoder etc via the
-        // SubtitleDecoderFactory route; APPLICATION_PGS routes raw
-        // .sup bytes into Media3's PgsDecoder (added pre-1.0,
-        // RLE colour-index-0 fix in 1.4.0). Bitmap tracks (.sup)
-        // surface in the text-track list and overlay alongside any
-        // HLS-internal text tracks.
-        val kinds = sidecarKinds(ready.sidecarSubtitles)
-        val sideSubs = ready.sidecarSubtitles.mapIndexed { k, sub ->
-            val mime = when (sub.format?.lowercase()) {
-                "pgs" -> MimeTypes.APPLICATION_PGS
-                "vobsub" -> MimeTypes.APPLICATION_VOBSUB
-                "dvb" -> MimeTypes.APPLICATION_DVBSUBS
-                "srt", "subrip" -> MimeTypes.APPLICATION_SUBRIP
-                else -> MimeTypes.TEXT_VTT
-            }
+        // The subtitles, side-loaded (SubtitleChoices.kt): the sidecars of
+        // /v1/items/{id}/subtitles, then the text streams of the original
+        // file /play/info lists, each at the WebVTT chino-stream extracts of
+        // it. The MIME type picks the decoder (PGS and the other picture
+        // formats their own); the language is all a picture subtitle says of
+        // itself. The menu knows each by its id ("side:…", "emb:…"). FORCED
+        // and the deaf and hard of hearing as chino-api, the file or the
+        // name say: the subtitle rule reads them, Media3 is told to ignore
+        // them. A file's default flag is not passed on: it counts for nothing.
+        val sideSubs = ready.sideLoadedSubtitles.map { sub ->
             MediaItem.SubtitleConfiguration.Builder(android.net.Uri.parse(sub.url))
-                .setMimeType(mime)
-                // setLanguage is the only signal the track selector sees
-                // for bitmap subs — .sup has no internal language tag.
-                .setLanguage(sub.lang.takeIf { it.isNotBlank() })
-                .setLabel(sub.label.takeIf { it.isNotBlank() })
-                // DEFAULT as the catalog has it; FORCED where chino-api says
-                // so, else (an older one) where its label does (sidecarKinds),
-                // which the forced subtitle's rule reads (ForcedSubtitles.kt)
-                // and the menu shows ("(forced)").
-                .setSelectionFlags(
-                    (if (sub.default == true) C.SELECTION_FLAG_DEFAULT else 0) or
-                        (if (kinds[k] == SubtitleKind.FORCED) C.SELECTION_FLAG_FORCED else 0),
-                )
+                .setId(sub.id)
+                .setMimeType(sub.mimeType)
+                .setLanguage(sub.language)
+                .setLabel(sub.label)
+                .setSelectionFlags(if (sub.forced) C.SELECTION_FLAG_FORCED else 0)
+                .setRoleFlags(if (sub.sdh) C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND else 0)
                 .build()
         }
         // chino-stream's retry rules: a segment's 404 is retried with a
@@ -371,7 +358,12 @@ private fun ExoPlayback(
         // HLS source AND the per-subtitle SingleSampleMediaSources it creates.
         // The sidecars are the subtitles: the master reaches Media3 without the
         // SUBTITLES renditions they already have (withoutDuplicateSubtitles),
-        // so no language is listed twice. Where the TV's output is stereo
+        // so no language is listed twice. A side-loaded subtitle is fetched
+        // only once it is switched on: Media3 parses none of them as the
+        // playback starts (experimentalParseSubtitlesDuringExtraction off;
+        // the text renderer decodes them, StreamRenderersFactory), so a file
+        // with forty subtitle streams costs chino-stream one extraction, the
+        // one watched. Where the TV's output is stereo
         // a 5.1 default hands the DEFAULT to its stereo twin
         // (withStereoDefault): the player starts on the stereo track, the 5.1
         // one is in the audio menu.
@@ -383,6 +375,7 @@ private fun ExoPlayback(
         val mediaSourceFactory =
             androidx.media3.exoplayer.source.DefaultMediaSourceFactory(playDataSourceFactory)
                 .setLoadErrorHandlingPolicy(retryPolicy)
+                .experimentalParseSubtitlesDuringExtraction(false)
         // A packaged ladder starts on its first variant, the one
         // chino-stream warmed when the master was fetched (streamPlayerBuilder).
         streamPlayerBuilder(context, mediaSourceFactory)
@@ -400,10 +393,11 @@ private fun ExoPlayback(
                 } else {
                     setMaxAudioChannelCount(2)
                 }
-                // A forced track comes on by the player's rule alone
-                // (ForcedSubtitles.kt): Media3 would switch on the one in the
-                // audio's language wherever subtitles are on.
-                setIgnoredTextSelectionFlags(C.SELECTION_FLAG_FORCED)
+                // The subtitle on is the player's rule's or the viewer's
+                // (SubtitleChoices.kt), never Media3's: text starts off, and
+                // a DEFAULT or a FORCED flag switches nothing on by itself.
+                setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                setIgnoredTextSelectionFlags(C.SELECTION_FLAG_DEFAULT or C.SELECTION_FLAG_FORCED)
             }.build()
             qoe?.let { listener -> it.addAnalyticsListener(listener) }
             it.setMediaItem(mediaItem)
@@ -417,25 +411,7 @@ private fun ExoPlayback(
         }
     }
 
-    // Apply the user's preferred subtitle language whenever Settings changes.
-    // ExoPlayer's preferredTextLanguage trips its automatic track-selector to
-    // pick the closest matching text track; "off" disables the text type
-    // entirely. Anything the user selects manually via the side panel wins
-    // because applySubtitleSelection sets a hard override.
     val settingsPref by viewModel.settings.collectAsState()
-    // The forced subtitle's state (the rule is below, with the tracks): the
-    // forced track it switched on, and whether the viewer picked in the menu.
-    var forcedOn by remember(player) { mutableStateOf<String?>(null) }
-    var subtitlePicked by remember(player) { mutableStateOf(false) }
-    LaunchedEffect(player, settingsPref.preferredSubLang) {
-        player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-            // A forced track switched on before is the rule's to weigh again
-            // against the subtitles as set now.
-            .apply { if (forcedOn != null) clearOverridesOfType(C.TRACK_TYPE_TEXT) }
-            .subtitlesAsSet(settingsPref.preferredSubLang)
-            .build()
-        forcedOn = null
-    }
 
     // Apply the user's preferred audio language on first load (and whenever the
     // Settings value changes). setPreferredAudioLanguage trips ExoPlayer's
@@ -494,40 +470,32 @@ private fun ExoPlayback(
     }
     var tracks by remember { mutableStateOf<List<SubtitleTrack>>(emptyList()) }
     var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
-    // The forced subtitle (ForcedSubtitles.kt): where the subtitles as set
-    // put none on, the forced track in the language of the audio that plays
-    // comes on, and goes with the audio into another language, until the
-    // viewer picks in the menu; their Off holds for the rest of the playback
-    // (the view model's, past a reload). Read off the player's own tracks
-    // each time they change, so a rebuilt player's are the ones it acts on.
+    // The subtitle menu of the tracks the player has (SubtitleChoices.kt):
+    // the viewer's language and the server's first, the rest behind "more
+    // languages".
+    val subtitleMenu = remember(tracks, ready.subtitlePreference, ready.serverSubtitleLanguages) {
+        subtitleMenu(tracks.map { it.info }, ready.subtitlePreference, ready.serverSubtitleLanguages)
+    }
+    // What comes on by itself (autoSubtitle): the viewer's preferred
+    // subtitle language where the title has it, else the foreign-language
+    // parts only in the language of the audio that plays - decided as the
+    // playback starts and again when the audio's language changes, until the
+    // viewer picks in the menu (SubtitleSession, the view model's: it holds
+    // past a reload, whose player switches the same subtitle on again). Read
+    // off the player's own tracks each time they change, so a rebuilt
+    // player's are the ones it acts on.
     LaunchedEffect(player, tracks, audioTracks) {
-        val subtitles = collectSubtitleTracks(player.currentTracks)
-        val change = forcedChange(
-            tracks = subtitles.map { it.option },
-            audioLanguage = collectAudioTracks(player.currentTracks).firstOrNull { it.selected }?.language,
-            selected = subtitles.firstOrNull { it.selected }?.id,
-            switchedOn = forcedOn,
-            viewerChose = subtitlePicked || viewModel.subtitlesOff,
-        )
-        when (change) {
-            ForcedChange.Keep -> Unit
-            is ForcedChange.On -> {
-                val track = subtitles.first { it.id == change.track.id }
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                    .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-                    .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex))
-                    .build()
-                forcedOn = track.id
-                viewModel.reportTelemetry("subtitle_forced", mapOf("label" to track.label))
-            }
-            ForcedChange.Off -> {
-                player.trackSelectionParameters = player.trackSelectionParameters.buildUpon()
-                    .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-                    .subtitlesAsSet(settingsPref.preferredSubLang)
-                    .build()
-                forcedOn = null
+        if (tracks.isEmpty() && audioTracks.isEmpty()) return@LaunchedEffect
+        val session = viewModel.subtitleSession
+        val audioLanguage = audioTracks.firstOrNull { it.selected }?.language
+        if (session.playerDecides(audioLanguage)) {
+            val auto = autoSubtitle(subtitleMenu, audioLanguage, ready.subtitlePreference)
+            session.playerChose(auto?.id)
+            if (auto != null) {
+                viewModel.reportTelemetry(if (auto.forced) "subtitle_forced" else "subtitle_auto", mapOf("label" to auto.label))
             }
         }
+        selectSubtitle(player, tracks, session.chosen)
     }
     // The picture size of the video format Media3 plays (width to height) —
     // on Auto, the rung ExoPlayer has stepped to; null until the first frame.
@@ -1074,8 +1042,10 @@ private fun ExoPlayback(
                 }
                 // CENTER + ENTER when chrome is HIDDEN → toggle play/pause
                 // (web-equivalent "click on video"). When chrome is visible
-                // we let the focused button consume the event.
-                if (!controllerVisible) {
+                // we let the focused button consume the event - and the
+                // focused row of an open menu, chrome or not: OK there picks.
+                val menuShown = showSubtitlePanel || showAudioPanel || showQualityPanel || showSpeedPanel
+                if (!controllerVisible && !menuShown) {
                     when (e.keyCode) {
                         android.view.KeyEvent.KEYCODE_DPAD_CENTER,
                         android.view.KeyEvent.KEYCODE_ENTER,
@@ -1086,8 +1056,9 @@ private fun ExoPlayback(
                     }
                 }
                 // DPAD_LEFT/RIGHT when chrome is HIDDEN → seek ±10s. With
-                // chrome visible those keys navigate between focused buttons.
-                if (!controllerVisible) {
+                // chrome visible those keys navigate between focused buttons,
+                // and an open menu keeps them.
+                if (!controllerVisible && !menuShown) {
                     when (e.keyCode) {
                         android.view.KeyEvent.KEYCODE_DPAD_LEFT -> {
                             player.seekTo((player.currentPosition - 10_000L).coerceAtLeast(0L))
@@ -1129,8 +1100,12 @@ private fun ExoPlayback(
     // Chrome auto-hide: visible for 4s after the last interaction while
     // playing, 8s while paused. lastInteractionTs / noteInteraction are
     // declared earlier (above the key-event handler that needs them).
-    LaunchedEffect(lastInteractionTs, isPlaying) {
+    // An open menu keeps it: the menu stands above the control bar, and its
+    // rows have the remote's keys.
+    val menuOpen = showSubtitlePanel || showAudioPanel || showQualityPanel || showSpeedPanel
+    LaunchedEffect(lastInteractionTs, isPlaying, menuOpen) {
         controllerVisible = true
+        if (menuOpen) return@LaunchedEffect
         val gracePeriod = if (isPlaying) 4_000L else 8_000L
         delay(gracePeriod)
         controllerVisible = false
@@ -1141,8 +1116,11 @@ private fun ExoPlayback(
     // play/pause button so DPAD_LEFT/RIGHT lands on a sensible default. Without
     // this the BRAVIA's last-focused-view (sometimes None) means the first
     // DPAD press goes into a void and the user thinks the remote is broken.
+    // An open menu keeps the focus: the chrome coming back (the remote's
+    // subtitles key opens the menu over hidden chrome) moved the focus to
+    // play/pause, out of the menu - DOWN went nowhere and OK paused the title.
     LaunchedEffect(controllerVisible) {
-        if (controllerVisible) {
+        if (controllerVisible && !menuOpen) {
             runCatching { playPauseFocusRequester.requestFocus() }
         }
     }
@@ -1173,6 +1151,10 @@ private fun ExoPlayback(
                     // playing" deliberately — pausing for 30 s shouldn't make
                     // the screen blank either.
                     keepScreenOn = true
+                    // The subtitles' one look (SubtitleStyle.kt), drawn by
+                    // this view alone: no box, embedded styles off, the
+                    // viewer's own caption settings where they are on.
+                    subtitleView?.applySubtitleLook()
                 }
             },
             // A quality switch rebuilds the ExoPlayer instance (player is
@@ -1294,19 +1276,20 @@ private fun ExoPlayback(
         }
         if (showSubtitlePanel) {
             SubtitlePanel(
-                tracks = tracks,
-                onSelect = { track ->
-                    // The viewer's from now on: no forced subtitle comes on
-                    // by itself any more, and after their Off none for the
-                    // rest of the playback.
-                    subtitlePicked = true
-                    if (track == null) viewModel.turnSubtitlesOff()
-                    val label = applySubtitleSelection(player, track)
+                menu = subtitleMenu,
+                selected = tracks.firstOrNull { it.selected }?.id,
+                onSelect = { entry ->
+                    // The viewer's from now on, for the rest of the playback:
+                    // nothing comes on by itself any more, and after their
+                    // Off nothing at all. One at a time: the pick replaces
+                    // what was on.
+                    viewModel.subtitleSession.viewerPicks(entry?.id)
+                    selectSubtitle(player, tracks, entry?.id)
+                    val label = if (entry == null) "Subtitles off" else "Subtitles: ${entry.label}"
                     bannerMessage = label
                     showSubtitlePanel = false
                     viewModel.reportTelemetry("subtitle_select", mapOf("label" to label))
                 },
-                onDismiss = { showSubtitlePanel = false },
             )
         }
         if (showAudioPanel) {
@@ -1503,6 +1486,8 @@ private fun PlayerMenuRow(
     focusRequester: FocusRequester? = null,
     secondary: String? = null,
     leading: (@Composable () -> Unit)? = null,
+    trailing: (@Composable () -> Unit)? = null,
+    maxLines: Int = 1,
     onClick: () -> Unit,
 ) {
     val focus = rememberItemFocus()
@@ -1530,7 +1515,7 @@ private fun PlayerMenuRow(
                 color = if (selected) ChinoAccent else Color.White,
                 fontSize = 15.sp,
                 fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = 1,
+                maxLines = maxLines,
                 overflow = TextOverflow.Ellipsis,
             )
             if (secondary != null) {
@@ -1543,6 +1528,7 @@ private fun PlayerMenuRow(
                 )
             }
         }
+        trailing?.invoke()
     }
 }
 
@@ -1791,90 +1777,157 @@ private fun NextEpisodeButton(
 }
 
 /**
- * Side panel listing each subtitle track plus an "Off" entry.
- * DPAD-navigable; CENTER selects, BACK dismisses. Slides in from the right.
+ * The subtitle menu (SubtitleChoices.kt): "off" first, then the languages
+ * that matter here - the viewer's, the server's - then "more languages",
+ * which opens the rest of the title's tracks below it, its arrow turning. It
+ * opens on the subtitle that is on, the rest already open where that one is
+ * among them. DPAD-navigable; CENTER picks, BACK closes (the caller's
+ * BackHandler).
  */
 @Composable
 private fun SubtitlePanel(
-    tracks: List<SubtitleTrack>,
-    onSelect: (SubtitleTrack?) -> Unit,
-    onDismiss: () -> Unit,
+    menu: SubtitleMenu,
+    /** The menu id of the subtitle on; null for off. */
+    selected: String?,
+    onSelect: (SubtitleEntry?) -> Unit,
 ) {
+    val selectedInMore = selected != null && menu.more.any { it.id == selected }
+    var moreOpen by remember { mutableStateOf(selectedInMore) }
+    // The row the menu opens on: the subtitle on, else "off".
+    val focusOn = selected?.takeIf { id -> menu.all.any { it.id == id } }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    val anySelected = tracks.any { it.selected }
-    MenuPopover(width = 300.dp) {
-        PlayerMenuHeader("SUBTITLES", trailing = "${if (anySelected) 1 else 0}/${tracks.size}")
-        // "None / Off" — always first; clears the text-track override. No
-        // checkbox (web renders it as plain text, blue when active).
+    MenuPopover(width = 380.dp) {
+        PlayerMenuHeader("SUBTITLES")
         PlayerMenuRow(
-            label = "None / Off",
-            selected = !anySelected,
-            focusRequester = focusRequester,
+            label = "off",
+            selected = selected == null,
+            focusRequester = focusRequester.takeIf { focusOn == null },
             onClick = { onSelect(null) },
         )
-        if (tracks.isEmpty()) {
+        if (menu.all.isEmpty()) {
             Text(
                 text = "No subtitles available",
                 color = ChinoMuted,
                 fontSize = 13.sp,
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
             )
-        } else {
-            tracks.forEach { track ->
-                PlayerMenuRow(
-                    label = track.label,
-                    selected = track.selected,
-                    leading = { MenuCheckbox(track.selected) },
-                    onClick = { onSelect(track) },
-                )
+        }
+        menu.top.forEach { entry ->
+            SubtitleRow(entry, entry.id == selected, focusRequester.takeIf { entry.id == focusOn }, onSelect)
+        }
+        if (menu.more.isNotEmpty()) {
+            PlayerMenuRow(
+                label = "more languages",
+                selected = false,
+                trailing = { DisclosureArrow(open = moreOpen) },
+                onClick = { moreOpen = !moreOpen },
+            )
+            if (moreOpen) {
+                menu.more.forEach { entry ->
+                    SubtitleRow(entry, entry.id == selected, focusRequester.takeIf { entry.id == focusOn }, onSelect)
+                }
             }
         }
     }
 }
 
+@Composable
+private fun SubtitleRow(
+    entry: SubtitleEntry,
+    selected: Boolean,
+    focusRequester: FocusRequester?,
+    onSelect: (SubtitleEntry?) -> Unit,
+) {
+    PlayerMenuRow(
+        label = entry.label,
+        selected = selected,
+        focusRequester = focusRequester,
+        leading = { MenuCheckbox(selected) },
+        maxLines = 2,
+        onClick = { onSelect(entry) },
+    )
+}
+
+/** The arrow of "more languages": down while closed, up once open. */
+@Composable
+private fun DisclosureArrow(open: Boolean) {
+    val turn by androidx.compose.animation.core.animateFloatAsState(
+        targetValue = if (open) 180f else 0f,
+        animationSpec = tween(durationMillis = 150),
+        label = "disclosure",
+    )
+    androidx.compose.foundation.Image(
+        imageVector = Lucide.ChevronDown,
+        contentDescription = null,
+        colorFilter = androidx.compose.ui.graphics.ColorFilter.tint(ChinoMuted),
+        modifier = Modifier.size(16.dp).graphicsLayer { rotationZ = turn },
+    )
+}
+
+/** A text track as the player lists it, and what the menu is told of it. */
 data class SubtitleTrack(
+    /** Its menu id ([SubtitleTrackInfo.id]). */
     val id: String,
-    val label: String,
     val selected: Boolean,
-    // Internal pointers so applySubtitleSelection can rebuild the override.
+    // Internal pointers so selectSubtitle can build the override.
     val group: Tracks.Group,
     val trackIndex: Int,
-    /** What the forced subtitle's rule reads of it: language, forced, image. */
-    val option: SubtitleOption,
+    val info: SubtitleTrackInfo,
 )
 
-/** The subtitle panel's rows, each labelled by [subtitleLabels]: by its
- *  language ("German", "No dialogue" for zxx), with what its own label - the
- *  sidecar's, the rendition's NAME - says beyond that ("English · SDH"); a
- *  track in no language by its own label, else "Unknown". */
-private fun collectSubtitleTracks(tracks: Tracks): List<SubtitleTrack> {
-    val found = tracks.groups
+/** The player's text tracks: each side-loaded one by its own id
+ *  ([sideLoadedId]: "side:…", "emb:…"), a rendition of the master by
+ *  Media3's; their language, label, kind and whether they are pictures, as
+ *  the menu needs them. */
+private fun collectSubtitleTracks(tracks: Tracks): List<SubtitleTrack> =
+    tracks.groups
         .filter { it.type == C.TRACK_TYPE_TEXT }
         .flatMap { g -> (0 until g.length).map { i -> g to i } }
-    val formats = found.map { (g, i) -> g.getTrackFormat(i) }
-    val labels = subtitleLabels(
-        formats.map { fmt ->
-            SubtitleLabelInput(fmt.language, fmt.label, forced = (fmt.selectionFlags and C.SELECTION_FLAG_FORCED) != 0)
-        },
-    )
-    return found.mapIndexed { k, (g, i) ->
-        val id = "${g.mediaTrackGroup.id}#$i"
-        val fmt = formats[k]
-        SubtitleTrack(
-            id = id,
-            label = labels[k],
-            selected = g.isTrackSelected(i),
-            group = g,
-            trackIndex = i,
-            option = SubtitleOption(
+        .map { (g, i) ->
+            val fmt = g.getTrackFormat(i)
+            val id = sideLoadedId(fmt.id) ?: "${g.mediaTrackGroup.id}#$i"
+            SubtitleTrack(
                 id = id,
-                language = fmt.language,
-                forced = (fmt.selectionFlags and C.SELECTION_FLAG_FORCED) != 0,
-                image = isImageSubtitle(fmt.sampleMimeType, fmt.codecs),
-            ),
-        )
+                selected = g.isTrackSelected(i),
+                group = g,
+                trackIndex = i,
+                info = SubtitleTrackInfo(
+                    id = id,
+                    lang = fmt.language,
+                    title = fmt.label,
+                    forced = (fmt.selectionFlags and C.SELECTION_FLAG_FORCED) != 0,
+                    sdh = (fmt.roleFlags and C.ROLE_FLAG_DESCRIBES_MUSIC_AND_SOUND) != 0,
+                    image = isImageSubtitle(fmt.sampleMimeType, fmt.codecs),
+                ),
+            )
+        }
+
+/**
+ * Switches the subtitle [id] on - the one text track the player plays,
+ * whatever was on before - or, for null, every subtitle off. Nothing where
+ * that is already so: the effect that calls it runs again on every change of
+ * the tracks.
+ */
+private fun selectSubtitle(player: ExoPlayer, tracks: List<SubtitleTrack>, id: String?) {
+    val params = player.trackSelectionParameters
+    val textOff = C.TRACK_TYPE_TEXT in params.disabledTrackTypes
+    val on = tracks.filter { it.selected }
+    val target = id?.let { want -> tracks.firstOrNull { it.id == want } }
+    if (target == null) {
+        if (textOff && on.isEmpty()) return
+        player.trackSelectionParameters = params.buildUpon()
+            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+            .build()
+        return
     }
+    val override = params.overrides[target.group.mediaTrackGroup]
+    if (!textOff && on.size == 1 && on[0].id == target.id && override?.trackIndices == listOf(target.trackIndex)) return
+    player.trackSelectionParameters = params.buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
+        .setOverrideForType(TrackSelectionOverride(target.group.mediaTrackGroup, target.trackIndex))
+        .build()
 }
 
 data class AudioTrack(
@@ -1995,32 +2048,6 @@ private fun AudioPanel(
                 )
             }
         }
-    }
-}
-
-/** The subtitles as set in Settings: Off (or nothing set) turns text off,
- *  and with it any track picked; a language has Media3 pick a track in it. */
-private fun TrackSelectionParameters.Builder.subtitlesAsSet(pref: String): TrackSelectionParameters.Builder =
-    if (pref == "off" || pref.isBlank()) {
-        setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true).clearOverridesOfType(C.TRACK_TYPE_TEXT)
-    } else {
-        setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false).setPreferredTextLanguage(pref)
-    }
-
-private fun applySubtitleSelection(player: ExoPlayer, track: SubtitleTrack?): String {
-    val params = player.trackSelectionParameters
-    return if (track == null) {
-        player.trackSelectionParameters = params.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
-            .clearOverridesOfType(C.TRACK_TYPE_TEXT)
-            .build()
-        "Subtitles off"
-    } else {
-        player.trackSelectionParameters = params.buildUpon()
-            .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, false)
-            .setOverrideForType(TrackSelectionOverride(track.group.mediaTrackGroup, track.trackIndex))
-            .build()
-        "Subtitles: ${track.label}"
     }
 }
 
