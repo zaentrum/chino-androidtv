@@ -21,9 +21,12 @@ import cloud.nalet.chino.tv.data.api.QualityRung
  *
  * Each quality has the server's name, a name and its height by one table
  * ("Medium (720p)", docs/chino playback), shown as the server gives it; an
- * older server's height alone ("720p") is named by the same table here, and
- * a master's variants that come without a name are named by it as
- * chino-stream names a frame ([frameQualityName]).
+ * older server's height alone ("720p") is named by the same table here, its
+ * "High (source resolution)" by the frame that high encodes for this device
+ * ([highRungFrame]: a 4K original's is 1080p), and a master's variants that
+ * come without a name are named by it as chino-stream names a frame
+ * ([frameQualityName]). A step down compares the names shown, and a pick of
+ * the row the player is on loads nothing ([pickReloads]).
  *
  * A stream with no /play/info — a title's extra — has the same menu made from
  * its master's own variants, as the player read them ([variantMenu]).
@@ -36,11 +39,37 @@ internal val ON_THE_FLY = listOf("high", "medium", "low")
 
 /** The entries of [info] as the menu names them ([shownQualityName]); one
  *  without a label by its name ("High": no height rather than a wrong one),
- *  one without a name left out. */
-private fun namedEntries(info: PlayInfo?): List<QualityRung> =
+ *  one without a name left out. What a step down compares, too
+ *  (lowerOnTheFlyRung): the names the menu shows. */
+fun shownQualities(info: PlayInfo?): List<QualityRung> =
     info?.qualities.orEmpty()
         .filter { it.name.isNotBlank() }
         .map { it.copy(label = shownQualityName(it.label.ifBlank { it.name.replaceFirstChar(Char::uppercaseChar) }, it.name, info)) }
+
+/**
+ * [info] with its qualities named as this device's menu shows them, made
+ * once as it arrives: an older server's names by the table, its "High
+ * (source resolution)" by the frame its high encodes for this device
+ * ([shownQualityName], [maxHeight] the tallest frame the caps say the
+ * hardware decodes; 0 for none said). [original]: the title played as it
+ * is at high before a step down (a direct stream, a stream copy), whose
+ * /play/info at another q names high as a re-encode though q=high plays the
+ * original again - so its high is the "Original" here, as the menu and
+ * Playback info say of it there.
+ */
+fun namedQualities(info: PlayInfo, maxHeight: Int = 0, original: Boolean = false): PlayInfo {
+    if (info.qualities.isNullOrEmpty()) return info
+    return info.copy(
+        qualities = info.qualities.map { q ->
+            val label = when {
+                original && q.name.equals("high", ignoreCase = true) && !playsOriginal(info.mode, q.name) -> ORIGINAL
+                q.label.isBlank() -> q.label
+                else -> shownQualityName(q.label, q.name, info, maxHeight)
+            }
+            q.copy(label = label)
+        },
+    )
+}
 
 /**
  * The menu for [info], or null when there is nothing to pick (fewer than two
@@ -50,7 +79,7 @@ private fun namedEntries(info: PlayInfo?): List<QualityRung> =
  * put there should the server leave it out.
  */
 fun qualityMenu(info: PlayInfo?): List<QualityRung>? {
-    val entries = namedEntries(info).distinctBy { it.label.lowercase() }
+    val entries = shownQualities(info).distinctBy { it.label.lowercase() }
     if (entries.size < 2) return null
     if (!isPackaged(info?.mode)) return entries
     val auto = entries.firstOrNull { it.name == AUTO } ?: QualityRung(AUTO, "Auto")
@@ -108,10 +137,19 @@ fun variantMenu(variants: List<VideoVariant>): List<QualityRung>? {
  */
 fun chosenQuality(menu: List<QualityRung>, q: String, info: PlayInfo? = null): QualityRung? =
     menu.firstOrNull { it.name != AUTO && it.name.equals(q, ignoreCase = true) }
-        ?: namedEntries(info).firstOrNull { it.name.equals(q, ignoreCase = true) }?.let { listed ->
+        ?: shownQualities(info).firstOrNull { it.name.equals(q, ignoreCase = true) }?.let { listed ->
             menu.firstOrNull { it.name != AUTO && it.label.equals(listed.label, ignoreCase = true) }
         }
         ?: menu.firstOrNull { it.name == AUTO }
+
+/**
+ * Whether a pick of the menu's [rung] loads another stream: not where it is
+ * the row the player is on already ([chosenQuality] of the q it plays) -
+ * OK on the picked row, after a step down to a q of the same name too,
+ * leaves the stream as it is rather than reloading the one it left.
+ */
+fun pickReloads(menu: List<QualityRung>, q: String, info: PlayInfo?, rung: String): Boolean =
+    chosenQuality(menu, q, info)?.name?.equals(rung, ignoreCase = true) != true
 
 /** The standard picture heights: the transcoder's ladder rungs and the
  *  boxes players and sources come in, as chino-stream's sizeClasses. */
@@ -197,6 +235,23 @@ fun namedHeight(width: Int, height: Int): Int {
 fun frameQualityName(width: Int, height: Int): String? =
     namedHeight(width, height).takeIf { it > 0 }?.let(::qualityName)
 
+/**
+ * The frame an on-the-fly title's high encodes from a [width] x [height]
+ * original, as chino-stream's transcodeGeometry has it: the original's own
+ * size up to a 1920 x 1080 box - or the box of [maxHeight], the tallest
+ * frame this device's hardware decodes, where that is lower (0: none said)
+ * - else the original fitted into that box ("Invalid Level" past it), its
+ * sides even. A 3840 x 2160 original's high is 1920 x 1080, a 3840 x 1606
+ * one's 1920 x 804, a 1080p one on a device of 720 lines 1280 x 720.
+ */
+fun highRungFrame(width: Int, height: Int, maxHeight: Int = 0): Pair<Int, Int> {
+    val boxH = if (maxHeight in 1 until 1080) maxHeight else 1080
+    val boxW = boxH * 16 / 9
+    if (width <= 0 || height <= 0 || (width <= boxW && height <= boxH)) return width to height
+    return if (width.toLong() * boxH > height.toLong() * boxW) boxW to ((height * boxW / width + 1) and 1.inv())
+    else ((width * boxH / height + 1) and 1.inv()) to boxH
+}
+
 private val HEIGHT_ONLY = Regex("""(\d{3,4})p""", RegexOption.IGNORE_CASE)
 private val SOURCE_WORD = Regex("""(?<![A-Za-z])source(?![A-Za-z])""", RegexOption.IGNORE_CASE)
 
@@ -206,17 +261,26 @@ private val SOURCE_WORD = Regex("""(?<![A-Za-z])source(?![A-Za-z])""", RegexOpti
  * server's - a height alone ("720p") is named by the table ([qualityName]),
  * never with its height twice, and its "High (source resolution)" of the
  * quality [name] is "Original" where that plays the original as it is, else
- * named by the original's height ([info]), as a re-encode at the original's
- * size is.
+ * named by the frame that high encodes ([highOnTheFly]): the original's up
+ * to 1080 lines, a 4K original's fitted into 1080p - "High (1080p)", never
+ * "Ultra (2160p)" for the 1080p that plays.
  */
-fun shownQualityName(label: String, name: String? = null, info: PlayInfo? = null): String {
+fun shownQualityName(label: String, name: String? = null, info: PlayInfo? = null, maxHeight: Int = 0): String {
     val t = label.trim()
     HEIGHT_ONLY.matchEntire(t)?.let { return qualityName(it.groupValues[1].toInt()) }
     if (name != null && SOURCE_WORD.containsMatchIn(t)) {
         if (playsOriginal(info?.mode, name)) return ORIGINAL
-        info?.height?.let { frameQualityName(info.width ?: 0, it) }?.let { return it }
+        highOnTheFly(info, maxHeight)?.let { return it }
     }
     return t
+}
+
+/** The name of the frame an on-the-fly high encodes of [info]'s original
+ *  ([highRungFrame]); null where its size is not known. */
+private fun highOnTheFly(info: PlayInfo?, maxHeight: Int = 0): String? {
+    val height = info?.height?.takeIf { it > 0 } ?: return null
+    val (w, h) = highRungFrame(info.width ?: 0, height, maxHeight)
+    return frameQualityName(w, h)
 }
 
 /** The name of the original played as it is: a direct stream, a stream copy. */
@@ -228,13 +292,13 @@ private val ON_THE_FLY_WORDS = mapOf("high" to "High", "medium" to "Medium", "lo
 
 /** The quality [q] by its name in the quality menu, a name and its height
  *  ("Medium (720p)"): /play/info's label for it; "Original" for the original
- *  played as it is; a high on the fly by the original's frame; else the
- *  rung's word alone. */
+ *  played as it is; a high on the fly by the frame it encodes of the
+ *  original; else the rung's word alone. */
 fun qualityLabel(q: String, info: PlayInfo?): String {
     if (playsOriginal(info?.mode, q)) return ORIGINAL
     info?.qualities.orEmpty().firstOrNull { it.name.equals(q, ignoreCase = true) && it.label.isNotBlank() }
         ?.let { return shownQualityName(it.label, it.name, info) }
-    if (q.equals("high", ignoreCase = true)) info?.height?.let { frameQualityName(info.width ?: 0, it) }?.let { return it }
+    if (q.equals("high", ignoreCase = true)) highOnTheFly(info)?.let { return it }
     return ON_THE_FLY_WORDS[q.lowercase()] ?: q
 }
 

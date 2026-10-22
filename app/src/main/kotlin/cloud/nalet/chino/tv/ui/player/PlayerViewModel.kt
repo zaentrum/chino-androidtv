@@ -8,6 +8,7 @@ import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.AppSettings
 import cloud.nalet.chino.tv.data.PlayCaps
 import cloud.nalet.chino.tv.data.SettingsStore
+import cloud.nalet.chino.tv.data.capsMaxHeight
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.PlayInfo
 import cloud.nalet.chino.tv.data.api.ProgressBody
@@ -233,6 +234,11 @@ class PlayerViewModel(
     /** The step down on its way, until its stream has loaded. */
     private var stepDown: StepDown? = null
 
+    /** The title played its original as it is at high (a direct stream, a
+     *  stream copy) this session: after a step down its high is the
+     *  "Original" again (namedQualities). */
+    private var originalAtHigh = false
+
     /** The notice has been shown. */
     fun qualityNoticeShown() {
         _qualityNotice.value = null
@@ -290,7 +296,7 @@ class PlayerViewModel(
                 // Settings' subtitle language as it is now, read once: what
                 // comes on by itself is decided with it (SubtitleChoices.kt).
                 val subtitlePreference = runCatching { settingsStore.flow.first().preferredSubLang }.getOrDefault("off")
-                val (item, saved, segments, rawSubs, info, serverLanguages) = coroutineScope {
+                val (item, saved, segments, rawSubs, served, serverLanguages) = coroutineScope {
                     // An extra's detail is read above.
                     val itemDef = async { if (extra != null) null else runCatching { api.getItem(itemId) }.getOrNull() }
                     // When the user clicked "Play from start", skip the
@@ -333,7 +339,7 @@ class PlayerViewModel(
                 // length is /play/info's, chino-web's too, else the catalog's.
                 val resume = explicitStart ?: startFrom(
                     savedSec = saved,
-                    durationSec = ((info?.durationMs ?: item?.durationMs ?: 0L) / 1000L).toInt(),
+                    durationSec = ((served?.durationMs ?: item?.durationMs ?: 0L) / 1000L).toInt(),
                 )
                 val parentSeriesId = item?.parentId
                 // Episode title compose (web parity): "{Series} — S01E02 · {Episode}".
@@ -347,7 +353,11 @@ class PlayerViewModel(
                 // but high for a packaged q the title is no longer served for.
                 // An extra's master is its whole ladder: its quality menu pins a
                 // variant in the player (variantMenu), with no reload.
-                val resolvedQuality = if (extra != null) AUTO else playQuality(quality, info)
+                val resolvedQuality = if (extra != null) AUTO else playQuality(quality, served)
+                if (served != null && playsOriginal(served.mode, resolvedQuality)) originalAtHigh = true
+                // Its qualities named once, as this device's menu shows them:
+                // an older server's high by the frame it encodes for these caps.
+                val info = served?.let { namedQualities(it, capsMaxHeight(capsParam), original = originalAtHigh) }
                 // Binge entry: pre-skip the intro/recap chain ONLY when it
                 // begins right at the head (small tolerance for analyzer
                 // drift — segmenters often stamp the start a few hundred ms
@@ -817,7 +827,9 @@ class PlayerViewModel(
      * A player error at [positionMs]: what to do about it, by how the title
      * is served (PlaybackRecovery; an extra is packaged, [streamMode]). An
      * on-the-fly title steps down its ladder (high→medium→low: the transcode
-     * still warming the high rung while medium has been cached for hours); a
+     * still warming the high rung while medium has been cached for hours),
+     * by the names the menu shows, to a rung of the same name where no other
+     * is left, and is tried in place at its last; a
      * packaged one is tried again in place, then rebuilt at its quality —
      * never put on the on-the-fly ladder. A step down or a reload is started
      * here and goes on at the position; retrying in place and giving up are
@@ -825,7 +837,7 @@ class PlayerViewModel(
      */
     fun recoverFromError(positionMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.GiveUp
-        val r = recovery.onError(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, cur.playInfo?.qualities.orEmpty())
+        val r = recovery.onError(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, shownQualities(cur.playInfo))
         carryOut(r, cur, positionMs, cause = "error")
         return r
     }
@@ -840,7 +852,7 @@ class PlayerViewModel(
     fun recoverFromStall(positionMs: Long, loading: Boolean, bufferedAheadMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.Wait
         val r = recovery.onStall(
-            streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, loading, bufferedAheadMs, cur.playInfo?.qualities.orEmpty(),
+            streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, loading, bufferedAheadMs, shownQualities(cur.playInfo),
         )
         carryOut(r, cur, positionMs, cause = "stall")
         return r

@@ -57,10 +57,11 @@ fun isPackaged(mode: String?): Boolean = mode.equals("packaged", ignoreCase = tr
 
 /**
  * The rung below [quality] on the on-the-fly ladder: the next of [listed] -
- * /play/info's qualities, each named by the frame it encodes - with another
- * name, as a step down that keeps the picture is none (a 720p source's high
- * and medium are both "Medium (720p)": its high steps to low); null where no
- * other name is left. Where the q is not listed - a direct stream's, whose
+ * /play/info's qualities as the menu names them ([shownQualities]), each by
+ * the frame it encodes - with another name, as a step down that keeps the
+ * picture is none (a 720p source's high and medium are both "Medium
+ * (720p)": its high steps to low, an older server's "High (source
+ * resolution)" of it too); null where no other name is left. Where the q is not listed - a direct stream's, whose
  * info lists no ladder, an older server's - the fixed ladder: high, medium,
  * low, a q that is none of its rungs (a packaged one, on a title the server
  * no longer serves packaged) read as high, the server's default.
@@ -80,6 +81,14 @@ fun lowerOnTheFlyRung(quality: String, listed: List<QualityRung> = emptyList()):
     }
 }
 
+/** The next of [listed]'s on-the-fly rungs after [quality], whatever its
+ *  name: null at the last one, or where [quality] is not listed. */
+fun nextListedRung(quality: String, listed: List<QualityRung>): String? {
+    val ladder = listed.filter { it.name.lowercase() in ON_THE_FLY }
+    val at = ladder.indexOfFirst { it.name.equals(quality, ignoreCase = true) }
+    return if (at < 0) null else ladder.getOrNull(at + 1)?.name
+}
+
 /**
  * The tries of one play session. A rebuild makes a new player, so this lives
  * with the session (PlayerViewModel), not with a player: failing at the same
@@ -92,11 +101,20 @@ class PlaybackRecovery(private val passedMs: Long = SPOT_PASSED_MS) {
     private var inPlace = 0
     private var reloads = 0
 
-    /** A player error at [positionMs] of a title of [mode] played at
-     *  [quality], [listed] its /play/info's qualities. */
+    /**
+     * A player error at [positionMs] of a title of [mode] played at
+     * [quality], [listed] its /play/info's qualities as the menu names them.
+     * On the fly: a step down to another picture; where none is left, to the
+     * next rung of the same name anyway - another encode, cached apart, which
+     * may well play where the one warming failed (a step that says nothing:
+     * stepDownNoticeFor) - and at the last rung, tries in place and a
+     * rebuild, as for a packaged title, before the error shows.
+     */
     fun onError(mode: String?, quality: String, positionMs: Long, listed: List<QualityRung> = emptyList()): Recovery {
         moveTo(positionMs)
-        if (!isPackaged(mode)) return lowerOnTheFlyRung(quality, listed)?.let { Recovery.StepDown(it) } ?: Recovery.GiveUp
+        if (!isPackaged(mode)) {
+            (lowerOnTheFlyRung(quality, listed) ?: nextListedRung(quality, listed))?.let { return Recovery.StepDown(it) }
+        }
         return retryOrReload(quality) ?: Recovery.GiveUp
     }
 

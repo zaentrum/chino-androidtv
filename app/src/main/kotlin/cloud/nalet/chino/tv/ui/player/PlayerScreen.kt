@@ -1364,7 +1364,10 @@ private fun ExoPlayback(
                 playing = playing,
                 onPick = { rung ->
                     showQualityPanel = false
-                    if (!byPlayInfo) {
+                    if (!pickReloads(menu, quality, ready.playInfo, rung)) {
+                        // The row it is on: nothing to load, not even the q
+                        // a step down left that shares its name.
+                    } else if (!byPlayInfo) {
                         // A variant of the master: pinned in this player,
                         // where it plays on — no reload.
                         pinnedVariant = rung

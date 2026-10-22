@@ -35,12 +35,15 @@ class PlaybackRecoveryTest {
     }
 
     @Test
-    fun `an on-the-fly title steps down its ladder, and the error shows at low`() {
+    fun `an on-the-fly title steps down its ladder, is tried again at low, and then the error shows`() {
         for (mode in listOf("transcode", "remux", "passthrough", null)) {
             val r = PlaybackRecovery()
             assertEquals(Recovery.StepDown("medium"), r.onError(mode, "high", at))
             assertEquals(Recovery.StepDown("low"), r.onError(mode, "medium", at))
-            assertEquals(Recovery.GiveUp, r.onError(mode, "low", at))
+            assertEquals(
+                listOf(Recovery.RetryInPlace, Recovery.RetryInPlace, Recovery.RetryInPlace, Recovery.Reload("low"), Recovery.GiveUp),
+                List(5) { r.onError(mode, "low", at) },
+            )
         }
     }
 

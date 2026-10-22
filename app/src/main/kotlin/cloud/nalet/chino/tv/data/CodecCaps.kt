@@ -195,3 +195,12 @@ fun capsQuery(decoded: List<String>, eac3: Boolean, stereo: Boolean = false): St
     val tokens = decoded.filter { it != "eac3" } + if (eac3) listOf("eac3") else emptyList()
     return tokens.filter { !stereo || it !in SURROUND_TOKENS }.joinToString(",")
 }
+
+/**
+ * The tallest frame a ?caps= value says this device's hardware decodes: the
+ * largest `:maxHeight` of its video tokens ("avc:2160,hvc:1080" is 2160), 0
+ * where none says one - what chino-stream reads as the cap of the frames it
+ * encodes on the fly (Caps.MaxVideoHeight).
+ */
+fun capsMaxHeight(query: String): Int =
+    query.split(',').mapNotNull { it.substringAfter(':', "").trim().toIntOrNull() }.filter { it > 0 }.maxOrNull() ?: 0

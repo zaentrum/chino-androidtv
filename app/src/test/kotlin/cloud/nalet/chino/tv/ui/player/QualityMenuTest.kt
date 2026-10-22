@@ -42,11 +42,79 @@ class QualityMenuTest {
         assertEquals("Original", shownQualityName("Original"))
         assertEquals("Lowest (360p)", shownQualityName("Lowest (360p)"))
         // An older server's on-the-fly high: the original where it plays as
-        // it is, else a re-encode named by the original's height.
+        // it is, else a re-encode named by the frame it encodes - the
+        // original's up to 1080 lines, a larger one fitted into 1080p, as
+        // chino-stream's transcodeGeometry does.
+        val old = { w: Int, h: Int -> PlayInfo(mode = "transcode", width = w, height = h) }
         assertEquals("Original", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "remux", height = 1080)))
-        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode", width = 1920, height = 1080)))
-        assertEquals("Ultra (2160p)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode", width = 3840, height = 1606)))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", old(1920, 1080)))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", old(3840, 1606)))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", old(3840, 2160)))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", old(2560, 1440)))
+        assertEquals("Medium (720p)", shownQualityName("High (source resolution)", "high", old(1280, 720)))
+        // A device whose hardware decodes 720 lines gets a 720p high.
+        assertEquals("Medium (720p)", shownQualityName("High (source resolution)", "high", old(1920, 1080), maxHeight = 720))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", old(3840, 2160), maxHeight = 2160))
         assertEquals("High (source resolution)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode")))
+        // A high with no ladder listed, by the same frame.
+        assertEquals("High (1080p)", qualityLabel("high", old(3840, 2160)))
+    }
+
+    @Test
+    fun `the frame an on-the-fly high encodes, as chino-stream fits it`() {
+        assertEquals(1920 to 1080, highRungFrame(3840, 2160))
+        assertEquals(1920 to 804, highRungFrame(3840, 1606))
+        assertEquals(1920 to 1080, highRungFrame(2560, 1440))
+        // A 4:3 one is fitted by its height.
+        assertEquals(1440 to 1080, highRungFrame(2880, 2160))
+        assertEquals(1280 to 720, highRungFrame(1920, 1080, maxHeight = 720))
+        // Within the box: the original's own size; a size not known as it is.
+        assertEquals(1920 to 1080, highRungFrame(1920, 1080))
+        assertEquals(720 to 480, highRungFrame(720, 480))
+        assertEquals(0 to 2160, highRungFrame(0, 2160))
+    }
+
+    @Test
+    fun `an older server's names, made the menu's once as they arrive`() {
+        // An older server's 720p transcode: its high is the same picture as
+        // its medium, so one row, and a step down goes to low, by the names
+        // shown - with a notice.
+        val raw = onTheFly("high" to "High (source resolution)", "medium" to "Medium (720p)", "low" to "Low (480p)", width = 1280, height = 720)
+        val named = namedQualities(raw)
+        assertEquals(listOf("Medium (720p)", "Medium (720p)", "Low (480p)"), named.qualities!!.map { it.label })
+        assertEquals(listOf("high" to "Medium (720p)", "low" to "Low (480p)"), qualityMenu(named)!!.map { it.name to it.label })
+        assertEquals("low", lowerOnTheFlyRung("high", shownQualities(raw)))
+        assertEquals("low", lowerOnTheFlyRung("high", shownQualities(named)))
+        // A 4K original on a device whose hardware decodes 1080: High (1080p).
+        val uhd = onTheFly("high" to "High (source resolution)", "medium" to "Medium (720p)", "low" to "Low (480p)", width = 3840, height = 2160)
+        assertEquals("High (1080p)", namedQualities(uhd, maxHeight = 1080).qualities!!.first().label)
+        // A label not given stays so: the menu names it by its word.
+        assertEquals(listOf("High", "Medium (720p)", "Low (480p)"), qualityMenu(namedQualities(unknown))!!.map { it.label })
+    }
+
+    @Test
+    fun `after a step down from the original its high is the Original again`() {
+        // A direct stream stepped down to medium: /play/info at q=medium names
+        // high as a re-encode, but q=high plays the original again.
+        val named = namedQualities(hd, original = true)
+        assertEquals(listOf("Original", "Medium (720p)", "Low (480p)"), qualityMenu(named)!!.map { it.label })
+        assertEquals("Original", qualityLabel("high", named))
+        // A 720p one: the Original and its medium are two streams, two rows.
+        assertEquals(listOf("Original", "Medium (720p)", "Low (480p)"), qualityMenu(namedQualities(p720, original = true))!!.map { it.label })
+        // A title that never played its original: as the server names it.
+        assertEquals("High (1080p)", qualityMenu(namedQualities(hd))!!.first().label)
+    }
+
+    @Test
+    fun `a pick of the row the player is on loads nothing`() {
+        val menu = qualityMenu(p720)!!
+        // After a step down to medium the one row is high's: OK on it stays.
+        assertEquals(false, pickReloads(menu, "medium", p720, "high"))
+        assertEquals(true, pickReloads(menu, "medium", p720, "low"))
+        assertEquals(false, pickReloads(menu, "high", p720, "high"))
+        val ladderMenu = qualityMenu(ladder)!!
+        assertEquals(false, pickReloads(ladderMenu, "auto", ladder, "auto"))
+        assertEquals(true, pickReloads(ladderMenu, "auto", ladder, "v1"))
     }
 
     @Test
@@ -178,8 +246,12 @@ class QualityMenuTest {
         assertEquals("low", lowerOnTheFlyRung("high", p720.qualities))
         assertEquals("low", lowerOnTheFlyRung("medium", p720.qualities))
         assertEquals("low", lowerOnTheFlyRung("high", pal.qualities))
-        // A 360p source has no smaller picture.
+        // A 360p source has no smaller picture: on an error, the next rung
+        // of its name anyway - another encode - but never on a stall.
         assertNull(lowerOnTheFlyRung("high", p360.qualities))
+        assertEquals("medium", nextListedRung("high", p360.qualities))
+        assertNull(nextListedRung("low", p360.qualities))
+        assertNull(nextListedRung("v1", p360.qualities))
         // A high without a name is another than medium's.
         assertEquals("medium", lowerOnTheFlyRung("high", unknown.qualities))
         // No ladder listed - a direct stream's first step, an older server: the fixed one.
@@ -188,7 +260,23 @@ class QualityMenuTest {
         val at = 120_000L
         assertEquals(Recovery.StepDown("low"), PlaybackRecovery().onStall("transcode", "high", at, loading = true, bufferedAheadMs = 0, listed = p720.qualities))
         assertEquals(Recovery.Wait, PlaybackRecovery().onStall("transcode", "high", at, loading = true, bufferedAheadMs = 0, listed = p360.qualities))
-        assertEquals(Recovery.GiveUp, PlaybackRecovery().onError("transcode", "high", at, listed = p360.qualities))
+        val r = PlaybackRecovery()
+        assertEquals(
+            listOf(
+                Recovery.StepDown("medium"), Recovery.StepDown("low"),
+                // At the last rung: tried in place, rebuilt, then the error.
+                Recovery.RetryInPlace, Recovery.RetryInPlace, Recovery.RetryInPlace, Recovery.Reload("low"), Recovery.GiveUp,
+            ),
+            listOf("high", "medium", "low", "low", "low", "low", "low").map { q -> r.onError("transcode", q, at, listed = p360.qualities) },
+        )
+        // A 720p source's high steps to low on an error too, past the medium of its name.
+        assertEquals(Recovery.StepDown("low"), PlaybackRecovery().onError("transcode", "high", at, listed = p720.qualities))
+    }
+
+    @Test
+    fun `a step to the next rung of the same name says nothing`() {
+        val same = StepDown(quality = "medium", fromOriginal = false, stalled = false, previous = qualityLabel("high", p360))
+        assertNull(stepDownNoticeFor(same, "medium", p360))
     }
 
     @Test

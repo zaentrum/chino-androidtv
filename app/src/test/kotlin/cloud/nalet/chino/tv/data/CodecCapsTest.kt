@@ -27,4 +27,13 @@ class CodecCapsTest {
         assertEquals("avc:2160,hvc:2160,av1:2160,aac,mp3,opus", capsQuery(decoded, eac3 = true, stereo = true))
         assertEquals("avc:2160,hvc:2160,av1:2160,aac,mp3,opus", capsQuery(decoded, eac3 = false, stereo = true))
     }
+
+    @Test
+    fun `the tallest frame the caps say the hardware decodes`() {
+        assertEquals(2160, capsMaxHeight("avc:2160,hvc:1080,aac"))
+        assertEquals(720, capsMaxHeight("avc:720,aac,eac3"))
+        // Bare tokens say no height: none.
+        assertEquals(0, capsMaxHeight("avc,hvc,aac"))
+        assertEquals(0, capsMaxHeight(""))
+    }
 }
