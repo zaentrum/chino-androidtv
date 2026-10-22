@@ -215,8 +215,19 @@ class TrackLabelsTest {
         assertEquals("Spanish (Latin America)", languageName("spa-419"))
         assertEquals("English (New Zealand)", languageName("en-NZ"))
         assertEquals("Serbian (Latin, Serbia)", languageName("sr-Latn-RS"))
-        // A region the table has no name for: its code.
-        assertEquals("English (GU)", languageName("en-GU"))
+        // A region the table has no name for: the platform's, as the web's
+        // Intl names it - the spec's own example.
+        assertEquals("English (Guam)", languageName("en-GU"))
+        // The regions a title names that the table lacks, by their names.
+        assertEquals(
+            listOf(
+                "Spanish (Bolivia)", "Spanish (Ecuador)", "Spanish (Paraguay)", "Spanish (Dominican Republic)",
+                "Spanish (Guatemala)", "Spanish (Honduras)", "Spanish (Nicaragua)", "Spanish (Panama)",
+                "Spanish (El Salvador)", "Spanish (Costa Rica)", "Spanish (Puerto Rico)", "English (Jamaica)",
+            ),
+            listOf("es-BO", "es-EC", "es-PY", "es-DO", "es-GT", "es-HN", "es-NI", "es-PA", "es-SV", "es-CR", "es-PR", "en-JM")
+                .map(::languageName),
+        )
         // A variant or an extension names nothing.
         assertEquals("German", languageName("de-1901"))
         assertEquals("English (United States)", languageName("en-US-x-custom"))
@@ -358,12 +369,104 @@ class TrackLabelsTest {
             Case("spa", "Spanish (Latin America)", "Spanish (Latin America)", tag = "es-419"),
             // The tag's region again says nothing more.
             Case("es-419", "Español (Latinoamérica)", "Spanish (Latin America)", tag = "es-419"),
+            // A title in the dialect form names the region: said in the
+            // standard form, the language and its region in brackets.
+            Case("por", "Brazilian Portuguese", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "European Portuguese", "Portuguese (Portugal)", tag = "pt-PT"),
+            Case("spa", "Latin American Spanish", "Spanish (Latin America)", tag = "es-419"),
+            Case("fre", "Canadian French", "French (Canada)", tag = "fr-CA"),
+            Case("eng", "British English", "English (United Kingdom)", tag = "en-GB"),
+            Case("dut", "Flemish", "Dutch (Belgium)", tag = "nl-BE"),
+            Case("pt-BR", "Brazilian Portuguese", "Portuguese (Brazil)", tag = "pt-BR"),
+            // The dialect's adjective in brackets after the language, or alone.
+            Case("por", "Portuguese (Brazilian)", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "Portuguese (European)", "Portuguese (Portugal)", tag = "pt-PT"),
+            Case("spa", "Spanish (Latin American)", "Spanish (Latin America)", tag = "es-419"),
+            Case("spa", "Spanish (Mexican)", "Spanish (Mexico)", tag = "es-MX"),
+            Case("fre", "French (Canadian)", "French (Canada)", tag = "fr-CA"),
+            Case("eng", "English (British)", "English (United Kingdom)", tag = "en-GB"),
+            Case("eng", "English [American]", "English (United States)", tag = "en-US"),
+            Case("ger", "German (Austrian)", "German (Austria)", tag = "de-AT"),
+            Case("por", "Brazilian", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "Portuguese - Brazilian", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case(
+                "spa", "Spanish (Latin American) (Forced)", "Spanish (Latin America) · foreign-language parts only",
+                tag = "es-419",
+            ),
             // Another region than the tag's stays a word.
             Case("es-ES", "Latinoamérica", "Spanish (Spain) · Latinoamérica"),
-            // A region among other words is a word.
+            Case("es-ES", "Latin American Spanish", "Spanish (Spain) · Latin American Spanish"),
+            Case("pt-PT", "Portuguese (Brazilian)", "Portuguese (Portugal) · Brazilian"),
+            // A region among other words is a word, its adjective too.
             Case("fre", "Canada Commentaire", "French · Canada Commentaire"),
+            Case("por", "Brazilian Commentary", "Portuguese · Brazilian Commentary"),
             // With the kind: once, after.
             Case("spa", "Español (Latinoamérica) (Forced)", "Spanish (Latin America) · foreign-language parts only"),
+        ),
+    )
+
+    @Test
+    fun aTitleThatIsACodeOfTheTracksLanguageKeepsItsRegionOrScriptInTheWordListsForm() = check(
+        listOf(
+            Case("por", "PT-BR", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "PT-PT", "Portuguese (Portugal)", tag = "pt-PT"),
+            Case("por", "pt_BR", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("chi", "zh-Hant", "Chinese (Traditional)", tag = "zh-Hant"),
+            Case("chi", "zh-Hans", "Chinese (Simplified)", tag = "zh-Hans"),
+            Case("chi", "zh-Hant-TW", "Chinese (Traditional, Taiwan)", tag = "zh-Hant-TW"),
+            Case("spa", "es-419", "Spanish (Latin America)", tag = "es-419"),
+            Case("spa", "es-ES", "Spanish (Spain)", tag = "es-ES"),
+            Case("eng", "en-US", "English (United States)", tag = "en-US"),
+            Case("eng", "en-GB", "English (United Kingdom)", tag = "en-GB"),
+            // In brackets after the language's name, and with the kind.
+            Case("por", "Português (PT-BR)", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "PT-BR (Forced)", "Portuguese (Brazil) · foreign-language parts only", tag = "pt-BR"),
+            // The tag's own again says nothing more; a code alone is the language.
+            Case("pt-BR", "PT-BR", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "pt", "Portuguese", tag = "pt"),
+            Case("eng", "eng", "English", tag = "en"),
+            Case("eng", "en-US-x-custom", "English (United States)", tag = "en-US"),
+            // Another region or script than the tag's stays, as the title says it.
+            Case("pt-PT", "PT-BR", "Portuguese (Portugal) · PT-BR"),
+            Case("zh-Hant", "zh-Hans", "Chinese (Traditional) · zh-Hans"),
+            // Another language's code is something else.
+            Case("eng", "de", "English · de"),
+        ),
+    )
+
+    @Test
+    fun aRegionsCodeInBracketsAfterTheLanguageIsTheRegionWhereItIsOneOfTheLanguages() = check(
+        listOf(
+            Case("por", "Português (BR)", "Portuguese (Brazil)", tag = "pt-BR"),
+            // The language's own code, and a region of it: the region.
+            Case("por", "Português (PT)", "Portuguese (Portugal)", tag = "pt-PT"),
+            Case("spa", "Español (419)", "Spanish (Latin America)", tag = "es-419"),
+            Case("spa", "Español [MX]", "Spanish (Mexico)", tag = "es-MX"),
+            Case("fre", "Français (CA)", "French (Canada)", tag = "fr-CA"),
+            Case("ger", "Deutsch (CH)", "German (Switzerland)", tag = "de-CH"),
+            Case("chi", "中文（TW）", "Chinese (Taiwan)", tag = "zh-TW"),
+            Case("spa", "Español (419) (Forced)", "Spanish (Latin America) · foreign-language parts only", tag = "es-419"),
+            // The language's own code where it is none of its regions: the
+            // language (El Salvador, Argentina and Canada speak other
+            // languages most).
+            Case("swe", "Svenska (SV)", "Swedish"),
+            Case("ara", "Arabic (AR)", "Arabic"),
+            Case("cat", "Català (CA)", "Catalan"),
+            // A code in lower case is a language's; other capitals are a word.
+            Case("por", "Português (pt)", "Portuguese"),
+            Case("eng", "English (BD)", "English · BD"),
+            // Another number than a region's is a server's, which goes; 150
+            // is Europe, no region of Spanish's.
+            Case("spa", "Español (150)", "Spanish · 150"),
+        ),
+    )
+
+    @Test
+    fun aRegionTheTitleNamesIsNamedByThePlatformWhereTheTableLacksIt() = check(
+        listOf(
+            Case("spa", "Español (Bolivia)", "Spanish (Bolivia)", tag = "es-BO"),
+            Case("spa", "Español (El Salvador)", "Spanish (El Salvador)", tag = "es-SV"),
+            Case("spa", "Español - Puerto Rico", "Spanish (Puerto Rico)", tag = "es-PR"),
         ),
     )
 
@@ -433,15 +536,35 @@ class TrackLabelsTest {
             Case("eng", "English (US)", "English (United States)", tag = "en-US"),
             Case("eng", "English · SDH", "English · for deaf and hard of hearing", tag = "en"),
             Case("und", "Signs", "Signs", tag = ""),
-            // A region's name in English, not a demonym: chino-web reads
-            // "Brazilian", "Latin American" and "Canadian" as words.
-            Case("por", "Portuguese · Brazilian", "Portuguese · Brazilian", tag = "pt"),
-            Case("spa", "Spanish · Latin American", "Spanish · Latin American"),
-            Case("fre", "French · Canadian", "French · Canadian"),
+            // A region's adjective, as chino-stream writes a title's
+            // "Portuguese (Brazilian)" and "Brazilian Portuguese": the region,
+            // in brackets after the language (chino-web 2cda806).
+            Case("por", "Portuguese · Brazilian", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "Portuguese · Brazilian Portuguese", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "Portuguese · Brazilian · SDH", "Portuguese (Brazil) · for deaf and hard of hearing", tag = "pt-BR"),
+            Case("spa", "Spanish · Latin American", "Spanish (Latin America)", tag = "es-419"),
+            Case("fre", "French · Canadian", "French (Canada)", tag = "fr-CA"),
+            Case("eng", "English · British", "English (United Kingdom)", tag = "en-GB"),
+            Case("dut", "Dutch · Flemish", "Dutch (Belgium)", tag = "nl-BE"),
+            // CLDR names no regional form by these: they stay words, as on the
+            // web; "Swiss French" is one, "Swiss German" is a language.
+            Case("spa", "Spanish (Castilian)", "Spanish · Castilian", tag = "es"),
+            Case("fre", "French (Belgian)", "French · Belgian", tag = "fr"),
+            Case("ger", "German (Swiss)", "German · Swiss", tag = "de"),
+            Case("fre", "French (Swiss)", "French (Switzerland)", tag = "fr-CH"),
+            Case("eng", "English (Australian)", "English (Australia)", tag = "en-AU"),
+            Case("eng", "English (Canadian)", "English (Canada)", tag = "en-CA"),
+            Case("spa", "Spanish (European)", "Spanish (Spain)", tag = "es-ES"),
+            // In the language's own words, too.
+            Case("spa", "Español de México", "Spanish (Mexico)", tag = "es-MX"),
+            Case("ger", "Österreichisches Deutsch", "German (Austria)", tag = "de-AT"),
             // A script the tag has already is the one; a word of another
             // language's region says nothing here.
             Case("zh-Hant", "Simplified", "Chinese (Traditional) · Simplified"),
             Case("ger", "Canadian", "German · Canadian"),
+            // What CLDR calls Tagalog in every language only names it again.
+            Case("tgl", "Filipino", "Tagalog"),
+            Case("fil", "Tagalog", "Filipino · Tagalog"),
             // "us" in a sentence is no region.
             Case("eng", "talk to us", "English · talk to us"),
             // In another language than its own, too.

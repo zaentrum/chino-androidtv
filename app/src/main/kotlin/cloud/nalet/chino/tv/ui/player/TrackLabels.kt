@@ -18,7 +18,10 @@ import java.util.Locale
  * A subtitle is named by chino-web's rule (lib/languages.ts subtitleLabel,
  * whose cases TrackLabelsTest runs as they are): its language first, with the
  * script or region its own title names where its tag names none ("chi"
- * titled "繁體中文" is "Chinese (Traditional)"); then what its title says
+ * titled "繁體中文" is "Chinese (Traditional)") - by its name, its code
+ * ("PT-BR", "Português (BR)") or the region's adjective ("Portuguese
+ * (Brazilian)", "Brazilian Portuguese"), all "Portuguese (Brazil)" in the
+ * word list's form; then what its title says
  * besides ("English · Commentary", "Chinese · Cantonese", "Chinese
  * (Simplified) · AI") - not the words of it that only name the language
  * again, in any language and wherever they stand ("Deutsch", "中文",
@@ -127,7 +130,8 @@ private val SCRIPT_NAMES = mapOf(
 
 // The English names of the regions a tag carries, as CLDR puts them in a
 // language's name: "pt-BR" is "Portuguese (Brazil)", "es-419" "Spanish
-// (Latin America)". A region not here is named by its code.
+// (Latin America)". A region not here is named by the platform ("en-GU" is
+// "English (Guam)"), else by its code.
 private val REGION_NAMES = mapOf(
     "US" to "United States", "GB" to "United Kingdom", "AU" to "Australia", "CA" to "Canada",
     "NZ" to "New Zealand", "IE" to "Ireland", "IN" to "India", "ZA" to "South Africa", "SG" to "Singapore",
@@ -224,18 +228,50 @@ private val SHORT_REGION_NAMES = mapOf(
     "zh-Hant" to mapOf("HK" to "香港", "MO" to "澳門"),
 )
 
-// The English names CLDR gives a language with its region or script as one
-// ("Brazilian Portuguese"), which chino-web reads from Intl's dialect form
-// and the platform's Locale does not give: a title that is one of them only
-// names the track's language.
-private val DIALECT_NAMES = mapOf(
-    "en-AU" to "australian english", "en-CA" to "canadian english", "en-GB" to "british english",
-    "en-US" to "american english", "es-419" to "latin american spanish", "es-ES" to "european spanish",
-    "es-MX" to "mexican spanish", "fr-CA" to "canadian french", "fr-CH" to "swiss french",
-    "de-AT" to "austrian german", "de-CH" to "swiss high german", "pt-BR" to "brazilian portuguese",
-    "pt-PT" to "european portuguese", "nl-BE" to "flemish", "ro-MD" to "moldavian",
-    "zh-Hans" to "simplified chinese", "zh-Hant" to "traditional chinese",
+// The names CLDR gives a language with its region or script as one
+// ("Brazilian Portuguese"), in English and, where it has one, in the
+// language itself ("français canadien"), which chino-web reads from Intl's
+// dialect form and the platform's Locale does not give. A title that is one
+// of them names the track's language with that region (dialectsOf); on a
+// track tagged with it, it only names the language again.
+private val DIALECT_NAMES: Map<String, Pair<String, String?>> = mapOf(
+    "en-US" to ("american english" to null), "en-GB" to ("british english" to null),
+    "en-AU" to ("australian english" to null), "en-CA" to ("canadian english" to null),
+    "es-ES" to ("european spanish" to "español de españa"), "es-MX" to ("mexican spanish" to "español de méxico"),
+    "es-419" to ("latin american spanish" to "español latinoamericano"),
+    "fr-CA" to ("canadian french" to "français canadien"), "fr-CH" to ("swiss french" to "français suisse"),
+    "de-AT" to ("austrian german" to "österreichisches deutsch"), "de-CH" to ("swiss high german" to "schweizer hochdeutsch"),
+    "pt-BR" to ("brazilian portuguese" to null), "pt-PT" to ("european portuguese" to null),
+    "nl-BE" to ("flemish" to "vlaams"), "ro-MD" to ("moldavian" to null), "fa-AF" to ("dari" to "دری"),
+    "sr-ME" to ("montenegrin" to null),
+    "zh-Hans" to ("simplified chinese" to null), "zh-Hant" to ("traditional chinese" to null),
 )
+
+// The regions whose own language - the one CLDR's likely subtags give them,
+// as chino-web reads them from Intl.Locale's maximize() - is each language,
+// of the regions a title may name (REGION_CODES): a region's code in
+// brackets after the language names one of these ("Português (BR)").
+private val LIKELY_REGIONS: Map<String, List<String>> = mapOf(
+    "en" to listOf("US", "GB", "AU", "CA", "NZ", "IE", "ZA", "SG", "NG", "150"), "hi" to listOf("IN"),
+    "fil" to listOf("PH"), "ms" to listOf("MY"), "sw" to listOf("KE"), "pt" to listOf("BR", "PT", "AO", "MZ"),
+    "es" to listOf("ES", "MX", "AR", "CO", "CL", "PE", "VE", "UY", "CU", "BO", "EC", "DO", "GT", "HN", "NI", "PA", "SV", "CR", "PR", "419"),
+    "fr" to listOf("FR", "LU", "MC"), "nl" to listOf("BE", "NL", "SR"), "de" to listOf("CH", "DE", "AT", "LI"),
+    "it" to listOf("IT", "SM"), "zh" to listOf("CN", "TW", "HK", "MO"), "ja" to listOf("JP"), "ko" to listOf("KR", "KP"),
+    "mn" to listOf("MN"), "ru" to listOf("RU", "BY", "KZ"), "uk" to listOf("UA"), "uz" to listOf("UZ"), "sv" to listOf("SE"),
+    "fi" to listOf("FI"), "nb" to listOf("NO"), "da" to listOf("DK"), "is" to listOf("IS"), "et" to listOf("EE"),
+    "lv" to listOf("LV"), "lt" to listOf("LT"), "pl" to listOf("PL"), "cs" to listOf("CZ"), "sk" to listOf("SK"),
+    "hu" to listOf("HU"), "ro" to listOf("RO", "MD"), "bg" to listOf("BG"), "sr" to listOf("RS", "ME"), "bs" to listOf("BA"),
+    "hr" to listOf("HR"), "sl" to listOf("SI"), "mk" to listOf("MK"), "sq" to listOf("AL", "XK"), "el" to listOf("GR", "CY"),
+    "tr" to listOf("TR"), "ka" to listOf("GE"), "hy" to listOf("AM"), "az" to listOf("AZ"), "he" to listOf("IL"),
+    "ar" to listOf("SA", "EG", "AE", "MA", "DZ", "TN", "LB", "JO", "IQ", "SY", "KW", "QA", "BH", "OM", "YE", "LY", "SD"),
+    "fa" to listOf("IR", "AF"), "ur" to listOf("PK"), "bn" to listOf("BD"), "si" to listOf("LK"), "ne" to listOf("NP"),
+    "th" to listOf("TH"), "vi" to listOf("VN"), "id" to listOf("ID"), "km" to listOf("KH"), "lo" to listOf("LA"), "my" to listOf("MM"),
+)
+
+// Other names of a language where chino-web's Intl gives one the platform
+// does not: CLDR folds "tl" into "fil", and calls it Filipino in every
+// language, so a Tagalog track titled "Filipino" only names its language.
+private val OTHER_NAMES = mapOf("tl" to listOf("filipino"))
 
 /** Lower-cased, without its accents: "Latinoamérica" is "latinoamerica". */
 private fun folded(text: String): String =
@@ -276,6 +312,62 @@ private fun regionsOf(base: String): Map<String, String> = synchronized(regionsO
     }
 }
 
+/** The name without the word or words [word] ("brazilian" of "brazilian
+ *  portuguese"); the name as it is where they are not among its words. */
+private fun withoutWords(name: String, word: String): String =
+    " $name ".replaceFirst(" $word ", " ").replace(SPACES, " ").trim()
+
+private val dialectsOf = HashMap<String, Map<String, String>>()
+
+/**
+ * The names CLDR's dialect form gives a language's regional forms of its own
+ * ([DIALECT_NAMES]), in the language itself and in English, folded -
+ * "brazilian portuguese" "BR", "latin american spanish" "419", "flemish" "BE"
+ * for "nl" - and each without the language's own name, the adjective a title
+ * puts in brackets after it ("Portuguese (Brazilian)"): "brazilian" "BR",
+ * "latin american" "419", "british" "GB". A title that says one names the
+ * region, which the standard form says in brackets ("Portuguese (Brazil)").
+ * chino-web's dialectsOf. Made once per language, when a title asks.
+ */
+private fun dialectsOf(base: String): Map<String, String> = synchronized(dialectsOf) {
+    dialectsOf.getOrPut(base) {
+        val dialects = LinkedHashMap<String, String>()
+        val forms = DIALECT_NAMES.mapNotNull { (tag, names) ->
+            regionOf(tag)?.takeIf { normalizeLang(tag) == base }?.let { it to names }
+        }
+        // A dialect's name, and its adjective: the name without the
+        // language's own name in the same language.
+        fun add(region: String, dialect: String, language: String) {
+            val name = folded(dialect)
+            dialects.putIfAbsent(name, region)
+            val adjective = if (language.isEmpty()) "" else withoutWords(name, language)
+            if (adjective.isNotEmpty() && adjective != name) dialects.putIfAbsent(adjective, region)
+        }
+        // In the language itself first, then in English, as the web asks Intl.
+        val own = folded(ENDONYMS[base]?.firstOrNull().orEmpty())
+        for ((region, names) in forms) names.second?.let { add(region, it, own) }
+        val english = folded(NAMES[base] ?: platformName(base).orEmpty())
+        for ((region, names) in forms) add(region, names.first, english)
+        dialects
+    }
+}
+
+private val regionCodesOf = HashMap<String, Set<String>>()
+
+/**
+ * The regions the language [base] ([normalizeLang]) is a region's own in, by
+ * their codes: where it is the language the region speaks most (CLDR's likely
+ * subtags, [LIKELY_REGIONS]: "BR" and "PT" for "pt", "CH" and "AT" for "de"),
+ * and where CLDR names a regional form of it ("CA" for "fr": "Canadian
+ * French"). A code in brackets after the language names one of these
+ * ("Português (BR)", "Português (PT)"); other capitals there are a word
+ * ("English (BD)"), or the language's own code where it is none of its
+ * regions ("Svenska (SV)"). chino-web's regionCodesOf.
+ */
+private fun regionCodesOf(base: String): Set<String> = synchronized(regionCodesOf) {
+    regionCodesOf.getOrPut(base) { dialectsOf(base).values.toSet() + LIKELY_REGIONS[base].orEmpty() }
+}
+
 /** The locales a language's name is looked up in: the languages a library
  *  is likely to carry, each naming every other. */
 private val NAME_LOCALES: List<Locale> by lazy {
@@ -303,20 +395,38 @@ private fun languageNames(code: String?): Set<String> {
         }
         for (t in tags) {
             names += languageName(t).lowercase()
-            DIALECT_NAMES[t]?.let { names += it }
+            DIALECT_NAMES[t]?.let { (english, own) -> names += listOfNotNull(english, own) }
         }
         ENDONYMS[base]?.let { names += it }
+        OTHER_NAMES[base]?.let { names += it }
     }
     synchronized(languageNames) { languageNames[tag] = names }
     return names
 }
 
+/** The script and the region a title names that is only a code of the
+ *  track's own language ("BR" of "PT-BR", "Hant" of "zh-Hant" on "chi"),
+ *  each "" where it names none ("eng" on English); null for a title that is
+ *  no code, or one of another language or of none. */
+private fun codeSays(title: String, lang: String?): Says.Variant? {
+    val base = normalizeLang(lang)
+    if (base.isEmpty() || !CODE_LIKE.matches(title) || normalizeLang(title) != base) return null
+    val tag = namedTag(languageTag(title))
+    return Says.Variant(scriptOf(tag).orEmpty(), regionOf(tag).orEmpty())
+}
+
 /** Whether a title only names the track's language again, in any language
  *  ("Deutsch", "中文", "English", "eng" on a German, Chinese, English
- *  track), or names no language as a code ("und"). */
+ *  track) - as a code, with no script or region the track's tag does not
+ *  name ("pt-BR" on "pt-BR", not on "por" or "pt-PT") - or names no
+ *  language as a code ("und"). */
 private fun namesLanguage(title: String, lang: String?): Boolean {
     val t = title.trim()
     if (t.isEmpty()) return false
+    codeSays(t, lang)?.let { said ->
+        val tag = namedTag(languageTag(lang))
+        return (said.script.isEmpty() || said.script == scriptOf(tag)) && (said.region.isEmpty() || said.region == regionOf(tag))
+    }
     return sameLanguageCode(t, lang) || t.lowercase() in languageNames(lang)
 }
 
@@ -432,11 +542,17 @@ private fun variantNames(tag: String): List<String> {
         when {
             script == null && region == null && sub.length == 4 && sub.all { it.isLetter() } -> script = SCRIPT_NAMES[sub] ?: sub
             region == null && ((sub.length == 2 && sub.all { it.isLetter() }) || (sub.length == 3 && sub.all { it.isDigit() })) ->
-                region = REGION_NAMES[sub] ?: sub
+                region = REGION_NAMES[sub] ?: platformRegionName(sub) ?: sub
         }
     }
     return listOfNotNull(script, region)
 }
+
+/** The platform's English name of a region the table lacks ("Guam" of
+ *  "GU"), where it knows one. */
+private fun platformRegionName(region: String): String? = runCatching {
+    Locale.Builder().setRegion(region).build().getDisplayCountry(Locale.ENGLISH)
+}.getOrNull()?.takeIf { it.isNotBlank() && !it.equals(region, ignoreCase = true) }
 
 /** Whether the code says what the track is in: a language, no dialogue,
  *  several languages or one with no code. */
@@ -457,36 +573,51 @@ private val MASKED_BRACKET = Regex("\u0001(\\d+)\u0002")
 // Where a title's parts meet: "Chinese (Simplified) · 中文", "German - Deutsch".
 private val PART_SEPARATOR = Regex("""\s*[·|/–—]\s*|\s+-\s+|\s*:\s+|\s*,\s+""")
 
+// A region's code as a title gives it in brackets: two capitals, or the
+// three digits of one of the world's regions ("419").
+private val BRACKETED_REGION = Regex("^([A-Z]{2}|\\d{3})$")
+
 /** What a piece of a title says of the track's language. */
 private sealed interface Says {
     /** It is the language: "Deutsch", "中文". */
     data object Language : Says
 
-    /** Its script: "简体". */
-    data class Script(val script: String) : Says
-
-    /** Its region: "Latinoamérica". */
-    data class Region(val region: String) : Says
+    /** Its script and its region, each "" where it names none: "简体",
+     *  "Latinoamérica", "Brazilian", "PT-BR". */
+    data class Variant(val script: String, val region: String) : Says
 
     /** A Chinese variety, in the word list's words: "粵語" is "Cantonese". */
     data class Words(val words: String) : Says
 }
 
-/** What a piece of a title - a part, a bracket, words of one - says of the
- *  track's language, or null for none of these. Words inside a longer piece
- *  name the language by a name, never by a code: "und" is a German word. */
-private fun pieceSays(text: String, code: String?, whole: Boolean): Says? {
+/**
+ * What a piece of a title - a part, a bracket, words of one - says of the
+ * track's language: that it is the language ("Deutsch", "中文"), its script
+ * ("简体"), its region ("Latinoamérica", "Brazilian", "Brazilian
+ * Portuguese"), either or both as a code of the language ("PT-BR",
+ * "zh-Hant-TW"), a Chinese variety in the word list's words ("粵語":
+ * "Cantonese"); null for none of these. In brackets ([bracketed]), a
+ * region's code says the region where it is one of the language's
+ * ("Português (BR)": [regionCodesOf]). Words inside a longer piece name the
+ * language by a name, never by a code: "und" is a German word.
+ */
+private fun pieceSays(text: String, code: String?, whole: Boolean, bracketed: Boolean = false): Says? {
     val t = text.trim()
     if (t.isEmpty()) return null
     val lower = t.lowercase()
-    if (if (whole) namesLanguage(t, code) else lower in languageNames(code)) return Says.Language
     val base = normalizeLang(code)
+    if (whole && base.isNotEmpty()) {
+        if (bracketed && BRACKETED_REGION.matches(t) && t in regionCodesOf(base)) return Says.Variant("", t)
+        codeSays(t, code)?.takeIf { it.script.isNotEmpty() || it.region.isNotEmpty() }?.let { return it }
+    }
+    if (if (whole) namesLanguage(t, code) else lower in languageNames(code)) return Says.Language
     if (base == "zh") {
-        CHINESE_SCRIPTS[lower]?.let { return Says.Script(it) }
+        CHINESE_SCRIPTS[lower]?.let { return Says.Variant(it, "") }
         CHINESE_VARIETIES[t]?.let { return Says.Words(it) }
     }
-    val region = if (base.isNotEmpty()) regionsOf(base)[folded(t)] else null
-    return region?.let { Says.Region(it) }
+    if (base.isEmpty()) return null
+    val region = regionsOf(base)[folded(t)] ?: dialectsOf(base)[folded(t)]
+    return region?.let { Says.Variant("", it) }
 }
 
 /** A title read for a track: what is left of it, and the script and the
@@ -498,10 +629,11 @@ private data class TitleRead(val title: String, val script: String, val region: 
  * names the language again, and the script and the region it names that
  * the tag agrees with. A part, or a bracket, that is the language's name,
  * script or region goes whole ("Chinese (Simplified) · 中文", "Español
- * (Latinoamérica)"); inside one with other words only the language's names
- * go ("Deutsch Kommentar" is "Kommentar") - not the label's own name, which
- * says it once ("English Commentary") - and a region stays a word. Nothing
- * read, the title as it was. chino-web's readParts.
+ * (Latinoamérica)", "Portuguese (Brazilian)", "PT-BR", "Português (BR)");
+ * inside one with other words only the language's names go ("Deutsch
+ * Kommentar" is "Kommentar") - not the label's own name, which says it once
+ * ("English Commentary") - and a region stays a word. Nothing read, the
+ * title as it was. chino-web's readParts.
  */
 private fun readParts(title: String, code: String?): TitleRead {
     val tag = namedTag(languageTag(code))
@@ -514,25 +646,26 @@ private fun readParts(title: String, code: String?): TitleRead {
     fun agreesScript(v: String) = (ownScript.isEmpty() || ownScript == v) && (foundScript.isEmpty() || foundScript == v)
     fun agreesRegion(v: String) = (ownRegion.isEmpty() || ownRegion == v) && (foundRegion.isEmpty() || foundRegion == v)
 
-    // What is left of a piece; null for nothing.
-    fun readPiece(text: String): String? {
+    // Takes the script and the region a piece names, where both agree with
+    // the tag's and with what the title named before.
+    fun takes(says: Says.Variant): Boolean {
+        if ((says.script.isNotEmpty() && !agreesScript(says.script)) || (says.region.isNotEmpty() && !agreesRegion(says.region))) return false
+        if (says.script.isNotEmpty()) foundScript = says.script
+        if (says.region.isNotEmpty()) foundRegion = says.region
+        changed = true
+        return true
+    }
+
+    // What is left of a piece, a part or a bracket; null for nothing.
+    fun readPiece(text: String, bracketed: Boolean): String? {
         val t = text.trim()
         if (t.isEmpty()) return null
-        when (val whole = pieceSays(t, code, whole = true)) {
+        when (val whole = pieceSays(t, code, whole = true, bracketed = bracketed)) {
             Says.Language -> {
                 changed = true
                 return null
             }
-            is Says.Script -> if (agreesScript(whole.script)) {
-                foundScript = whole.script
-                changed = true
-                return null
-            }
-            is Says.Region -> if (agreesRegion(whole.region)) {
-                foundRegion = whole.region
-                changed = true
-                return null
-            }
+            is Says.Variant -> if (takes(whole)) return null
             is Says.Words -> {
                 changed = true
                 return whole.words
@@ -563,22 +696,16 @@ private fun readParts(title: String, code: String?): TitleRead {
         val plain = runs.any { it.second == null }
         val kept = ArrayList<String>()
         for ((run, says) in runs) {
-            when {
-                says == null -> kept += run
-                says == Says.Language -> if (plain && run.lowercase() == display) kept += run else changed = true
-                says is Says.Script && agreesScript(says.script) -> {
-                    foundScript = says.script
-                    changed = true
-                }
-                says is Says.Region && !plain && agreesRegion(says.region) -> {
-                    foundRegion = says.region
-                    changed = true
-                }
-                says is Says.Words -> {
+            when (says) {
+                null -> kept += run
+                Says.Language -> if (plain && run.lowercase() == display) kept += run else changed = true
+                is Says.Words -> {
                     kept += says.words
                     changed = true
                 }
-                else -> kept += run
+                // A region among other words stays a word; a script goes,
+                // where it agrees.
+                is Says.Variant -> if ((says.region.isNotEmpty() && plain) || !takes(says)) kept += run
             }
         }
         return if (kept.isEmpty()) null else kept.joinToString(" ")
@@ -597,7 +724,8 @@ private fun readParts(title: String, code: String?): TitleRead {
             inner += brackets[m.groupValues[1].toInt()]
             " "
         }
-        val pieces = (listOf(readPiece(main.replace(SPACES, " "))) + inner.map(::readPiece)).filterNotNull()
+        val pieces = (listOf(readPiece(main.replace(SPACES, " "), bracketed = false)) + inner.map { readPiece(it, bracketed = true) })
+            .filterNotNull()
         if (pieces.isNotEmpty()) kept += (listOf(pieces[0]) + pieces.drop(1).map { "($it)" }).joinToString(" ")
     }
     return TitleRead(if (changed) kept.joinToString(" · ") else title, foundScript, foundRegion)
@@ -684,8 +812,9 @@ private val SDH_PHRASES = Regex(
 )
 
 // A number a server gave a title to keep it unique in its group ("English
-// (2)"); the menu shows each subtitle once, by its label.
-private val TRAILING_NUMBER = Regex("""\s*\(\d+\)$""")
+// (2)"); the menu shows each subtitle once, by its label. Not the code of
+// one of the world's regions: "Español (419)" is Latin America's.
+private val TRAILING_NUMBER = Regex("""\s*\((?!(?:419|150)\))\d+\)$""")
 
 private val SEPARATOR_RUN = Regex("""\s*([·\-–—:,|/])(\s*[·\-–—:,|/])+\s*""")
 private val SEPARATOR_AFTER_OPEN = Regex("""([(\[])\s*[·\-–—:,|/]+\s*""")

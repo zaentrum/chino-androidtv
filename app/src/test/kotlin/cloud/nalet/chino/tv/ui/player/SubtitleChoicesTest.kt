@@ -104,14 +104,14 @@ class SubtitleChoicesTest {
         )
         assertEquals(listOf("emb:0", "emb:1", "side:ai-en", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans"), menu.top.map { it.id })
         // The rest by language in the file's order, a language's tracks
-        // together. chino-stream's "Spanish · Latin American" reads as the web
-        // reads it (TrackLabelsTest).
+        // together. chino-stream's "Spanish · Latin American" is the region,
+        // as the web reads it (TrackLabelsTest).
         assertEquals(
             listOf(
-                "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Greek", "Spanish · Latin American",
-                "Spanish", "Estonian", "Finnish", "French · Canadian", "French", "Hebrew", "Hindi", "Hungarian",
+                "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Greek", "Spanish (Latin America)",
+                "Spanish", "Estonian", "Finnish", "French (Canada)", "French", "Hebrew", "Hindi", "Hungarian",
                 "Indonesian", "Italian", "Japanese", "Korean", "Lithuanian", "Latvian", "Malay", "Dutch", "Norwegian",
-                "Polish", "Portuguese", "Portuguese · Brazilian", "Russian", "Slovak", "Slovenian", "Swedish", "Tamil",
+                "Polish", "Portuguese", "Portuguese (Brazil)", "Russian", "Slovak", "Slovenian", "Swedish", "Tamil",
                 "Telugu", "Thai", "Turkish", "Ukrainian", "Vietnamese",
             ),
             labels(menu.more),
@@ -133,7 +133,7 @@ class SubtitleChoicesTest {
         // A language the server is not set up for: first, its tracks in the
         // file's order.
         val french = subtitleMenu(tracks, preferred = "fr", serverLanguages = server)
-        assertEquals(listOf("French · Canadian", "French", "English"), labels(french.top).take(3))
+        assertEquals(listOf("French", "French (Canada)", "English"), labels(french.top).take(3))
         assertFalse("French" in labels(french.more))
         assertTrue("German" in labels(french.top))
     }
