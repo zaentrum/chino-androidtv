@@ -89,6 +89,8 @@ import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.theme.LoadError
+import cloud.nalet.chino.tv.ui.theme.WatchedMark
+import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
@@ -215,7 +217,7 @@ fun DetailScreen(
 private fun DetailContent(
     s: DetailUiState.Ready,
     inWatchlist: Boolean,
-    /** The ids in the Watchlist: the episode rows' bookmarks. */
+    /** The ids in the Watchlist: the episode rows' and the cards' bookmarks. */
     watchlist: Set<String>,
     liked: Boolean,
     onPlay: (resume: Boolean) -> Unit,
@@ -380,6 +382,7 @@ private fun DetailContent(
                     items = s.similar,
                     baseUrl = s.baseUrl,
                     streamToken = s.streamToken,
+                    watchlist = watchlist,
                     onSelect = onSimilarSelected,
                 )
             }
@@ -1171,6 +1174,8 @@ private fun MoreLikeThisSection(
     items: List<Item>,
     baseUrl: String,
     streamToken: String,
+    /** The ids in the Watchlist: the cards' bookmarks. */
+    watchlist: Set<String>,
     onSelect: (String) -> Unit,
 ) {
     Column(
@@ -1192,6 +1197,7 @@ private fun MoreLikeThisSection(
                 SimilarCard(
                     item = entry,
                     posterUrl = "$baseUrl/v1/items/${entry.id}/poster?stream=$streamToken",
+                    saved = entry.id in watchlist,
                     onClick = { onSelect(entry.id) },
                 )
             }
@@ -1199,8 +1205,11 @@ private fun MoreLikeThisSection(
     }
 }
 
+/** A card of "More like this", with a card's status marks (docs/chino,
+ *  title actions): the Watchlist's bookmark top-left where [saved], the
+ *  watched check top-right. */
 @Composable
-private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
+private fun SimilarCard(item: Item, posterUrl: String, saved: Boolean, onClick: () -> Unit) {
     val focus = rememberItemFocus()
     ChinoCard(
         onClick = onClick,
@@ -1220,6 +1229,8 @@ private fun SimilarCard(item: Item, posterUrl: String, onClick: () -> Unit) {
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
+                if (saved) WatchlistMark(Modifier.align(Alignment.TopStart).padding(6.dp))
+                if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(modifier = Modifier.padding(8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(

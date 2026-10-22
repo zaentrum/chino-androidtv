@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
+import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.ProgressBody
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
@@ -62,9 +63,14 @@ class LibraryViewModel(
     private val streamTokens: StreamTokenManager,
     private val telemetry: Telemetry,
     private val baseUrl: String,
+    private val userFlags: UserFlagsRepository,
 ) : ViewModel() {
     private val _state = MutableStateFlow<LibraryUiState>(LibraryUiState.Loading)
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
+
+    /** The ids in the Watchlist, the shared cache every screen marks its
+     *  cards from: Home is the first screen, so it warms it itself. */
+    val watchlist: StateFlow<Set<String>> = userFlags.watchlist
 
     // Monotonic "user just (re)entered Home" signal. LibraryContent's
     // focus/align effect is keyed on this so it re-fires on EVERY home entry —
@@ -89,6 +95,7 @@ class LibraryViewModel(
 
     init {
         telemetry.event("screen_view", extra = mapOf("screen" to "library"))
+        viewModelScope.launch { userFlags.warm() }
         refresh()
         // Independent ticker for hero rotation — doesn't restart on filter
         // changes so the hero feels alive even when the grid is reloading.
@@ -386,7 +393,7 @@ class LibraryViewModel(
         fun factory(container: AppContainer) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                LibraryViewModel(container.chinoApi, container.streamTokenManager, container.telemetry, container.baseUrl) as T
+                LibraryViewModel(container.chinoApi, container.streamTokenManager, container.telemetry, container.baseUrl, container.userFlags) as T
         }
     }
 }

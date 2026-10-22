@@ -412,8 +412,9 @@ class FocusScreenshotTest {
 
     @Composable
     private fun Badges() {
-        // A browse card saved (blue) and watched (green), a shelf's poster
-        // watched, the hero's rating (blue) and the bell's unread count (blue).
+        // A browse card saved (blue) and watched (green), a Home shelf's
+        // poster saved and watched too - the same marks on every card - the
+        // hero's rating (blue) and the bell's unread count (blue).
         Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room), verticalAlignment = Alignment.Top) {
             PosterGridCard(
                 item = posters[0].copy(watchedAt = "2026-10-01T20:00:00Z"),
@@ -426,6 +427,7 @@ class FocusScreenshotTest {
                 item = posters[1].copy(watchedAt = "2026-10-01T20:00:00Z"),
                 posterUrl = "https://artwork.test/p2",
                 onItemSelected = {},
+                saved = true,
             )
             Column(verticalArrangement = Arrangement.spacedBy(24.dp)) {
                 RatingBadge(rating = 7.4)

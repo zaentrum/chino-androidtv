@@ -97,6 +97,7 @@ import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
 import com.composables.icons.lucide.Check
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
+import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 
 @Composable
 fun LibraryScreen(
@@ -115,6 +116,8 @@ fun LibraryScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val homeEntryNonce by viewModel.homeEntryNonce.collectAsState()
+    // The ids in the Watchlist: every card's bookmark.
+    val watchlist by viewModel.watchlist.collectAsState()
     // Refresh the continue-watching shelf whenever the screen comes back to
     // the foreground — covers "user finished an episode and pressed BACK"
     // (LocalLifecycleOwner here is the NavBackStackEntry, which returns to
@@ -155,6 +158,7 @@ fun LibraryScreen(
                     movies = s.movies,
                     series = s.series,
                     continueWatching = s.continueWatching,
+                    watchlist = watchlist,
                     baseUrl = s.baseUrl,
                     streamToken = s.streamToken,
                     genres = s.genres,
@@ -191,6 +195,8 @@ private fun LibraryContent(
     movies: List<Item>,
     series: List<Item>,
     continueWatching: List<cloud.nalet.chino.tv.data.api.ContinueWatchingItem>,
+    /** The ids in the Watchlist: the cards' bookmarks. */
+    watchlist: Set<String>,
     baseUrl: String,
     streamToken: String,
     genres: List<String>,
@@ -395,6 +401,7 @@ private fun LibraryContent(
                     items = cwRows,
                     baseUrl = baseUrl,
                     streamToken = streamToken,
+                    saved = watchlist,
                     showProgress = true,
                     onItemSelected = onItemSelected,
                     // Only the in-progress shelf gets the dismiss action — Next
@@ -416,6 +423,7 @@ private fun LibraryContent(
                     items = nextUpRows,
                     baseUrl = baseUrl,
                     streamToken = streamToken,
+                    saved = watchlist,
                     showProgress = false,
                     onItemSelected = onItemSelected,
                     // Next Up rows carry no dismiss, but they DO get the watched
@@ -444,6 +452,7 @@ private fun LibraryContent(
                     items = movies,
                     baseUrl = baseUrl,
                     streamToken = streamToken,
+                    saved = watchlist,
                     onItemSelected = onItemSelected,
                     onSeeAll = onMoviesNav,
                     onToggleWatched = onToggleWatched,
@@ -462,6 +471,7 @@ private fun LibraryContent(
                     items = series,
                     baseUrl = baseUrl,
                     streamToken = streamToken,
+                    saved = watchlist,
                     onItemSelected = onItemSelected,
                     onSeeAll = onSeriesNav,
                     onToggleWatched = onToggleWatched,
@@ -480,6 +490,7 @@ private fun LibraryContent(
                     items = topRated,
                     baseUrl = baseUrl,
                     streamToken = streamToken,
+                    saved = watchlist,
                     onItemSelected = onItemSelected,
                     // Top Rated is a movies-only shelf — See All goes to Movies.
                     onSeeAll = onMoviesNav,
@@ -885,6 +896,8 @@ private fun ContinueWatchingRow(
     items: List<cloud.nalet.chino.tv.data.api.ContinueWatchingItem>,
     baseUrl: String,
     streamToken: String,
+    /** The ids in the Watchlist: the cards' bookmarks. */
+    saved: Set<String>,
     showProgress: Boolean,
     onItemSelected: (String) -> Unit,
     // Non-null only on the in-progress shelf. When set, the card's actions menu
@@ -929,6 +942,7 @@ private fun ContinueWatchingRow(
                 item = item,
                 baseUrl = baseUrl,
                 streamToken = streamToken,
+                saved = item.id in saved,
                 showProgress = showProgress,
                 onClick = { onItemSelected(item.id) },
                 onLongPress = openMenu,
@@ -946,6 +960,8 @@ private fun ContinueWatchingCard(
     item: cloud.nalet.chino.tv.data.api.ContinueWatchingItem,
     baseUrl: String,
     streamToken: String,
+    /** In the Watchlist: its bookmark, top-left. */
+    saved: Boolean,
     showProgress: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
@@ -984,9 +1000,11 @@ private fun ContinueWatchingCard(
                     contentDescription = displayTitle,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // The watched check — top-right, shown once the user finishes a
-                // CW/Next-Up item (e.g. just un-marked then re-marked). The
-                // same mark as the PosterCard's and Browse's.
+                // The Watchlist's bookmark top-left, the watched check
+                // top-right (shown once the user finishes a CW/Next-Up item,
+                // e.g. just un-marked then re-marked): the same marks as the
+                // PosterCard's and Browse's.
+                if (saved) WatchlistMark(Modifier.align(Alignment.TopStart).padding(6.dp))
                 if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
                 if (progress != null && progress > 0f) {
                     Box(
@@ -1267,6 +1285,8 @@ internal fun ItemGrid(
     baseUrl: String,
     streamToken: String,
     onItemSelected: (String) -> Unit,
+    /** The ids in the Watchlist: the cards' bookmarks. */
+    saved: Set<String> = emptySet(),
     // Navigates to the full Movies/Series overview. The home shelf is capped
     // (~20 items, VM-side) and terminates in a "See All" tile instead of
     // paging the whole catalogue inline — that endless inline paging is what
@@ -1289,6 +1309,7 @@ internal fun ItemGrid(
                 item = item,
                 posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
                 onItemSelected = onItemSelected,
+                saved = item.id in saved,
                 // Hold-OK opens the shared menu with the watched toggle. Marking
                 // watched drops the card from this rail (rails are unwatched=true).
                 onLongPress = {
@@ -1352,6 +1373,9 @@ internal fun PosterCard(
     posterUrl: String,
     onItemSelected: (String) -> Unit,
     onLongPress: () -> Unit = {},
+    /** In the Watchlist: its bookmark, top-left (docs/chino, title actions:
+     *  one icon and one colour on buttons and on cards alike). */
+    saved: Boolean = false,
     focus: ItemFocus = rememberItemFocus(),
 ) {
     // Card body: poster on top in 2:3, meta strip below with title + year.
@@ -1381,9 +1405,11 @@ internal fun PosterCard(
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // The watched check — top-right of the poster. Server stamps
-                // watched_at when the user has finished an item; non-null
-                // means "show the check", dark on green as everywhere.
+                // The Watchlist's bookmark top-left, dark on blue; the watched
+                // check top-right. Server stamps watched_at when the user has
+                // finished an item; non-null means "show the check", dark on
+                // green as everywhere.
+                if (saved) WatchlistMark(Modifier.align(Alignment.TopStart).padding(6.dp))
                 if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(
