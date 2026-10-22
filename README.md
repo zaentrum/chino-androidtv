@@ -48,6 +48,9 @@ real values always come from the connected server at runtime.
   screen; the episode a detail page was opened on has a bar along its left
   edge instead (`ui/theme/Focus.kt`)
 - Playback with trickplay scrubbing thumbnails
+- A quality step down the player makes by itself is said on screen for a few
+  seconds, the quality named as its menu names it: "Switched to Medium (720p)
+  quality: the connection can't keep up with the original."
 - Playback quality reports, as chino-web sends them: the time to the first
   frame, each stall mid-play and how long it lasted, the bandwidth the player
   sees with its segments' load times and time to first byte, the switches of

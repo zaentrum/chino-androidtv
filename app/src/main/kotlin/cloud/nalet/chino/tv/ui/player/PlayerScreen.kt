@@ -1279,6 +1279,12 @@ private fun ExoPlayback(
         bannerMessage?.let { label ->
             SubtitleBanner(label = label, onDismiss = { bannerMessage = null })
         }
+        // A step down the player made by itself says what it did and why
+        // (docs/chino, playback): long enough to read from the sofa.
+        val qualityNotice by viewModel.qualityNotice.collectAsState()
+        qualityNotice?.let { notice ->
+            SubtitleBanner(label = notice, durationMs = 6_000, onDismiss = viewModel::qualityNoticeShown)
+        }
         if (showSubtitlePanel) {
             SubtitlePanel(
                 menu = subtitleMenu,
@@ -2187,9 +2193,9 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
 }
 
 @Composable
-private fun SubtitleBanner(label: String, onDismiss: () -> Unit) {
+private fun SubtitleBanner(label: String, durationMs: Long = 2_000, onDismiss: () -> Unit) {
     LaunchedEffect(label) {
-        delay(2_000)
+        delay(durationMs)
         onDismiss()
     }
     Box(

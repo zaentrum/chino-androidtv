@@ -145,3 +145,34 @@ fun playQuality(requested: String?, info: PlayInfo?): String {
     if (requested.lowercase() in ON_THE_FLY) return requested
     return if (info != null && !isPackaged(info.mode)) "high" else requested
 }
+
+/** The names of chino-stream's on-the-fly rungs, as its /play/info labels
+ *  them: what a step down says where the info at hand lists no ladder (a
+ *  title played from its original). */
+private val ON_THE_FLY_LABELS = mapOf("high" to "High", "medium" to "Medium (720p)", "low" to "Low (480p)")
+
+/** The quality [q] by its name in the quality menu, a name and its height
+ *  ("Medium (720p)"): /play/info's label for it, else chino-stream's own. */
+fun qualityLabel(q: String, info: PlayInfo?): String =
+    info?.qualities.orEmpty().firstOrNull { it.name.equals(q, ignoreCase = true) && it.label.isNotBlank() }?.label
+        ?: ON_THE_FLY_LABELS[q.lowercase()]
+        ?: q
+
+/** Whether a stream of [mode] at [q] plays the original as it is: a direct
+ *  stream or a stream copy at high, which a step down leaves for the
+ *  encoded ladder. */
+fun playsOriginal(mode: String?, q: String): Boolean =
+    (mode.equals("passthrough", ignoreCase = true) || mode.equals("remux", ignoreCase = true)) &&
+        q.equals("high", ignoreCase = true)
+
+/**
+ * What the player says when it steps the quality down by itself
+ * (docs/chino, playback), [label] the new quality as the menu names it: from
+ * the original when the connection is too slow ([stalled]), or because the
+ * original couldn't be streamed; else one step down between qualities.
+ */
+fun stepDownNotice(fromOriginal: Boolean, stalled: Boolean, label: String): String = when {
+    fromOriginal && stalled -> "Switched to $label quality: the connection can't keep up with the original."
+    fromOriginal -> "Switched to $label quality: the original couldn't be streamed."
+    else -> "Switched to $label quality: the connection can't keep up."
+}

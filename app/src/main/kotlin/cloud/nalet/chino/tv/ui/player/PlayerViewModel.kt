@@ -217,6 +217,21 @@ class PlayerViewModel(
      *  one on and the viewer's pick - their Off included - holds. */
     val subtitleSession = SubtitleSession()
 
+    /** A step down the player made by itself, said once the stream it moved
+     *  to has loaded: what it says ([stepDownNotice]), null when nothing. */
+    private val _qualityNotice = MutableStateFlow<String?>(null)
+    val qualityNotice: StateFlow<String?> = _qualityNotice.asStateFlow()
+
+    /** The step down on its way: the q it goes to, whether it leaves the
+     *  original and whether a stall made it. */
+    private data class StepDownNote(val quality: String, val fromOriginal: Boolean, val stalled: Boolean)
+    private var stepDown: StepDownNote? = null
+
+    /** The notice has been shown. */
+    fun qualityNoticeShown() {
+        _qualityNotice.value = null
+    }
+
     init { prepare(quality = null) }
 
     /**
@@ -406,6 +421,12 @@ class PlayerViewModel(
                     report.quality = resolvedQuality
                 }
                 val prev = _state.value as? PlayerUiState.Ready
+                // A step down is said once its stream is at hand, by the name
+                // the quality menu gives it ("Medium (720p)").
+                stepDown?.takeIf { it.quality.equals(resolvedQuality, ignoreCase = true) }?.let { note ->
+                    _qualityNotice.value = stepDownNotice(note.fromOriginal, note.stalled, qualityLabel(resolvedQuality, info))
+                }
+                stepDown = null
                 PlayerUiState.Ready(
                     masterUrl = extra?.masterUrl ?: buildString {
                         append("$base/v1/items/$itemId/play/master.m3u8?stream=$token")
@@ -816,6 +837,11 @@ class PlayerViewModel(
         val atSec = (positionMs / 1000L).toInt()
         when (r) {
             is Recovery.StepDown -> {
+                stepDown = StepDownNote(
+                    quality = r.quality,
+                    fromOriginal = playsOriginal(streamMode(mode, cur.playInfo), cur.currentQuality),
+                    stalled = cause == "stall",
+                )
                 if (requests.telemetry) {
                     telemetry.event(
                         "quality_fallback",

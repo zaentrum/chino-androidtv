@@ -150,4 +150,44 @@ class QualityMenuTest {
         assertEquals("medium", playQuality("medium", transcode))
         assertEquals("low", playQuality("low", ladder))
     }
+
+    @Test
+    fun `a quality is named by the menu's name, a name and its height`() {
+        val onTheFly = PlayInfo(
+            mode = "transcode",
+            qualities = listOf(QualityRung("high", "High"), QualityRung("medium", "Medium (720p)"), QualityRung("low", "Low (480p)")),
+        )
+        assertEquals("Medium (720p)", qualityLabel("medium", onTheFly))
+        assertEquals("Low (480p)", qualityLabel("LOW", onTheFly))
+        assertEquals("720p", qualityLabel("v1", ladder))
+        // A server that sent no qualities: chino-stream's own names.
+        assertEquals("Medium (720p)", qualityLabel("medium", null))
+        assertEquals("Low (480p)", qualityLabel("low", PlayInfo(mode = "remux")))
+        assertEquals("v9", qualityLabel("v9", null))
+    }
+
+    @Test
+    fun `the original plays as it is only in a direct stream or a stream copy at high`() {
+        assertEquals(true, playsOriginal("passthrough", "high"))
+        assertEquals(true, playsOriginal("remux", "high"))
+        assertEquals(false, playsOriginal("remux", "medium"))
+        assertEquals(false, playsOriginal("transcode", "high"))
+        assertEquals(false, playsOriginal(null, "high"))
+    }
+
+    @Test
+    fun `a step down says what it switched to and why`() {
+        assertEquals(
+            "Switched to Medium (720p) quality: the connection can't keep up with the original.",
+            stepDownNotice(fromOriginal = true, stalled = true, label = "Medium (720p)"),
+        )
+        assertEquals(
+            "Switched to Medium (720p) quality: the original couldn't be streamed.",
+            stepDownNotice(fromOriginal = true, stalled = false, label = "Medium (720p)"),
+        )
+        assertEquals(
+            "Switched to Low (480p) quality: the connection can't keep up.",
+            stepDownNotice(fromOriginal = false, stalled = true, label = "Low (480p)"),
+        )
+    }
 }
