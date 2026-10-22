@@ -57,6 +57,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
@@ -1458,7 +1461,9 @@ private fun isPostCreditsPreview(seg: Segment, all: List<Segment>): Boolean {
  * SpeedMenuCard, chino-mobile parity — NOT full-height drawers. They float
  * over the video (no scrim, like web); the first row auto-focuses, CENTER
  * selects, BACK closes (BackHandler at the call site). #161B22 / 8dp radius /
- * 1dp white@10% border; selected row = blue. */
+ * 1dp white@10% border; selected row = blue. The focus stays inside while
+ * the menu is open: DOWN on its last row, UP on its first, stay there. */
+@OptIn(ExperimentalComposeUiApi::class)
 @Composable
 private fun MenuPopover(width: Dp, content: @Composable ColumnScope.() -> Unit) {
     Box(
@@ -1468,6 +1473,8 @@ private fun MenuPopover(width: Dp, content: @Composable ColumnScope.() -> Unit) 
         // Not clipped: a focused row grows past the menu's edge.
         Column(
             modifier = Modifier
+                .focusProperties { exit = { FocusRequester.Cancel } }
+                .focusGroup()
                 .width(width)
                 .heightIn(max = 460.dp)
                 .background(ChinoSurface)
