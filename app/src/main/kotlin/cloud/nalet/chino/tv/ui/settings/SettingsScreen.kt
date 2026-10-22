@@ -172,8 +172,9 @@ fun SettingsScreen(
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
                 Section(
                     title = "Account",
-                    subtitle = "View your profile and watch history, sign in as a different " +
-                        "user, add a new profile, or delete your account.",
+                    // "account", the word for who is watching (docs/chino words).
+                    subtitle = "See your account and its watch history, sign in to another " +
+                        "account or add one, or delete your account.",
                 ) {
                     Row(
                         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
@@ -183,7 +184,7 @@ fun SettingsScreen(
                         // ordering): identity + watch history.
                         if (onProfile != null) {
                             ChinoButton(onClick = onProfile) {
-                                Text("Profile")
+                                Text("Your account")
                             }
                         }
                         if (onSwitchAccount != null) {
@@ -224,8 +225,8 @@ fun SettingsScreen(
             // keyboard.
             Section(
                 title = "Feedback",
-                subtitle = "Something not working? File a bug straight to the dev backlog — " +
-                    "no typing needed, device and app details ride along automatically.",
+                subtitle = "Something not working? Tell the people who run this server — " +
+                    "no typing needed: the app's and the device's details go with your report.",
             ) {
                 ChinoButton(
                     onClick = {
@@ -312,7 +313,7 @@ private fun ReportProblemDialog(
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
                 Text(
-                    text = "Thanks — the report landed on the dev backlog.",
+                    text = "Thanks — the report reached the people who run this server.",
                     color = ChinoMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

@@ -103,7 +103,7 @@ fun ProfileScreen(
                     onAccountClick = onAccountClick,
                 )
                 when (val s = state) {
-                    ProfileUiState.Loading -> Centered("Loading your profile…")
+                    ProfileUiState.Loading -> Centered("Loading your account…")
                     is ProfileUiState.Error -> LoadError(
                         title = "couldn't load your watch history",
                         failure = s.failure,
@@ -132,7 +132,7 @@ private fun ReadyContent(
     ) {
         item {
             Text(
-                text = "Profile",
+                text = "Account",
                 color = Color.White,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
