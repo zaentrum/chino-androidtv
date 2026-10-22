@@ -180,6 +180,24 @@ class TrackLabelsTest {
     }
 
     @Test
+    fun aMacrolanguagesOwnLanguageAsMedia3WritesItIsThatLanguage() {
+        // Media3's normalizeLanguageCode: "ind" is "ms-ind", "hrv" "hbs-hrv".
+        val cases = listOf(
+            "ms-ind" to "Indonesian", "hbs-hrv" to "Croatian", "hbs-srp" to "Serbian", "hbs-bos" to "Bosnian",
+            "no-nob" to "Norwegian Bokmål", "no-nno" to "Norwegian Nynorsk",
+        )
+        for ((tag, name) in cases) assertEquals(tag, name, languageName(tag))
+        assertEquals("id", normalizeLang("ms-ind"))
+        assertEquals("hr", languageTag("hbs-hrv"))
+        // A file's own code beside it says nothing more.
+        assertEquals("Indonesian", subtitleLabel(SubtitleLabelInput("ms-ind", "ind")))
+        assertEquals("Croatian · foreign-language parts only", subtitleLabel(SubtitleLabelInput("hbs-hrv", "Hrvatski", forced = true)))
+        // A region is no extlang.
+        assertEquals("Spanish (Latin America)", languageName("es-419"))
+        assertEquals("Chinese (Traditional, Taiwan)", languageName("zh-Hant-TW"))
+    }
+
+    @Test
     fun aTagKeepsItsRegionOrScriptCanonicallyCased() {
         assertEquals("pt-BR", languageTag("pt_br"))
         assertEquals("de", languageTag("ger"))

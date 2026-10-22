@@ -322,7 +322,20 @@ private fun namesLanguage(title: String, lang: String?): Boolean {
 
 private val PRIMARY = Regex("^[a-z]{2,3}$")
 
-private fun subtags(code: String): List<String> = code.trim().replace('_', '-').split('-')
+/**
+ * A code's subtags. An extended language subtag stands for the language
+ * itself, as BCP 47 has a tag in that form mean the same as its extlang
+ * alone: Media3 writes the languages of a macrolanguage so ("ind" is
+ * "ms-ind", "hrv" "hbs-hrv", "nob" "no-nob", "cmn" "zh-cmn"), and they are
+ * Indonesian, Croatian, Norwegian Bokmål and Mandarin Chinese, as the file
+ * and every other app name them - not Malay, Serbo-Croatian, Norwegian and
+ * Chinese.
+ */
+private fun subtags(code: String): List<String> {
+    val parts = code.trim().replace('_', '-').split('-')
+    val extlang = parts.size >= 2 && parts[0].length in 2..3 && parts[1].length == 3 && parts[1].all { it in 'a'..'z' || it in 'A'..'Z' }
+    return if (extlang) parts.drop(1) else parts
+}
 
 /** The code's language subtag, lower-cased ("pt" of "PT_br"); "" for none. */
 private fun primarySubtag(code: String?): String = code?.let { subtags(it).first().lowercase() }.orEmpty()
