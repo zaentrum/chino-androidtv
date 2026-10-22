@@ -92,17 +92,17 @@ class SubtitleChoicesTest {
     }
 
     @Test
-    fun `the server's languages first, each the file's own before the attached, then more languages`() {
+    fun `the server's languages first, each the file's own before the platform's, then more languages`() {
         val menu = subtitleMenu(tracks, preferred = "off", serverLanguages = server)
         assertEquals(
             listOf(
-                "English", "English · AI", "English · for deaf and hard of hearing",
+                "English", "English · for deaf and hard of hearing", "English · AI",
                 "German", "German · AI",
                 "Chinese (Simplified)", "Chinese (Simplified) · AI",
             ),
             labels(menu.top),
         )
-        assertEquals(listOf("emb:0", "side:ai-en", "emb:1", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans"), menu.top.map { it.id })
+        assertEquals(listOf("emb:0", "emb:1", "side:ai-en", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans"), menu.top.map { it.id })
         assertEquals(
             listOf(
                 "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Dutch", "Estonian", "Finnish",
@@ -124,7 +124,7 @@ class SubtitleChoicesTest {
     fun `the viewer's own language comes first, the server's after it`() {
         val german = subtitleMenu(tracks, preferred = "de", serverLanguages = server)
         assertEquals(
-            listOf("German", "German · AI", "English", "English · AI", "English · for deaf and hard of hearing", "Chinese (Simplified)", "Chinese (Simplified) · AI"),
+            listOf("German", "German · AI", "English", "English · for deaf and hard of hearing", "English · AI", "Chinese (Simplified)", "Chinese (Simplified) · AI"),
             labels(german.top),
         )
         // A language the server is not set up for: first, its variants after it.
@@ -135,15 +135,40 @@ class SubtitleChoicesTest {
     }
 
     @Test
-    fun `an older server names no languages - the viewer's then everything under more languages`() {
-        val noServer = subtitleMenu(tracks, preferred = "off", serverLanguages = emptyList())
-        assertEquals(emptyList<String>(), labels(noServer.top))
-        assertEquals(44, noServer.more.size)
-        assertEquals(listOf("Arabic", "Bulgarian", "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)"), labels(noServer.more).take(5))
-        assertEquals(listOf("English", "English · AI", "English · for deaf and hard of hearing"), labels(noServer.more).filter { it.startsWith("English") })
+    fun `a server that names no languages lists every track directly, the viewer's first, nothing more`() {
+        // An older server (its 404), or one with no subtitle languages set.
+        for (none in listOf(emptyList(), listOf(""))) {
+            val noServer = subtitleMenu(tracks, preferred = "off", serverLanguages = none)
+            assertTrue(noServer.more.isEmpty())
+            assertEquals(44, noServer.top.size)
+            assertEquals(listOf("Arabic", "Bulgarian", "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)"), labels(noServer.top).take(5))
+            assertEquals(
+                listOf("English", "English · for deaf and hard of hearing", "English · AI"),
+                labels(noServer.top).filter { it.startsWith("English") },
+            )
+        }
         val italian = subtitleMenu(tracks, preferred = "it", serverLanguages = emptyList())
-        assertEquals(listOf("Italian"), labels(italian.top))
-        assertEquals(43, italian.more.size)
+        assertEquals("Italian", labels(italian.top).first())
+        assertEquals(44, italian.top.size)
+        assertTrue(italian.more.isEmpty())
+    }
+
+    @Test
+    fun `a packaged title lists its tracks directly, the server's languages first`() {
+        // A package keeps what its source brought besides the server's languages.
+        val packaged = listOf(
+            SubtitleTrackInfo("side:fr", "fre"),
+            SubtitleTrackInfo("side:en", "eng"),
+            SubtitleTrackInfo("side:it", "ita"),
+            SubtitleTrackInfo("side:de", "ger"),
+        )
+        val menu = subtitleMenu(packaged, preferred = "off", serverLanguages = listOf("en", "de"), packaged = true)
+        assertEquals(listOf("English", "German", "French", "Italian"), labels(menu.top))
+        assertTrue(menu.more.isEmpty())
+        // The same tracks of a title played from its file: the rest behind more languages.
+        val unpackaged = subtitleMenu(packaged, preferred = "off", serverLanguages = listOf("en", "de"))
+        assertEquals(listOf("English", "German"), labels(unpackaged.top))
+        assertEquals(listOf("French", "Italian"), labels(unpackaged.more))
     }
 
     @Test
@@ -184,6 +209,18 @@ class SubtitleChoicesTest {
         )
         // The first of the three plain ones in the player's order.
         assertEquals("c", menu.top.first().id)
+    }
+
+    @Test
+    fun `a track titled in its own language is the plain one, shown once, the file's own first`() {
+        val german = listOf(
+            SubtitleTrackInfo("emb:3", "ger", "Deutsch"),
+            SubtitleTrackInfo("side:de", "de", "German"),
+            SubtitleTrackInfo("emb:5", "ger", "Deutsch (Forced)", forced = true),
+        )
+        val menu = subtitleMenu(german, preferred = "de", serverLanguages = listOf("de"))
+        assertEquals(listOf("German", "German · foreign-language parts only"), labels(menu.top))
+        assertEquals(listOf("emb:3", "emb:5"), menu.top.map { it.id })
     }
 
     @Test
@@ -228,9 +265,14 @@ class SubtitleChoicesTest {
     }
 
     @Test
-    fun `the preferred subtitle language where the title has it, its plain track`() {
+    fun `the preferred subtitle language where the title has it and the audio is in another, its plain track`() {
         assertEquals("emb:8", autoSubtitle(subtitleMenu(tracks, "de", server), audioLang = "eng", preferred = "de")?.id)
-        assertEquals("emb:0", autoSubtitle(subtitleMenu(tracks, "en", server), audioLang = "eng", preferred = "en")?.id)
+        assertEquals("emb:0", autoSubtitle(subtitleMenu(tracks, "en", server), audioLang = "jpn", preferred = "en")?.id)
+        // English subtitles over English audio are the viewer's to pick.
+        assertNull(autoSubtitle(subtitleMenu(tracks, "en", server), audioLang = "eng", preferred = "en"))
+        assertNull(autoSubtitle(subtitleMenu(tracks, "de", server), audioLang = "deu", preferred = "ger"))
+        // No language known for the audio: nothing.
+        assertNull(autoSubtitle(subtitleMenu(tracks, "de", server), audioLang = "und", preferred = "de"))
         // One "more languages" holds: still the viewer's language.
         assertEquals("emb:20", autoSubtitle(subtitleMenu(tracks, "it", server), audioLang = "eng", preferred = "it")?.id)
         // Tagged the other way round: one language.
@@ -262,6 +304,8 @@ class SubtitleChoicesTest {
         for (audio in listOf("und", "zxx", "", null)) assertNull(audio.toString(), autoSubtitle(dubbedMenu, audio, "off"))
         // The preferred language before any forced track.
         assertEquals("side:de", autoSubtitle(dubbedMenu, audioLang = "en", preferred = "de")?.id)
+        // English preferred over English audio: the foreign-language parts only.
+        assertEquals("side:en-forced", autoSubtitle(dubbedMenu, audioLang = "eng", preferred = "en")?.id)
     }
 
     @Test

@@ -325,7 +325,7 @@ class TrackLabelsTest {
             Triple("chi", "Simplified Chinese", "Chinese (Simplified)"),
             Triple("chi", "Chinese (Simplified)", "Chinese (Simplified)"),
             Triple("chi", "简体", "Chinese (Simplified)"),
-            Triple("chi", "繁體中文", "Chinese (Traditional) · 中文"),
+            Triple("chi", "繁體中文", "Chinese (Traditional)"),
             Triple("eng", "English (US)", "English (United States)"),
             // The kind and the other words stay, in their places.
             Triple("chi", "Chinese · Simplified · SDH", "Chinese (Simplified) · for deaf and hard of hearing"),
@@ -340,6 +340,30 @@ class TrackLabelsTest {
         assertEquals("Chinese (Traditional) · Simplified", subtitleLabel(SubtitleLabelInput("zh-Hant", "Simplified")))
         // "us" in a sentence is no region.
         assertEquals("English · talk to us", subtitleLabel(SubtitleLabelInput("eng", "talk to us")))
+    }
+
+    @Test
+    fun aTitleThatOnlyNamesTheLanguageAgainSaysNothingMore() {
+        val cases = listOf(
+            Triple("ger", "Deutsch", "German"),
+            Triple("de", "Deutsch (Forced)", "German · foreign-language parts only"),
+            Triple("ita", "Italiano", "Italian"),
+            Triple("fre", "Français", "French"),
+            Triple("jpn", "日本語", "Japanese"),
+            Triple("zh-Hans", "中文", "Chinese (Simplified)"),
+            Triple("chi", "简体中文", "Chinese (Simplified)"),
+            Triple("por", "Português (Brasil)", "Portuguese (Brazil)"),
+            // In another language than its own, too.
+            Triple("ger", "Allemand", "German"),
+            Triple("eng", "Englisch", "English"),
+            Triple("spa", "Spanish", "Spanish"),
+        )
+        for ((lang, title, label) in cases) assertEquals(title, label, subtitleLabel(SubtitleLabelInput(lang, title)))
+        // Words that add something stay.
+        assertEquals("German · Commentary", subtitleLabel(SubtitleLabelInput("ger", "Commentary")))
+        assertEquals("German · Deutsch Kommentar", subtitleLabel(SubtitleLabelInput("ger", "Deutsch Kommentar")))
+        // Another language's name on a track is no name of its own.
+        assertEquals("German · Français", subtitleLabel(SubtitleLabelInput("ger", "Français")))
     }
 
     @Test

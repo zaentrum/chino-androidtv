@@ -17,19 +17,25 @@ import cloud.nalet.chino.tv.data.api.SidecarSubtitle
  * subtitle only once it is switched on, so a file with forty tracks costs one
  * extraction, the one watched.
  *
- * The menu: "off" first; then the tracks in the viewer's preferred subtitle
- * language (Settings), then those in each of the subtitle languages the
- * server is set up for (GET /subtitles/languages, its setting's order); then
- * one entry, "more languages", that opens the rest of the title's tracks.
+ * The menu (docs/chino, subtitles): "off" first; then the tracks in the
+ * viewer's preferred subtitle language (Settings), then those in each of the
+ * subtitle languages the server is set up for (GET /subtitles/languages, its
+ * setting's order); then one entry, "more languages", that opens the rest of
+ * the title's tracks. Where the server names no subtitle languages (an older
+ * one, none set), and for a packaged title - whose package holds the
+ * server's languages and what its source brought - every track is listed
+ * directly instead, the preferred language first, with no "more languages".
  * Within a language the plain track comes first, then the one for the deaf
- * and hard of hearing, then the foreign-language parts only; two tracks that
- * would read the same show once (the first: a file's own before one attached
- * to it).
+ * and hard of hearing, then the foreign-language parts only, then one the
+ * platform made ("· AI"); two tracks that would read the same show once (the
+ * first: a file's own before one attached to it).
  *
  * What comes on by itself: the viewer's preferred subtitle language, where
- * the title has it; else the foreign-language parts only in the language of
- * the audio that plays. Nothing else - no track because it comes first or a
- * file flags it default. The player decides as the playback starts and again
+ * the title has it and the audio is in another language; else the
+ * foreign-language parts only in the language of the audio that plays.
+ * Nothing else - subtitles in the audio's own language are the viewer's to
+ * pick, and no track comes on because it comes first or a file flags it
+ * default. The player decides as the playback starts and again
  * whenever the audio's language changes, until the viewer picks in the menu;
  * from then on the subtitles are theirs, Off included, for the rest of the
  * playback (SubtitleSession). One subtitle at a time: picking one turns the
@@ -164,6 +170,9 @@ data class SubtitleEntry(
     val kind: SubtitleKindOrder,
     val image: Boolean,
     val sidecar: Boolean,
+    /** Made by the platform, as its label says ("· AI"): after a language's
+     *  own tracks. */
+    val ai: Boolean = false,
 ) {
     val forced: Boolean get() = kind == SubtitleKindOrder.FORCED || kind == SubtitleKindOrder.FORCED_SDH
 }
@@ -225,6 +234,9 @@ fun languageMatch(want: String, tag: String): Int? {
 fun sameLanguage(a: String, b: String): Boolean =
     if (a.isEmpty() || b.isEmpty()) a == b else languageMatch(a, b) != null
 
+/** The word a track the platform made carries in its label (docs/chino words). */
+private val AI_WORD = Regex("(?<![\\p{L}\\p{N}])AI(?![\\p{L}\\p{N}])")
+
 private fun kindOf(forced: Boolean, sdh: Boolean): SubtitleKindOrder = when {
     forced && sdh -> SubtitleKindOrder.FORCED_SDH
     forced -> SubtitleKindOrder.FORCED
@@ -245,6 +257,7 @@ fun subtitleEntry(track: SubtitleTrackInfo): SubtitleEntry {
         kind = kindOf(forced, sdh),
         image = track.image,
         sidecar = track.sidecar,
+        ai = track.title?.let { AI_WORD.containsMatchIn(it) } == true,
     )
 }
 
@@ -253,14 +266,21 @@ fun subtitleEntry(track: SubtitleTrackInfo): SubtitleEntry {
  * language is [preferred] (Settings: a code or "off") on a server set up for
  * [serverLanguages] (BCP 47 tags, its order; none from an older server): the
  * preferred language's tracks, then each server language's, in [top]; the
- * rest in [more], by language name, a track in no language last. Within a
- * language: the very one before its variants ("Chinese (Simplified)" for
- * zh-Hans before an unmarked "Chinese"), then by name, then plain, for the
- * deaf and hard of hearing, foreign-language parts only, then a file's own
+ * rest in [more], by language name, a track in no language last - or, where
+ * the server names no language or the title is [packaged], after them in
+ * [top], with [more] empty. Within a language: the very one before its
+ * variants ("Chinese (Simplified)" for zh-Hans before an unmarked
+ * "Chinese"), then by name, then plain, for the deaf and hard of hearing,
+ * foreign-language parts only, then the platform's ("· AI"), a file's own
  * track before one attached to it. Two that read the same show once: the
  * first, a text one before a picture one.
  */
-fun subtitleMenu(tracks: List<SubtitleTrackInfo>, preferred: String?, serverLanguages: List<String>): SubtitleMenu {
+fun subtitleMenu(
+    tracks: List<SubtitleTrackInfo>,
+    preferred: String?,
+    serverLanguages: List<String>,
+    packaged: Boolean = false,
+): SubtitleMenu {
     data class Item(val entry: SubtitleEntry, val order: Int)
     val items = tracks.mapIndexed { i, t -> Item(subtitleEntry(t), i) }
     val wants = buildList {
@@ -276,6 +296,7 @@ fun subtitleMenu(tracks: List<SubtitleTrackInfo>, preferred: String?, serverLang
         group.sortedWith(
             compareBy<Pair<Item, Int>> { it.second }
                 .thenBy { languageName(it.first.entry.tag) }
+                .thenBy { it.first.entry.ai }
                 .thenBy { it.first.entry.kind }
                 .thenBy { it.first.entry.sidecar }
                 .thenBy { it.first.order },
@@ -287,6 +308,7 @@ fun subtitleMenu(tracks: List<SubtitleTrackInfo>, preferred: String?, serverLang
     val more = items.filter { it.order !in placed }.sortedWith(
         compareBy<Item> { it.entry.tag.isEmpty() }
             .thenBy { languageName(it.entry.tag.ifEmpty { null }) }
+            .thenBy { it.entry.ai }
             .thenBy { it.entry.kind }
             .thenBy { it.entry.sidecar }
             .thenBy { it.order },
@@ -300,26 +322,34 @@ fun subtitleMenu(tracks: List<SubtitleTrackInfo>, preferred: String?, serverLang
         val same = byLabel.getValue(first.entry.label)
         (same.firstOrNull { !it.entry.image } ?: first).entry
     }
-    return SubtitleMenu(top = once(top), more = once(more))
+    // Nothing to set apart the few that matter from the rest: a server that
+    // names no language, or a package, which holds the server's languages
+    // and what its source brought - "off" and "more languages" alone would
+    // hide every track behind a press.
+    val noMore = packaged || serverLanguages.none { languageTag(it).isNotEmpty() }
+    return if (noMore) SubtitleMenu(top = once(top + more), more = emptyList())
+    else SubtitleMenu(top = once(top), more = once(more))
 }
 
 /**
  * The subtitle that comes on by itself, or null for off: the viewer's
- * preferred subtitle language ([preferred]) where the title has it - its first
+ * preferred subtitle language ([preferred]) where the title has it and the
+ * audio that plays ([audioLang]) is in another, known, language - its first
  * track in the menu that is not the foreign-language parts only, else that
- * one; otherwise the foreign-language parts only in the language of the audio
- * that plays ([audioLang]), a text one before a picture one. Never another
- * language, and never a track because it comes first or is flagged default.
+ * one; otherwise the foreign-language parts only in the language of the
+ * audio, a text one before a picture one. Subtitles in the audio's own
+ * language are the viewer's to pick; never another language, and never a
+ * track because it comes first or is flagged default (docs/chino, subtitles).
  */
 fun autoSubtitle(menu: SubtitleMenu, audioLang: String?, preferred: String?): SubtitleEntry? {
     val all = menu.all
-    if (asksForSubtitles(preferred)) {
+    val audio = normalizeLang(audioLang)
+    if (audio.isEmpty()) return null
+    if (asksForSubtitles(preferred) && normalizeLang(preferred) != audio) {
         val want = languageTag(preferred)
         val inLang = all.filter { languageMatch(want, it.tag) != null }
         (inLang.firstOrNull { !it.forced } ?: inLang.firstOrNull())?.let { return it }
     }
-    val audio = normalizeLang(audioLang)
-    if (audio.isEmpty()) return null
     val forced = all.filter { it.forced && normalizeLang(it.tag) == audio }
     return forced.firstOrNull { !it.image } ?: forced.firstOrNull()
 }
@@ -330,8 +360,9 @@ fun autoSubtitle(menu: SubtitleMenu, audioLang: String?, preferred: String?): Su
  * picks in the subtitles menu; from then on the viewer, for the rest of the
  * playback - its reloads included: an Off stays off whatever the audio, and a
  * track picked stays on. A switch between a track's stereo and 5.1 renditions
- * is no change of language and changes nothing. chino-mobile's and
- * chino-web's rule.
+ * is no change of language and changes nothing. Who decides and when as
+ * chino-mobile's and chino-web's SubtitleSession has it; what the player
+ * decides is [autoSubtitle].
  */
 class SubtitleSession {
     /** The viewer has picked in the subtitles menu: a track, or Off. */

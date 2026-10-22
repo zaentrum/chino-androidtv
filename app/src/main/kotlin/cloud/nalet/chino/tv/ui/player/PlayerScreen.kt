@@ -472,13 +472,16 @@ private fun ExoPlayback(
     var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
     // The subtitle menu of the tracks the player has (SubtitleChoices.kt):
     // the viewer's language and the server's first, the rest behind "more
-    // languages".
-    val subtitleMenu = remember(tracks, ready.subtitlePreference, ready.serverSubtitleLanguages) {
-        subtitleMenu(tracks.map { it.info }, ready.subtitlePreference, ready.serverSubtitleLanguages)
+    // languages" - all of them directly for a package (a title's, an
+    // extra's) and where the server names no language.
+    val packaged = isPackaged(streamMode(viewModel.mode, ready.playInfo))
+    val subtitleMenu = remember(tracks, ready.subtitlePreference, ready.serverSubtitleLanguages, packaged) {
+        subtitleMenu(tracks.map { it.info }, ready.subtitlePreference, ready.serverSubtitleLanguages, packaged)
     }
     // What comes on by itself (autoSubtitle): the viewer's preferred
-    // subtitle language where the title has it, else the foreign-language
-    // parts only in the language of the audio that plays - decided as the
+    // subtitle language when the audio is in another language and the title
+    // has it, else the foreign-language parts only in the language of the
+    // audio that plays - decided as the
     // playback starts and again when the audio's language changes, until the
     // viewer picks in the menu (SubtitleSession, the view model's: it holds
     // past a reload, whose player switches the same subtitle on again). Read
@@ -1119,7 +1122,9 @@ private fun ExoPlayback(
     // An open menu keeps the focus: the chrome coming back (the remote's
     // subtitles key opens the menu over hidden chrome) moved the focus to
     // play/pause, out of the menu - DOWN went nowhere and OK paused the title.
-    LaunchedEffect(controllerVisible) {
+    // A menu that closes - a pick, BACK - takes its focused row with it: the
+    // focus goes back to play/pause, so the next OK lands somewhere.
+    LaunchedEffect(controllerVisible, menuOpen) {
         if (controllerVisible && !menuOpen) {
             runCatching { playPauseFocusRequester.requestFocus() }
         }
@@ -1798,7 +1803,8 @@ private fun SubtitlePanel(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     MenuPopover(width = 380.dp) {
-        PlayerMenuHeader("SUBTITLES")
+        // Lowercase, as its items (docs/chino, subtitles).
+        PlayerMenuHeader("subtitles")
         PlayerMenuRow(
             label = "off",
             selected = selected == null,

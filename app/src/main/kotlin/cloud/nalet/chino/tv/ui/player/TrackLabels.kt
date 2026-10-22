@@ -21,8 +21,9 @@ import java.util.Locale
  * AI"), then its kind in words: "· foreign-language parts only" for a forced
  * track, "· for deaf and hard of hearing" for one that describes the sound. A
  * label that says the kind itself ("English SDH", "German (forced)") says it
- * once, in these words. chino-mobile's rules (Languages.kt), which are
- * chino-web's lib/languages.ts.
+ * once, in these words; one that only names the language again ("Deutsch",
+ * "中文") says nothing more. chino-mobile's rules (Languages.kt), which are
+ * chino-web's lib/languages.ts, as docs/chino (subtitles, words) has them.
  */
 
 // ISO 639-2/B (bibliographic) codes and the /T (terminology) code each stands
@@ -203,6 +204,53 @@ private fun words(vararg ws: String, upper: List<String> = emptyList(), cjk: Lis
     }
     val alternatives = ws.map { whole(it, true) } + upper.map { whole(it, false) } + cjk.map { Regex.escape(it) }
     return Regex(alternatives.joinToString("|") { "(?:$it)" })
+}
+
+// What each language calls itself, as a track's own title often gives it
+// ("Deutsch", "中文"): chino-mobile's table.
+private val ENDONYMS: Map<String, Set<String>> = mapOf(
+    "af" to setOf("afrikaans"), "ar" to setOf("العربية", "عربي"), "bg" to setOf("български"), "bn" to setOf("বাংলা"),
+    "ca" to setOf("català"), "cs" to setOf("čeština", "česky"), "da" to setOf("dansk"), "de" to setOf("deutsch"),
+    "el" to setOf("ελληνικά"), "en" to setOf("english"), "es" to setOf("español", "castellano"), "et" to setOf("eesti"),
+    "eu" to setOf("euskara"), "fa" to setOf("فارسی"), "fi" to setOf("suomi"), "fr" to setOf("français"),
+    "ga" to setOf("gaeilge"), "gl" to setOf("galego"), "he" to setOf("עברית"), "hi" to setOf("हिन्दी"),
+    "hr" to setOf("hrvatski"), "hu" to setOf("magyar"), "id" to setOf("bahasa indonesia"), "is" to setOf("íslenska"),
+    "it" to setOf("italiano"), "ja" to setOf("日本語"), "ko" to setOf("한국어"), "lt" to setOf("lietuvių"),
+    "lv" to setOf("latviešu"), "mk" to setOf("македонски"), "ms" to setOf("bahasa melayu"), "nb" to setOf("norsk bokmål", "norsk"),
+    "nl" to setOf("nederlands"), "nn" to setOf("norsk nynorsk", "nynorsk"), "no" to setOf("norsk"), "pl" to setOf("polski"),
+    "pt" to setOf("português"), "ro" to setOf("română"), "ru" to setOf("русский"), "sk" to setOf("slovenčina"),
+    "sl" to setOf("slovenščina"), "sq" to setOf("shqip"), "sr" to setOf("српски", "srpski"), "sv" to setOf("svenska"),
+    "th" to setOf("ไทย"), "tr" to setOf("türkçe"), "uk" to setOf("українська"), "vi" to setOf("tiếng việt"),
+    "zh" to setOf("中文", "汉语", "漢語", "简体中文", "繁體中文", "简体", "繁體", "國語", "普通话", "粵語"),
+)
+
+/** The languages a language's name is looked up in besides its own: what
+ *  a file's title may call it ("Allemand", "Tedesco", "德语" for German). */
+private val NAMED_IN = listOf(
+    "en", "de", "fr", "es", "it", "pt", "nl", "sv", "da", "no", "fi", "pl", "cs", "sk", "hu", "ro", "ru",
+    "uk", "el", "tr", "ar", "he", "hi", "th", "vi", "id", "ja", "ko", "zh",
+)
+
+/** What a language is called, in its own words and in the languages of
+ *  [NAMED_IN], lower-cased: the words a track's title may name it with. */
+private val namesOf = HashMap<String, Set<String>>()
+
+private fun languageWords(lang: String): Set<String> = synchronized(namesOf) {
+    namesOf.getOrPut(lang) {
+        val locale = Locale.forLanguageTag(lang)
+        val inOthers = NAMED_IN.mapNotNull { other ->
+            locale.getDisplayLanguage(Locale.forLanguageTag(other)).trim().lowercase().takeIf { it.isNotEmpty() && it != lang }
+        }
+        ENDONYMS[lang].orEmpty() + inOthers + languageName(lang).lowercase()
+    }
+}
+
+/** Whether [title] only names the track's language again - in its own words
+ *  ("Deutsch", "中文") or another language's ("German", "Allemand") - and so
+ *  says nothing the label's name does not. */
+private fun onlyNamesLanguage(title: String, lang: String?): Boolean {
+    val key = normalizeLang(lang).ifEmpty { return false }
+    return title.trim().lowercase() in languageWords(key)
 }
 
 private val PRIMARY = Regex("^[a-z]{2,3}$")
@@ -429,7 +477,9 @@ private fun titleWithoutKind(title: String): String =
  * from its tag, else from the words of its title that say one ("German",
  * "Chinese (Simplified)", "No dialogue" for zxx); the track's own title where
  * it says more than that ("English · Commentary", "Chinese (Simplified) ·
- * AI"), or alone for a track tagged with no language, else "Unknown"; then its
+ * AI") - not where it only names the language again, in any language
+ * ("Deutsch", "中文", "Allemand") - or alone for a track tagged with no
+ * language, else "Unknown"; then its
  * kind in words - "foreign-language parts only" for a forced one, "for deaf
  * and hard of hearing" for one with sound described, both in that order. A
  * title that says the kind itself ("English SDH", "German (forced)") says it
@@ -443,7 +493,8 @@ fun subtitleLabel(track: SubtitleLabelInput): String {
     val title = titleWithoutKind(tagged.title)
     val name = if (tagged.tag.isNotEmpty()) languageName(tagged.tag) else languageName(track.lang)
     val label = when {
-        title.isEmpty() || title.equals(name, ignoreCase = true) || sameLanguageCode(title, track.lang) -> name
+        title.isEmpty() || title.equals(name, ignoreCase = true) || sameLanguageCode(title, track.lang) ||
+            onlyNamesLanguage(title, track.lang) -> name
         !hasLanguage(track.lang) -> title
         title.contains(name, ignoreCase = true) -> title
         // "English" on a British English track: the name says it already.
@@ -452,7 +503,7 @@ fun subtitleLabel(track: SubtitleLabelInput): String {
             // "Spanish · Commentary" of a track the name made Spanish (Latin
             // America): the language once, in the name.
             val rest = withoutLeadingName(title, languageName(normalizeLang(track.lang)))
-            if (rest.isEmpty()) name else "$name · $rest"
+            if (rest.isEmpty() || onlyNamesLanguage(rest, track.lang)) name else "$name · $rest"
         }
     }
     val kinds = listOfNotNull(FORCED_SUBTITLE_KIND.takeIf { forced }, SDH_SUBTITLE_KIND.takeIf { sdh })

@@ -64,17 +64,21 @@ real values always come from the connected server at runtime.
   at the bottom within 80 % of its width and inside the TV's safe area; a
   file's own colours, boxes, sizes and places are ignored, and Android's
   caption settings win where you have switched them on (accessibility). The
-  menu lists "off", then your subtitle language (Settings), then the subtitle
-  languages your server is set up for (`/api/v1/subtitles/languages`), then
-  "more languages" with the rest of the title's tracks - its sidecars and,
-  for a title played from its original file, the file's own text streams,
-  each fetched only once it is switched on. A track is named by its language,
-  its script or region in brackets, and its kind in words ("Chinese
-  (Simplified)", "English · for deaf and hard of hearing"); two that read the
-  same show once. What comes on by itself: your subtitle language where the
-  title has it, else the foreign-language parts only in the language of the
-  audio, which follow the audio into another language; nothing else, and a
-  pick in the menu, Off included, holds for the rest of the playback
+  menu, "subtitles", lists "off", then your subtitle language (Settings), then
+  the subtitle languages your server is set up for
+  (`/api/v1/subtitles/languages`), then "more languages" with the rest of the
+  title's tracks - its sidecars and, for a title played from its original
+  file, the file's own text streams, each fetched only once it is switched
+  on. A packaged title, and any title on a server that names no subtitle
+  languages, lists all of its tracks directly, your language first. A track
+  is named by its language, its script or region in brackets, and its kind in
+  words ("Chinese (Simplified)", "English · for deaf and hard of hearing",
+  "German · AI"); words in its own label that only name the language again
+  are dropped, and two that read the same show once, the file's own first.
+  What comes on by itself: your subtitle language when the audio is in
+  another language, else the foreign-language parts only in the language of
+  the audio, which follow the audio into another language; nothing else, and
+  a pick in the menu, Off included, holds for the rest of the playback
 - Trailers: a trailer your server has plays in the app's one player, with the
   controls, quality, audio and subtitle menus and remote a title has, from the
   start with sound, and closes at its end; it writes no progress, so Continue
