@@ -576,6 +576,34 @@ class TrackLabelsTest {
     )
 
     @Test
+    fun channelsInWordsMonoStereoFiveOneSevenOneNeverACountLike2ch() {
+        // chino-web's channelWords, chino-mobile's names for 1, 2, 6 and 8.
+        assertEquals(
+            listOf("Mono", "Stereo", "2.1", "4.0", "5.0", "5.1", "6.1", "7.1"),
+            (1..8).map(::channelWords),
+        )
+        // Past the table: the number in words, still no "ch".
+        assertEquals("12 channels", channelWords(12))
+        for (n in listOf(0, -1)) assertEquals(n.toString(), null, channelWords(n))
+        for (n in 1..16) assertFalse(n.toString(), Regex("""\dch\b""").containsMatchIn(channelWords(n)!!))
+    }
+
+    @Test
+    fun theAudioMenusDetailIsTheCodecAndTheChannelsInWordsAsThePhoneSaysIt() {
+        assertEquals(listOf("AAC", "Stereo"), audioDetail("mp4a.40.2", 2))
+        assertEquals(listOf("E-AC-3", "5.1"), audioDetail(audioCodec(null, "audio/eac3"), 6))
+        assertEquals(listOf("AC-3", "5.1"), audioDetail("ac-3", 6))
+        assertEquals(listOf("E-AC-3", "7.1"), audioDetail("ec-3", 8))
+        assertEquals(listOf("MP3", "Mono"), audioDetail("mp4a.40.34", 1))
+        assertEquals(listOf("Opus", "Stereo"), audioDetail("opus", 2))
+        assertEquals(listOf("FLAC", "Stereo"), audioDetail("fLaC", 2))
+        // Either alone where the other is not known.
+        assertEquals(listOf("Stereo"), audioDetail(null, 2))
+        assertEquals(listOf("AAC"), audioDetail("mp4a.40.2", -1))
+        assertEquals(emptyList<String>(), audioDetail(" ", 0))
+    }
+
+    @Test
     fun aSubtitleForTheDeafSaysSo() {
         assertTrue(isSdhSubtitle("English SDH"))
         assertTrue(isSdhSubtitle("English (CC)"))

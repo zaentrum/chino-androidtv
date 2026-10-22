@@ -903,6 +903,38 @@ fun audioCodec(codecs: String?, sampleMimeType: String?): String? =
         else -> null
     }
 
+// The layout ffmpeg gives a number of channels by default, as a menu names
+// it: words people know from their speakers, never a count ("2ch").
+private val LAYOUTS = mapOf(1 to "Mono", 2 to "Stereo", 3 to "2.1", 4 to "4.0", 5 to "5.0", 6 to "5.1", 7 to "6.1", 8 to "7.1")
+
+/** A number of channels in the menu's words (docs/chino, playback): "Mono"
+ *  for one, "Stereo" for two, "5.1" for six, "7.1" for eight; past the
+ *  table "10 channels"; null for none, or no count. Never "2ch". chino-web's
+ *  channelWords. */
+fun channelWords(channels: Int): String? =
+    if (channels < 1) null else LAYOUTS[channels] ?: "$channels channels"
+
+/** A codec as the audio menu names it ("AAC", "E-AC-3"), from a codecs
+ *  string ("mp4a.40.2", "ec-3") or [audioCodec]'s; another by its family,
+ *  upper-cased ("FLAC"). Null for none. chino-mobile's audioCodecName. */
+fun audioCodecName(codec: String?): String? {
+    val c = codec?.trim()?.lowercase().orEmpty()
+    if (c.isEmpty()) return null
+    return when {
+        c == "mp3" || c == "mp4a.40.34" || c == "mp4a.6b" -> "MP3"
+        c == "aac" || c.startsWith("mp4a") -> "AAC"
+        c == "ec-3" || c == "eac3" || c == "ec3" || c == "ec+3" -> "E-AC-3"
+        c == "ac-3" || c == "ac3" -> "AC-3"
+        c == "opus" -> "Opus"
+        else -> c.substringBefore('.').uppercase()
+    }
+}
+
+/** What the audio menu shows beside a track's label, in this order: its
+ *  codec and its channels in words ("AAC", "Stereo": "AAC · Stereo"), either
+ *  alone where the other is not known. As the phone and the web say it. */
+fun audioDetail(codec: String?, channels: Int): List<String> = listOfNotNull(audioCodecName(codec), channelWords(channels))
+
 /** What an audio menu is told about one track. */
 data class AudioLabelInput(
     /** The language tag as the track has it. */

@@ -2005,8 +2005,9 @@ data class AudioTrack(
 
 /** Builds the user-facing label from format metadata: the language first
  *  ("German", "No dialogue" for zxx), the NAME where there is none or where
- *  it tells two apart ([audioLabels]). Appends channel count + codec when
- *  present so "English • 5.1 • ec-3" disambiguates surround vs stereo — a
+ *  it tells two apart ([audioLabels]). Appends the codec and the channels in
+ *  words when present ([audioDetail]) so "English • E-AC-3 • 5.1"
+ *  disambiguates surround vs stereo — a
  *  package's 5.1 E-AC-3 companion beside its stereo twin, both of one
  *  language. Only the tracks the TV can play are listed: a pick of one it
  *  can neither decode nor pass through would fail the playback. */
@@ -2017,20 +2018,9 @@ private fun collectAudioTracks(tracks: Tracks): List<AudioTrack> {
             (0 until g.length).filter { g.isTrackSupported(it, /* allowExceedsCapabilities= */ true) }.map { i -> g to i }
         }
     val formats = found.map { (g, i) -> g.getTrackFormat(i) }
-    val details = formats.map { fmt ->
-        listOfNotNull(
-            fmt.channelCount.takeIf { it > 0 }?.let {
-                when (it) {
-                    1 -> "Mono"
-                    2 -> "Stereo"
-                    6 -> "5.1"
-                    8 -> "7.1"
-                    else -> "${it}ch"
-                }
-            },
-            audioCodec(fmt.codecs, fmt.sampleMimeType),
-        )
-    }
+    // Its codec and its channels in words, "AAC · Stereo", "E-AC-3 · 5.1"
+    // (docs/chino, playback: never "2ch").
+    val details = formats.map { fmt -> audioDetail(audioCodec(fmt.codecs, fmt.sampleMimeType), fmt.channelCount) }
     val labels = audioLabels(
         formats.mapIndexed { k, fmt -> AudioLabelInput(fmt.language, fmt.label, details[k].joinToString(" • ")) },
     )
@@ -2119,7 +2109,7 @@ private fun PlaybackInfoOverlay(
     info: cloud.nalet.chino.tv.data.api.PlayInfo?,
     quality: String,
     /** The audio track that plays, as the audio menu names it ("English ·
-     *  5.1 · ec-3"); null before the player has picked one. */
+     *  E-AC-3 · 5.1"); null before the player has picked one. */
     audio: String?,
     onDismiss: () -> Unit,
 ) {
