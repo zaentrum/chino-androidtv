@@ -10,10 +10,12 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -46,6 +48,11 @@ import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
+import androidx.compose.ui.layout.onGloballyPositioned
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.Spring
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.layout.size
 import androidx.compose.runtime.mutableStateListOf
@@ -956,7 +963,11 @@ private fun ExoPlayback(
     // press during the dwell window should obviously go to "watch the intro"
     // rather than "exit playback". After the pill dismisses, BACK exits as
     // usual.
-    BackHandler(enabled = skippedIntroPill) {
+    // A menu or the info open: BACK closes that first.
+    BackHandler(
+        enabled = skippedIntroPill &&
+            !(showSubtitlePanel || showAudioPanel || showQualityPanel || showSpeedPanel || showInfoOverlay),
+    ) {
         skippedIntroPill = false
         player.seekTo(0L)
         viewModel.reportTelemetry("binge_intro_undo")
@@ -1028,8 +1039,10 @@ private fun ExoPlayback(
                     android.view.KeyEvent.KEYCODE_CAPTIONS -> {
                         showSubtitlePanel = !showSubtitlePanel
                         if (showSubtitlePanel) {
+                            // One menu at a time.
                             showAudioPanel = false
                             showQualityPanel = false
+                            showSpeedPanel = false
                         }
                         noteInteraction()
                         return@handler true
@@ -1039,6 +1052,7 @@ private fun ExoPlayback(
                         if (showAudioPanel) {
                             showSubtitlePanel = false
                             showQualityPanel = false
+                            showSpeedPanel = false
                         }
                         noteInteraction()
                         return@handler true
@@ -1131,6 +1145,22 @@ private fun ExoPlayback(
         }
     }
     val backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
+    // The subtitle moves up above the controls while they show and back down
+    // when they hide, at their own pace: the spring their fade runs on
+    // (PlayerChromeOverlay's fadeIn and fadeOut).
+    val subtitlePlacement = remember { mutableStateOf<SubtitlePlacement?>(null) }
+    var controlsTop by remember { mutableStateOf<Float?>(null) }
+    val subtitleLift by animateFloatAsState(
+        targetValue = if (controllerVisible) 1f else 0f,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "subtitleLift",
+    )
+    LaunchedEffect(subtitlePlacement.value, controlsTop, subtitleLift) {
+        subtitlePlacement.value?.let { placement ->
+            placement.controlsTop = controlsTop
+            placement.lift = subtitleLift
+        }
+    }
     Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -1158,9 +1188,10 @@ private fun ExoPlayback(
                     // the screen blank either.
                     keepScreenOn = true
                     // The subtitles' one look (SubtitleStyle.kt), drawn by
-                    // this view alone: no box, embedded styles off, the
-                    // viewer's own caption settings where they are on.
-                    subtitleView?.applySubtitleLook()
+                    // this view alone: no box, a file's styles off but its
+                    // italics and ruby, the viewer's own caption settings
+                    // where they are on; above the controls while they show.
+                    subtitlePlacement.value = subtitleView?.applySubtitleLook()
                 }
             },
             // A quality switch rebuilds the ExoPlayer instance (player is
@@ -1231,60 +1262,69 @@ private fun ExoPlayback(
                 )
             },
             bottom = {
-                PlayerBottomChrome(
-                    isPlaying = isPlaying,
-                    positionMs = positionMs,
-                    durationMs = durationMs,
-                    bufferedMs = bufferedMs,
-                    segments = ready.segments,
-                    trickplayCues = ready.trickplayCues,
-                    trickplayBaseUrl = ready.trickplayBaseUrl,
-                    streamToken = ready.streamToken,
-                    muted = muted,
-                    volume = volume,
-                    onPlayPause = {
-                        if (player.isPlaying) player.pause() else player.play()
-                    },
-                    onToggleMute = { muted = !muted },
-                    onVolumeChange = { v -> muted = false; volume = v },
-                    onScrubberSeek = { ms -> player.seekTo(ms) },
-                    onAudio = if (audioTracks.size > 1) {
-                        { showAudioPanel = true }
-                    } else null,
-                    onSubtitles = { showSubtitlePanel = true },
-                    captionsOn = tracks.any { it.selected },
-                    onQuality = if (menu != null) {
-                        { showQualityPanel = true }
-                    } else null,
-                    onSpeed = {
-                        showSpeedPanel = true
-                        showAudioPanel = false
-                        showSubtitlePanel = false
-                        showQualityPanel = false
-                    },
-                    speedActive = showSpeedPanel || playbackSpeed != 1f,
-                    onInfo = { showInfoOverlay = true },
-                    // Prev/next chevrons only for episodes (parentSeriesId != null),
-                    // matching web which hides them on movies.
-                    onPrevEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
-                        { resolveAndPlayPrev(viewModel, onPlayNext, chromeCoroutineScope) }
-                    } else null,
-                    onNextEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
-                        { resolveAndPlayNext(viewModel, onPlayNext, chromeCoroutineScope) }
-                    } else null,
-                    playPauseFocusRequester = playPauseFocusRequester,
-                    onUserInteraction = noteInteraction,
-                )
+                Box(Modifier.onGloballyPositioned { controlsTop = it.boundsInWindow().top }) {
+                    PlayerBottomChrome(
+                        isPlaying = isPlaying,
+                        positionMs = positionMs,
+                        durationMs = durationMs,
+                        bufferedMs = bufferedMs,
+                        segments = ready.segments,
+                        trickplayCues = ready.trickplayCues,
+                        trickplayBaseUrl = ready.trickplayBaseUrl,
+                        streamToken = ready.streamToken,
+                        muted = muted,
+                        volume = volume,
+                        onPlayPause = {
+                            if (player.isPlaying) player.pause() else player.play()
+                        },
+                        onToggleMute = { muted = !muted },
+                        onVolumeChange = { v -> muted = false; volume = v },
+                        onScrubberSeek = { ms -> player.seekTo(ms) },
+                        onAudio = if (audioTracks.size > 1) {
+                            { showAudioPanel = true }
+                        } else null,
+                        onSubtitles = { showSubtitlePanel = true },
+                        captionsOn = tracks.any { it.selected },
+                        onQuality = if (menu != null) {
+                            { showQualityPanel = true }
+                        } else null,
+                        onSpeed = {
+                            showSpeedPanel = true
+                            showAudioPanel = false
+                            showSubtitlePanel = false
+                            showQualityPanel = false
+                        },
+                        speedActive = showSpeedPanel || playbackSpeed != 1f,
+                        onInfo = { showInfoOverlay = true },
+                        // Prev/next chevrons only for episodes (parentSeriesId != null),
+                        // matching web which hides them on movies.
+                        onPrevEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
+                            { resolveAndPlayPrev(viewModel, onPlayNext, chromeCoroutineScope) }
+                        } else null,
+                        onNextEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
+                            { resolveAndPlayNext(viewModel, onPlayNext, chromeCoroutineScope) }
+                        } else null,
+                        playPauseFocusRequester = playPauseFocusRequester,
+                        onUserInteraction = noteInteraction,
+                    )
+                }
             },
         )
-        bannerMessage?.let { label ->
-            SubtitleBanner(label = label, onDismiss = { bannerMessage = null })
-        }
-        // A step down the player made by itself says what it did and why
-        // (docs/chino, playback): long enough to read from the sofa.
+        // The messages over the picture, one under the other: a pick's
+        // ("Subtitles: English"), and a step down the player made by itself,
+        // what it did and why (docs/chino, playback) - long enough to read
+        // from the sofa, from the stream's first frame on.
         val qualityNotice by viewModel.qualityNotice.collectAsState()
-        qualityNotice?.let { notice ->
-            SubtitleBanner(label = notice, durationMs = 6_000, onDismiss = viewModel::qualityNoticeShown)
+        val notice = qualityNotice?.takeIf { sawFirstFrameState.value }
+        if (bannerMessage != null || notice != null) {
+            Column(
+                modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp),
+            ) {
+                bannerMessage?.let { label -> SubtitleBanner(label = label, onDismiss = { bannerMessage = null }) }
+                notice?.let { SubtitleBanner(label = it, durationMs = 6_000, onDismiss = viewModel::qualityNoticeShown) }
+            }
         }
         if (showSubtitlePanel) {
             SubtitlePanel(
@@ -1495,13 +1535,18 @@ private fun PlayerMenuHeader(title: String, trailing: String? = null) {
     }
 }
 
+/**
+ * A row of a player menu. The menus - subtitles, audio, quality, speed - are
+ * of one choice each (docs/chino, playback): the picked row in the accent
+ * blue with a small filled dot before it, no checkboxes; every row keeps the
+ * dot's place, so the labels line up. OK picks, once per press.
+ */
 @Composable
 private fun PlayerMenuRow(
     label: String,
     selected: Boolean,
     focusRequester: FocusRequester? = null,
     secondary: String? = null,
-    leading: (@Composable () -> Unit)? = null,
     trailing: (@Composable () -> Unit)? = null,
     maxLines: Int = 1,
     onClick: () -> Unit,
@@ -1514,17 +1559,18 @@ private fun PlayerMenuRow(
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown &&
-                    (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                        e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
+                val ok = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                    e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                // A held OK repeats its key-down: one pick per press.
+                if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
                     onClick(); true
-                } else false
+                } else ok
             }
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        leading?.invoke()
+        PickedDot(selected)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -1548,17 +1594,12 @@ private fun PlayerMenuRow(
     }
 }
 
+/** The picked row's small filled dot, in the accent blue; its place kept
+ *  empty on the other rows. */
 @Composable
-private fun MenuCheckbox(selected: Boolean) {
-    Box(
-        modifier = Modifier
-            .size(16.dp)
-            .clip(RectangleShape)
-            .background(if (selected) ChinoAccent else Color.Transparent)
-            .border(1.dp, if (selected) ChinoAccent else Color.White.copy(alpha = 0.3f), RectangleShape),
-        contentAlignment = Alignment.Center,
-    ) {
-        if (selected) Text("✓", color = Color.White, fontSize = 11.sp, fontWeight = FontWeight.Bold)
+private fun PickedDot(selected: Boolean) {
+    Box(modifier = Modifier.size(8.dp), contentAlignment = Alignment.Center) {
+        if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(ChinoAccent))
     }
 }
 
@@ -1585,7 +1626,7 @@ private fun QualityPanel(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     MenuPopover(width = 200.dp) {
-        PlayerMenuHeader("QUALITY")
+        PlayerMenuHeader("quality")
         rungs.forEachIndexed { idx, rung ->
             PlayerMenuRow(
                 label = if (rung.name == AUTO && active == AUTO) autoLabel(rung.label, playing) else rung.label,
@@ -1612,7 +1653,7 @@ private fun SpeedPanel(
     // Web rate ladder (7 steps incl. 1.75x); 1.0x renders "Normal (1x)".
     val rates = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
     MenuPopover(width = 180.dp) {
-        PlayerMenuHeader("SPEED")
+        PlayerMenuHeader("speed")
         rates.forEachIndexed { idx, rate ->
             PlayerMenuRow(
                 label = when {
@@ -1675,7 +1716,8 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xCC101010), shape = RectangleShape)
+                .background(ChinoSurface, shape = RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -1814,7 +1856,6 @@ private fun SubtitlePanel(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     MenuPopover(width = 380.dp) {
-        // Lowercase, as its items (docs/chino, subtitles).
         PlayerMenuHeader("subtitles")
         PlayerMenuRow(
             label = "off",
@@ -1860,7 +1901,6 @@ private fun SubtitleRow(
         label = entry.label,
         selected = selected,
         focusRequester = focusRequester,
-        leading = { MenuCheckbox(selected) },
         maxLines = 2,
         onClick = { onSelect(entry) },
     )
@@ -2045,7 +2085,7 @@ private fun AudioPanel(
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     MenuPopover(width = 300.dp) {
-        PlayerMenuHeader("AUDIO")
+        PlayerMenuHeader("audio")
         if (tracks.isEmpty()) {
             Text(
                 text = "No audio tracks",
@@ -2110,7 +2150,8 @@ private fun PlaybackInfoOverlay(
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xE6101010), shape = RectangleShape)
+                .background(ChinoSurface, shape = RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 14.dp)
                 .width(360.dp),
             verticalArrangement = Arrangement.spacedBy(6.dp),
@@ -2182,7 +2223,8 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
     ) {
         Column(
             modifier = Modifier
-                .background(Color(0xCC101010), shape = RectangleShape)
+                .background(ChinoSurface, shape = RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(horizontal = 16.dp, vertical = 12.dp),
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
@@ -2203,17 +2245,15 @@ private fun SubtitleBanner(label: String, durationMs: Long = 2_000, onDismiss: (
         delay(durationMs)
         onDismiss()
     }
+    // On a solid surface: nothing over the picture is see-through
+    // (docs/chino, playback).
     Box(
-        modifier = Modifier.fillMaxWidth().padding(top = 80.dp),
-        contentAlignment = Alignment.Center,
+        modifier = Modifier
+            .background(ChinoSurface, shape = RectangleShape)
+            .border(1.dp, ChinoBorder, RectangleShape)
+            .padding(horizontal = 16.dp, vertical = 8.dp),
     ) {
-        Box(
-            modifier = Modifier
-                .background(Color(0xE6202020), shape = RectangleShape)
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-        ) {
-            Text(text = label, color = Color.White, style = MaterialTheme.typography.bodyLarge)
-        }
+        Text(text = label, color = ChinoText, style = MaterialTheme.typography.bodyLarge)
     }
 }
 

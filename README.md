@@ -64,8 +64,9 @@ real values always come from the connected server at runtime.
   plays in stereo
 - Subtitles, one at a time, with one look for every title: white text with a
   black outline and nothing behind it, 5.33 % of the picture's height, centred
-  at the bottom within 80 % of its width and inside the TV's safe area; a
-  file's own colours, boxes, sizes and places are ignored, and Android's
+  at the bottom within 80 % of its width and inside the TV's safe area, and
+  above the player's controls while they show; a file's own colours, boxes,
+  sizes and places are ignored, its italics and ruby kept, and Android's
   caption settings win where you have switched them on (accessibility). The
   menu, "subtitles", lists "off", then your subtitle language (Settings), then
   the subtitle languages your server is set up for

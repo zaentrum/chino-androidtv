@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.ItemFocus
@@ -530,7 +531,8 @@ private fun TrickplayPreview(
         Box(
             modifier = Modifier
                 .clip(RectangleShape)
-                .background(Color(0xCC000000))
+                // Solid: nothing over the picture is see-through.
+                .background(ChinoBg)
                 .padding(horizontal = 8.dp, vertical = 2.dp),
         ) {
             Text(

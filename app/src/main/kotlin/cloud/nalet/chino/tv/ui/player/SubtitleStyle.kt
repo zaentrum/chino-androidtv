@@ -1,15 +1,25 @@
 package cloud.nalet.chino.tv.ui.player
 
 import android.content.Context
+import android.graphics.Canvas
 import android.graphics.Color
+import android.graphics.Paint
 import android.graphics.Typeface
 import android.os.Looper
 import android.text.Layout
+import android.text.Spannable
 import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.TextPaint
+import android.text.style.ReplacementSpan
+import android.text.style.StyleSpan
 import android.view.View
 import android.view.accessibility.CaptioningManager
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.CueGroup
+import androidx.media3.common.text.LanguageFeatureSpan
+import androidx.media3.common.text.RubySpan
+import androidx.media3.common.text.TextAnnotation
 import androidx.media3.exoplayer.DefaultRenderersFactory
 import androidx.media3.exoplayer.Renderer
 import androidx.media3.exoplayer.text.TextOutput
@@ -29,8 +39,12 @@ import androidx.media3.ui.SubtitleView
  * bottom, the lines wrap within 80 % of the picture's width, inside the TV's
  * safe area (48 dp left and right, 27 dp at the bottom), so no line is cut at
  * an edge. What a file brings - its colours, boxes, fonts, sizes and places -
- * is ignored. Where the viewer has switched Android's caption settings on
- * (accessibility), their style and their text size win, box included.
+ * is ignored, but for its italics (a voice off screen, a song, a thought) and
+ * its ruby (the readings above Japanese and Chinese characters), which mean
+ * something. While the player's controls show, the line moves up above them,
+ * and back down when they hide, at the controls' own pace. Where the viewer
+ * has switched Android's caption settings on (accessibility), their style and
+ * their text size win, box included.
  *
  * The subtitles are drawn by one view, the PlayerView's own SubtitleView,
  * from the one text renderer the player has: one subtitle at a time.
@@ -68,6 +82,12 @@ object SubtitleLook {
 
     /** The TV's safe area, at the bottom. */
     const val SAFE_BOTTOM_DP = 27f
+
+    /** How far above the player's controls the last line ends while they show. */
+    const val ABOVE_CONTROLS_DP = 12f
+
+    /** A ruby reading's size, as a share of the text's. */
+    const val RUBY_SIZE = 0.5f
 }
 
 /**
@@ -75,7 +95,11 @@ object SubtitleLook {
  * above its bottom edge: [SubtitleLook.BOTTOM_FRACTION], or more where the
  * picture's bottom edge lies inside the safe area so that 8 % would not clear
  * it. [pictureBottom] is the picture's bottom edge and [screenHeight] the
- * screen's, in pixels; [safeBottom] the safe area in pixels.
+ * screen's, in pixels; [safeBottom] the safe area in pixels. While the
+ * player's controls show, the line ends [SubtitleLook.ABOVE_CONTROLS_DP] above
+ * their top edge [controlsTop] (screen pixels, [aboveControls] the gap in
+ * pixels) where that is higher: by [lift] of the way, 0 with the controls
+ * hidden, 1 with them shown, as they come and go.
  *
  * The lines need no such care at the sides: centred within 80 % of the
  * picture's width, they keep a tenth of the picture's width clear on either
@@ -83,11 +107,24 @@ object SubtitleLook {
  * least half as wide as the screen; a narrower one is centred, far from the
  * edges.
  */
-fun subtitleBottomFraction(pictureHeight: Int, pictureBottom: Int, screenHeight: Int, safeBottom: Float): Float {
+fun subtitleBottomFraction(
+    pictureHeight: Int,
+    pictureBottom: Int,
+    screenHeight: Int,
+    safeBottom: Float,
+    controlsTop: Float? = null,
+    aboveControls: Float = 0f,
+    lift: Float = 0f,
+): Float {
     if (pictureHeight <= 0) return SubtitleLook.BOTTOM_FRACTION
     val below = (screenHeight - pictureBottom).coerceAtLeast(0)
     val inside = (safeBottom - below).coerceAtLeast(0f)
-    return maxOf(SubtitleLook.BOTTOM_FRACTION, inside / pictureHeight)
+    val resting = maxOf(SubtitleLook.BOTTOM_FRACTION, inside / pictureHeight)
+    if (controlsTop == null || lift <= 0f) return resting
+    val clear = (pictureBottom - controlsTop + aboveControls) / pictureHeight
+    val raised = clear.coerceAtMost(1f - SubtitleLook.TEXT_SIZE_FRACTION)
+    if (raised <= resting) return resting
+    return resting + (raised - resting) * lift.coerceAtMost(1f)
 }
 
 /**
@@ -95,10 +132,11 @@ fun subtitleBottomFraction(pictureHeight: Int, pictureBottom: Int, screenHeight:
  * centred at the bottom within [SubtitleLook.LINE_WIDTH_FRACTION] of the
  * picture's width: what is shown at once, top to bottom as the file placed
  * it, each cue on lines of its own. The places a file gives its cues (a line
- * at the top, a position at the side, an alignment, vertical text) and its
- * text sizes go; its spans stay for the view, which keeps only those of the
- * language itself (ruby) once embedded styles are off. Picture cues (PGS)
- * keep their own place: a picture cannot be re-flowed.
+ * at the top, a position at the side, an alignment, vertical text), its box
+ * and its text sizes go, and of its styles only italics and the language's
+ * own spans stay ([keepItalicsAndRuby]); a ruby reading is drawn above its
+ * characters. Picture cues (PGS) keep their own place: a picture cannot be
+ * re-flowed.
  */
 fun layOutCues(cues: List<Cue>): List<Cue> {
     val texts = cues.filter { it.bitmap == null && !it.text.isNullOrBlank() }
@@ -110,6 +148,7 @@ fun layOutCues(cues: List<Cue>): List<Cue> {
             if (i > 0) text.append('\n')
             text.append(cue.text)
         }
+    keepItalicsAndRuby(text)
     val subtitle = Cue.Builder()
         .setText(text)
         .setTextAlignment(Layout.Alignment.ALIGN_CENTER)
@@ -118,6 +157,68 @@ fun layOutCues(cues: List<Cue>): List<Cue> {
         .setSize(SubtitleLook.LINE_WIDTH_FRACTION)
         .build()
     return cues.filter { it.bitmap != null } + subtitle
+}
+
+/**
+ * Drops every style a file gives its text but italics and the spans of the
+ * language itself (ruby, emphasis marks): bold, colours, backgrounds, sizes,
+ * fonts, underlines. A bold italic stays italic. Each ruby reading gets a
+ * [RubyReading] to draw it: Media3's own drawing shows the characters
+ * without it.
+ */
+internal fun keepItalicsAndRuby(text: Spannable) {
+    for (span in text.getSpans(0, text.length, Any::class.java)) {
+        if (span is RubyReading) continue
+        val start = text.getSpanStart(span)
+        val end = text.getSpanEnd(span)
+        val flags = text.getSpanFlags(span)
+        when {
+            span is StyleSpan && span.style == Typeface.ITALIC -> Unit
+            span is StyleSpan && span.style == Typeface.BOLD_ITALIC -> {
+                text.removeSpan(span)
+                text.setSpan(StyleSpan(Typeface.ITALIC), start, end, flags)
+            }
+            span is RubySpan -> text.setSpan(RubyReading(span.rubyText, under = span.position == TextAnnotation.POSITION_AFTER), start, end, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
+            span is LanguageFeatureSpan -> Unit
+            else -> text.removeSpan(span)
+        }
+    }
+}
+
+/**
+ * A ruby reading drawn with its characters: the reading at half their size,
+ * centred over them (under them where the file puts it after), in the
+ * subtitle's own paint, so the outline goes round it as round the text. The
+ * line grows by the reading's height.
+ */
+class RubyReading(val reading: String, val under: Boolean) : ReplacementSpan() {
+    private fun small(paint: Paint) = TextPaint(paint).apply { textSize = paint.textSize * SubtitleLook.RUBY_SIZE }
+
+    override fun getSize(paint: Paint, text: CharSequence, start: Int, end: Int, fm: Paint.FontMetricsInt?): Int {
+        val small = small(paint)
+        if (fm != null) {
+            paint.getFontMetricsInt(fm)
+            val extra = kotlin.math.ceil(small.descent() - small.ascent()).toInt()
+            if (under) {
+                fm.descent += extra
+                fm.bottom += extra
+            } else {
+                fm.ascent -= extra
+                fm.top -= extra
+            }
+        }
+        return kotlin.math.ceil(maxOf(paint.measureText(text, start, end), small.measureText(reading))).toInt()
+    }
+
+    override fun draw(canvas: Canvas, text: CharSequence, start: Int, end: Int, x: Float, top: Int, y: Int, bottom: Int, paint: Paint) {
+        val small = small(paint)
+        val base = paint.measureText(text, start, end)
+        val above = small.measureText(reading)
+        val width = maxOf(base, above)
+        canvas.drawText(text, start, end, x + (width - base) / 2f, y.toFloat(), paint)
+        val readingY = if (under) y + paint.descent() - small.ascent() else y + paint.ascent() - small.descent()
+        canvas.drawText(reading, x + (width - above) / 2f, readingY, small)
+    }
 }
 
 /** How high a file placed a cue, from 0 (the top) to 1 (the bottom): what
@@ -166,14 +267,63 @@ private fun viewerCaptions(context: Context): CaptioningManager? =
     (context.getSystemService(Context.CAPTIONING_SERVICE) as? CaptioningManager)?.takeIf { it.isEnabled }
 
 /**
- * Gives [view] the look: embedded styles and sizes off, and [SubtitleLook]'s
- * style and size - or, where Android's caption settings are on, the viewer's
- * style and their text size (their scale of our 5.33 %). Again whenever those
- * settings change, while the view is attached; the bottom margin follows the
- * picture's place on the screen ([subtitleBottomFraction]).
+ * Where a subtitle sits: above the bottom of the picture and the safe area,
+ * and above the player's controls while they show ([subtitleBottomFraction]).
+ * The player tells it where the controls' top edge is and how far they have
+ * come in.
  */
-fun SubtitleView.applySubtitleLook() {
-    setApplyEmbeddedStyles(false)
+class SubtitlePlacement internal constructor(private val view: SubtitleView) {
+    private var bottom = SubtitleLook.BOTTOM_FRACTION
+
+    /** The top edge of the player's controls, in window pixels; null before
+     *  they have been laid out. */
+    var controlsTop: Float? = null
+        set(value) {
+            field = value
+            update()
+        }
+
+    /** How far the controls have come in: 0 hidden, 1 shown. */
+    var lift: Float = 0f
+        set(value) {
+            field = value
+            update()
+        }
+
+    internal fun update() {
+        val at = IntArray(2)
+        view.getLocationInWindow(at)
+        val density = view.resources.displayMetrics.density
+        val fraction = subtitleBottomFraction(
+            pictureHeight = view.height,
+            pictureBottom = at[1] + view.height,
+            screenHeight = view.rootView.height,
+            safeBottom = SubtitleLook.SAFE_BOTTOM_DP * density,
+            controlsTop = controlsTop,
+            aboveControls = SubtitleLook.ABOVE_CONTROLS_DP * density,
+            lift = lift,
+        )
+        // Set only when it changed: each set asks for a new drawing.
+        if (fraction != bottom) {
+            bottom = fraction
+            view.setBottomPaddingFraction(fraction)
+        }
+    }
+}
+
+/**
+ * Gives [view] the look: embedded sizes off, the file's styles but italics
+ * and ruby dropped as the cues are laid out ([layOutCues]), and
+ * [SubtitleLook]'s style and size - or, where Android's caption settings are
+ * on, the viewer's style and their text size (their scale of our 5.33 %).
+ * Again whenever those settings change, while the view is attached. The
+ * bottom margin follows the picture's place on the screen and the player's
+ * controls: the [SubtitlePlacement] it returns.
+ */
+fun SubtitleView.applySubtitleLook(): SubtitlePlacement {
+    // Media3's switch for embedded styles would drop italics with the rest:
+    // layOutCues keeps them, and only them and ruby.
+    setApplyEmbeddedStyles(true)
     setApplyEmbeddedFontSizes(false)
     applyCaptionSettings()
     val captioning = context.getSystemService(Context.CAPTIONING_SERVICE) as? CaptioningManager
@@ -194,17 +344,9 @@ fun SubtitleView.applySubtitleLook() {
     })
     if (isAttachedToWindow) captioning?.addCaptioningChangeListener(listener)
     // The bottom margin set last: a layout pass sets it only when it changed.
-    var bottom = SubtitleLook.BOTTOM_FRACTION
-    addOnLayoutChangeListener { v, _, _, _, _, _, _, _, _ ->
-        val at = IntArray(2)
-        v.getLocationOnScreen(at)
-        val safe = SubtitleLook.SAFE_BOTTOM_DP * v.resources.displayMetrics.density
-        val fraction = subtitleBottomFraction(v.height, at[1] + v.height, v.rootView.height, safe)
-        if (fraction != bottom) {
-            bottom = fraction
-            setBottomPaddingFraction(fraction)
-        }
-    }
+    val placement = SubtitlePlacement(this)
+    addOnLayoutChangeListener { _, _, _, _, _, _, _, _, _ -> placement.update() }
+    return placement
 }
 
 /** The style and size: the viewer's where Android's caption settings are on,

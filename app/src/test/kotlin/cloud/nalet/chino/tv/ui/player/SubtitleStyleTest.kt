@@ -7,6 +7,12 @@ import android.provider.Settings
 import android.text.Layout
 import android.text.SpannableString
 import android.text.Spanned
+import android.text.style.BackgroundColorSpan
+import android.text.style.ForegroundColorSpan
+import android.text.style.RelativeSizeSpan
+import android.text.style.StyleSpan
+import android.text.style.TypefaceSpan
+import android.text.style.UnderlineSpan
 import androidx.media3.common.text.Cue
 import androidx.media3.common.text.RubySpan
 import androidx.media3.common.text.TextAnnotation
@@ -56,10 +62,11 @@ class SubtitleStyleTest {
         SubtitleView::class.java.getDeclaredField(name).apply { isAccessible = true }.get(view)
 
     @Test
-    fun `the view draws the look, the file's own styles and sizes off`() {
+    fun `the view draws the look, the file's own sizes off, its styles dropped as the cues are laid out`() {
         val view = SubtitleView(context)
         view.applySubtitleLook()
-        assertEquals(false, field(view, "applyEmbeddedStyles"))
+        // Media3's switch would drop italics too: layOutCues drops the rest.
+        assertEquals(true, field(view, "applyEmbeddedStyles"))
         assertEquals(false, field(view, "applyEmbeddedFontSizes"))
         val style = field(view, "style") as CaptionStyleCompat
         assertEquals(Color.TRANSPARENT, style.backgroundColor)
@@ -81,8 +88,8 @@ class SubtitleStyleTest {
         assertEquals(Color.WHITE, style.foregroundColor)
         assertEquals(Color.BLACK, style.backgroundColor)
         assertEquals(0.0533f * 1.5f, field(view, "defaultTextSize") as Float, 1e-6f)
-        // Embedded styles stay off: the viewer's look, not the file's.
-        assertEquals(false, field(view, "applyEmbeddedStyles"))
+        // The file's sizes stay off: the viewer's look, not the file's.
+        assertEquals(false, field(view, "applyEmbeddedFontSizes"))
         Settings.Secure.putInt(resolver, "accessibility_captioning_enabled", 0)
     }
 
@@ -129,11 +136,36 @@ class SubtitleStyleTest {
     }
 
     @Test
-    fun `the language's own spans stay with the text`() {
+    fun `the language's own spans stay with the text, each ruby reading drawn`() {
         val ruby = SpannableString("漢字")
         ruby.setSpan(RubySpan("かんじ", TextAnnotation.POSITION_BEFORE), 0, 2, Spanned.SPAN_EXCLUSIVE_EXCLUSIVE)
         val laidOut = layOutCues(listOf(text(ruby))).single().text as Spanned
         assertEquals(1, laidOut.getSpans(0, laidOut.length, RubySpan::class.java).size)
+        val reading = laidOut.getSpans(0, laidOut.length, RubyReading::class.java).single()
+        assertEquals("かんじ", reading.reading)
+        assertFalse(reading.under)
+        assertEquals(0 to 2, laidOut.getSpanStart(reading) to laidOut.getSpanEnd(reading))
+    }
+
+    @Test
+    fun `italics stay, every other style a file brings goes`() {
+        val styled = SpannableString("a song, a thought, a shout")
+        val all = Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+        styled.setSpan(StyleSpan(Typeface.ITALIC), 0, 6, all)
+        styled.setSpan(StyleSpan(Typeface.BOLD_ITALIC), 8, 17, all)
+        styled.setSpan(StyleSpan(Typeface.BOLD), 19, 26, all)
+        styled.setSpan(ForegroundColorSpan(Color.YELLOW), 0, 26, all)
+        styled.setSpan(BackgroundColorSpan(Color.BLUE), 0, 26, all)
+        styled.setSpan(RelativeSizeSpan(1.5f), 0, 26, all)
+        styled.setSpan(TypefaceSpan("serif"), 0, 26, all)
+        styled.setSpan(UnderlineSpan(), 0, 26, all)
+        val laidOut = layOutCues(listOf(text(styled))).single().text as Spanned
+        val left = laidOut.getSpans(0, laidOut.length, Any::class.java).toList()
+        // The italic one and the bold italic one, now italic: nothing else.
+        assertEquals(2, left.size)
+        assertTrue(left.all { it is StyleSpan && it.style == Typeface.ITALIC })
+        assertEquals(listOf(0 to 6, 8 to 17), left.map { laidOut.getSpanStart(it) to laidOut.getSpanEnd(it) }.sortedBy { it.first })
+        assertEquals("a song, a thought, a shout", laidOut.toString())
     }
 
     @Test
@@ -163,6 +195,22 @@ class SubtitleStyleTest {
         // A picture ending 10 px above the screen's edge, 300 px high: 44 px inside.
         assertEquals(44f / 300f, subtitleBottomFraction(300, 1070, 1080, safe), 1e-6f)
         assertEquals(0.08f, subtitleBottomFraction(0, 0, 1080, safe), 1e-6f)
+    }
+
+    @Test
+    fun `while the controls show, the line ends above them, coming and going with them`() {
+        val safe = 27f * 2
+        val gap = 12f * 2
+        // A full-screen picture, the controls' top 200 px above its bottom.
+        val shown = subtitleBottomFraction(1080, 1080, 1080, safe, controlsTop = 880f, aboveControls = gap, lift = 1f)
+        assertEquals((200f + 24f) / 1080f, shown, 1e-6f)
+        // Hidden: where it rests; halfway in: halfway up.
+        assertEquals(0.08f, subtitleBottomFraction(1080, 1080, 1080, safe, controlsTop = 880f, aboveControls = gap, lift = 0f), 1e-6f)
+        assertEquals(0.08f + (shown - 0.08f) / 2f, subtitleBottomFraction(1080, 1080, 1080, safe, controlsTop = 880f, aboveControls = gap, lift = 0.5f), 1e-6f)
+        // A scope picture whose bottom edge is above the controls: it stays.
+        assertEquals(0.08f, subtitleBottomFraction(804, 942, 1080, safe, controlsTop = 960f, aboveControls = gap, lift = 1f), 1e-6f)
+        // Controls not laid out yet: where it rests.
+        assertEquals(0.08f, subtitleBottomFraction(1080, 1080, 1080, safe, controlsTop = null, lift = 1f), 1e-6f)
     }
 
     @Test
