@@ -48,9 +48,16 @@ real values always come from the connected server at runtime.
   screen; the episode a detail page was opened on has a bar along its left
   edge instead (`ui/theme/Focus.kt`)
 - Playback with trickplay scrubbing thumbnails
-- A quality step down the player makes by itself is said on screen for a few
-  seconds, the quality named as its menu names it: "Switched to Medium (720p)
-  quality: the connection can't keep up with the original."
+- Qualities by the server's names, a name and its height ("Medium (720p)"),
+  a direct stream the "Original"; an older server's height alone ("720p"),
+  and a trailer's variants, are named by the same table. Two qualities of one
+  name are one row, and a step down goes to the next of another name. A step
+  down the player makes by itself is said on screen for a few seconds from
+  the new stream's first frame - "Switched to Medium (720p) quality: the
+  connection can't keep up with the original." - and only for that step
+  down: a pick in the quality menu says nothing. The player's menus
+  (subtitles, audio, quality, speed) are of one choice each, the picked row
+  in blue with a dot before it, their headers lowercase
 - Playback quality reports, as chino-web sends them: the time to the first
   frame, each stall mid-play and how long it lasted, the bandwidth the player
   sees with its segments' load times and time to first byte, the switches of

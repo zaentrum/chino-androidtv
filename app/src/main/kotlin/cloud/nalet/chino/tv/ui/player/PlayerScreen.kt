@@ -1236,7 +1236,7 @@ private fun ExoPlayback(
             }
         }
         // The quality menu /play/info offers (null: nothing to pick) and the
-        // rung that plays, by its menu label — Auto says it: "Auto · 720p".
+        // rung that plays, by its menu label — Auto says it: "Auto · Medium (720p)".
         // A mode without /play/info (an extra) has its master's variants for
         // a menu, and the entry it is on is the variant pinned.
         val byPlayInfo = viewModel.requests.playInfo
@@ -1359,7 +1359,7 @@ private fun ExoPlayback(
         if (showQualityPanel && menu != null) {
             QualityPanel(
                 rungs = menu,
-                active = chosenQuality(menu, quality)?.name,
+                active = chosenQuality(menu, quality, ready.playInfo)?.name,
                 playing = playing,
                 onPick = { rung ->
                     showQualityPanel = false
@@ -1459,7 +1459,7 @@ private fun ExoPlayback(
         if (showInfoOverlay) {
             PlaybackInfoOverlay(
                 info = ready.playInfo,
-                quality = qualityText(menu, quality, playing),
+                quality = qualityText(menu, quality, playing, ready.playInfo),
                 audio = audioTracks.firstOrNull { it.selected }?.label?.replace(" • ", " · "),
                 onDismiss = { showInfoOverlay = false },
             )
@@ -1614,7 +1614,7 @@ private fun splitAudioLabel(label: String): Pair<String, String?> {
 /** The quality menu ([qualityMenu]): Auto and a packaged title's rungs, or
  *  an on-the-fly transcode's high / medium / low, by the server's labels.
  *  [active] is the entry the player is on; on Auto, its row names the rung
- *  that plays ([playing]): "Auto · 720p". */
+ *  that plays ([playing]): "Auto · Medium (720p)". */
 @Composable
 private fun QualityPanel(
     rungs: List<cloud.nalet.chino.tv.data.api.QualityRung>,

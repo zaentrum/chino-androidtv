@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.data.api.QualityRung
 import kotlin.math.abs
 
 /*
@@ -54,13 +55,29 @@ const val NUDGE_BUFFERED_MS = 500L
 
 fun isPackaged(mode: String?): Boolean = mode.equals("packaged", ignoreCase = true)
 
-/** The rung below [quality] on the on-the-fly ladder; null at low. A q that
- *  is not one of its rungs (a packaged one, on a title the server no longer
- *  serves packaged) is read as high, the server's default. */
-fun lowerOnTheFlyRung(quality: String): String? = when (quality.lowercase()) {
-    "low" -> null
-    "medium" -> "low"
-    else -> "medium"
+/**
+ * The rung below [quality] on the on-the-fly ladder: the next of [listed] -
+ * /play/info's qualities, each named by the frame it encodes - with another
+ * name, as a step down that keeps the picture is none (a 720p source's high
+ * and medium are both "Medium (720p)": its high steps to low); null where no
+ * other name is left. Where the q is not listed - a direct stream's, whose
+ * info lists no ladder, an older server's - the fixed ladder: high, medium,
+ * low, a q that is none of its rungs (a packaged one, on a title the server
+ * no longer serves packaged) read as high, the server's default.
+ */
+fun lowerOnTheFlyRung(quality: String, listed: List<QualityRung> = emptyList()): String? {
+    val ladder = listed.filter { it.name.lowercase() in ON_THE_FLY }
+    val at = ladder.indexOfFirst { it.name.equals(quality, ignoreCase = true) }
+    if (at >= 0) {
+        val name = ladder[at].label.trim()
+        // A rung without a name is told apart by none: it counts as another.
+        return ladder.drop(at + 1).firstOrNull { it.label.isBlank() || name.isEmpty() || !it.label.trim().equals(name, ignoreCase = true) }?.name
+    }
+    return when (quality.lowercase()) {
+        "low" -> null
+        "medium" -> "low"
+        else -> "medium"
+    }
 }
 
 /**
@@ -75,10 +92,11 @@ class PlaybackRecovery(private val passedMs: Long = SPOT_PASSED_MS) {
     private var inPlace = 0
     private var reloads = 0
 
-    /** A player error at [positionMs] of a title of [mode] played at [quality]. */
-    fun onError(mode: String?, quality: String, positionMs: Long): Recovery {
+    /** A player error at [positionMs] of a title of [mode] played at
+     *  [quality], [listed] its /play/info's qualities. */
+    fun onError(mode: String?, quality: String, positionMs: Long, listed: List<QualityRung> = emptyList()): Recovery {
         moveTo(positionMs)
-        if (!isPackaged(mode)) return lowerOnTheFlyRung(quality)?.let { Recovery.StepDown(it) } ?: Recovery.GiveUp
+        if (!isPackaged(mode)) return lowerOnTheFlyRung(quality, listed)?.let { Recovery.StepDown(it) } ?: Recovery.GiveUp
         return retryOrReload(quality) ?: Recovery.GiveUp
     }
 
@@ -91,9 +109,16 @@ class PlaybackRecovery(private val passedMs: Long = SPOT_PASSED_MS) {
      * an error: on the fly at low, and once a packaged title's tries are
      * spent, the player waits.
      */
-    fun onStall(mode: String?, quality: String, positionMs: Long, loading: Boolean, bufferedAheadMs: Long): Recovery {
+    fun onStall(
+        mode: String?,
+        quality: String,
+        positionMs: Long,
+        loading: Boolean,
+        bufferedAheadMs: Long,
+        listed: List<QualityRung> = emptyList(),
+    ): Recovery {
         moveTo(positionMs)
-        if (!isPackaged(mode)) return lowerOnTheFlyRung(quality)?.let { Recovery.StepDown(it) } ?: Recovery.Wait
+        if (!isPackaged(mode)) return lowerOnTheFlyRung(quality, listed)?.let { Recovery.StepDown(it) } ?: Recovery.Wait
         if (loading && bufferedAheadMs < NUDGE_BUFFERED_MS) return Recovery.Wait
         return retryOrReload(quality) ?: Recovery.Wait
     }

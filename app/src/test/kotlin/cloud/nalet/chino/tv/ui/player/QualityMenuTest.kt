@@ -22,16 +22,37 @@ class QualityMenuTest {
     )
 
     @Test
-    fun `a packaged ladder offers Auto and its rungs, by the server's labels`() {
+    fun `a packaged ladder offers Auto and its rungs, an older server's heights named by the table`() {
         val menu = qualityMenu(ladder)!!
         assertEquals(listOf("auto", "v0", "v1", "v2"), menu.map { it.name })
-        assertEquals(listOf("Auto", "1080p", "720p", "480p"), menu.map { it.label })
+        assertEquals(listOf("Auto", "High (1080p)", "Medium (720p)", "Low (480p)"), menu.map { it.label })
+        // The server's own names as it gives them: never a height twice.
+        val named = ladder.copy(qualities = listOf(auto, r1080.copy(label = "High (1080p)"), r720.copy(label = "Medium (720p)")))
+        assertEquals(listOf("Auto", "High (1080p)", "Medium (720p)"), qualityMenu(named)!!.map { it.label })
+    }
+
+    @Test
+    fun `the server's table of names by height`() {
+        assertEquals(
+            listOf("Ultra (4320p)", "Ultra (2160p)", "High (1440p)", "High (1080p)", "Medium (900p)", "Medium (720p)", "Low (576p)", "Low (480p)", "Lowest (360p)", "Lowest (240p)"),
+            listOf(4320, 2160, 1440, 1080, 900, 720, 576, 480, 360, 240).map(::qualityName),
+        )
+        assertEquals("Medium (720p)", shownQualityName("720p"))
+        assertEquals("Medium (720p)", shownQualityName("Medium (720p)"))
+        assertEquals("Original", shownQualityName("Original"))
+        assertEquals("Lowest (360p)", shownQualityName("Lowest (360p)"))
+        // An older server's on-the-fly high: the original where it plays as
+        // it is, else a re-encode named by the original's height.
+        assertEquals("Original", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "remux", height = 1080)))
+        assertEquals("High (1080p)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode", width = 1920, height = 1080)))
+        assertEquals("Ultra (2160p)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode", width = 3840, height = 1606)))
+        assertEquals("High (source resolution)", shownQualityName("High (source resolution)", "high", PlayInfo(mode = "transcode")))
     }
 
     @Test
     fun `Auto comes first even where the server left it out`() {
         val menu = qualityMenu(ladder.copy(qualities = listOf(r720, r480)))!!
-        assertEquals(listOf("Auto", "720p", "480p"), menu.map { it.label })
+        assertEquals(listOf("Auto", "Medium (720p)", "Low (480p)"), menu.map { it.label })
         // And is not listed twice when it is not first.
         assertEquals(listOf("auto", "v1", "v2"), qualityMenu(ladder.copy(qualities = listOf(r720, auto, r480)))!!.map { it.name })
     }
@@ -70,27 +91,119 @@ class QualityMenuTest {
     @Test
     fun `Auto says which rung plays`() {
         val menu = qualityMenu(ladder)!!
-        assertEquals("720p", playingLabel(1280, 720, menu))
-        assertEquals("Auto · 720p", autoLabel("Auto", playingLabel(1280, 720, menu)))
+        assertEquals("Medium (720p)", playingLabel(1280, 720, menu))
+        assertEquals("Auto · Medium (720p)", autoLabel("Auto", playingLabel(1280, 720, menu)))
         assertEquals("Auto", autoLabel("Auto", playingLabel(0, 0, menu)))
-        assertEquals("Auto · 720p", qualityText(menu, "auto", "720p"))
-        assertEquals("480p", qualityText(menu, "v2", "480p"))
+        assertEquals("Auto · Medium (720p)", qualityText(menu, "auto", "Medium (720p)"))
+        assertEquals("Low (480p)", qualityText(menu, "v2", "Low (480p)"))
         assertEquals("High", qualityText(qualityMenu(transcode), "high", "1080p"))
-        // No menu: the q as it is.
-        assertEquals("high", qualityText(null, "high", "1080p"))
+        // No menu: the q by its name.
+        assertEquals("High", qualityText(null, "high", "1080p"))
+        assertEquals("Auto · Medium (720p)", qualityText(null, "auto", "Medium (720p)"))
     }
 
     @Test
-    fun `a size the menu lacks is named as chino-stream names rungs`() {
+    fun `a frame the menu lacks is named as chino-stream names a frame`() {
         val menu = qualityMenu(ladder)!!
         // A 2.39:1 film's 720p rung.
-        assertEquals("720p", playingLabel(1280, 536, menu))
-        assertEquals("1080p", sizeLabel(1920, 1080))
-        assertEquals("480p", sizeLabel(854, 480))
-        assertEquals("2160p", sizeLabel(4096, 2160))
-        assertEquals("2160p", sizeLabel(3840, 1606))
-        assertEquals("1080p", sizeLabel(1440, 1080))
-        assertNull(sizeLabel(1280, 0))
+        assertEquals("Medium (720p)", playingLabel(1280, 536, menu))
+        // chino-stream's qualityname_test.go, case for case.
+        val frames = listOf(
+            Triple(3840, 1606, "Ultra (2160p)"), Triple(1920, 804, "High (1080p)"), Triple(1920, 800, "High (1080p)"),
+            Triple(1280, 536, "Medium (720p)"), Triple(854, 358, "Low (480p)"), Triple(640, 268, "Lowest (360p)"),
+            Triple(1920, 1038, "High (1080p)"), Triple(1998, 1080, "High (1080p)"), Triple(1280, 692, "Medium (720p)"),
+            Triple(4096, 2160, "Ultra (2160p)"), Triple(4096, 1716, "Ultra (2160p)"), Triple(2048, 1080, "High (1080p)"),
+            Triple(2048, 858, "High (1080p)"),
+            Triple(1916, 800, "High (1080p)"), Triple(1904, 800, "High (1080p)"), Triple(1912, 1036, "High (1080p)"),
+            Triple(1918, 1040, "High (1080p)"), Triple(3836, 1600, "Ultra (2160p)"), Triple(3816, 1600, "Ultra (2160p)"),
+            Triple(1278, 534, "Medium (720p)"), Triple(1276, 716, "Medium (720p)"),
+            Triple(1856, 800, "Medium (1044p)"), Triple(1856, 1036, "Medium (1036p)"),
+            Triple(1440, 1080, "High (1080p)"), Triple(960, 720, "Medium (720p)"), Triple(720, 576, "Low (576p)"),
+            Triple(720, 480, "Low (480p)"), Triple(640, 480, "Low (480p)"),
+            Triple(2560, 1080, "High (1440p)"), Triple(1600, 900, "Medium (900p)"), Triple(1666, 900, "Medium (900p)"),
+            Triple(1728, 720, "Medium (972p)"), Triple(1152, 480, "Low (648p)"),
+            Triple(7680, 4320, "Ultra (4320p)"), Triple(8192, 4320, "Ultra (4320p)"),
+        )
+        for ((w, h, name) in frames) assertEquals("${w}x$h", name, frameQualityName(w, h))
+        for (h in listOf(240, 359, 360, 479, 480, 576, 719, 720, 900, 1079, 1080, 1440, 2159, 2160, 4320)) {
+            assertEquals(qualityName(h), frameQualityName((h * 16 + 4) / 9, h))
+            assertEquals(qualityName(h), frameQualityName(0, h))
+        }
+        assertNull(frameQualityName(0, 0))
+        assertNull(frameQualityName(1920, 0))
+        assertNull(frameQualityName(1920, -1))
+    }
+
+    // /play/info of an on-the-fly transcode as chino-stream names it now: every
+    // q listed, each by the frame it encodes, two of them maybe of one name.
+    private fun onTheFly(vararg rungs: Pair<String, String>, width: Int? = null, height: Int? = null) =
+        PlayInfo(mode = "transcode", qualities = rungs.map { (q, label) -> QualityRung(q, label) }, defaultQuality = "high", width = width, height = height)
+
+    private val hd = onTheFly("high" to "High (1080p)", "medium" to "Medium (720p)", "low" to "Low (480p)", width = 1920, height = 1080)
+    private val p720 = onTheFly("high" to "Medium (720p)", "medium" to "Medium (720p)", "low" to "Low (480p)", width = 1280, height = 720)
+    private val pal = onTheFly("high" to "Low (576p)", "medium" to "Low (576p)", "low" to "Low (480p)", width = 720, height = 576)
+    private val p360 = onTheFly("high" to "Lowest (360p)", "medium" to "Lowest (360p)", "low" to "Lowest (360p)", width = 640, height = 360)
+    private val unknown = onTheFly("high" to "", "medium" to "Medium (720p)", "low" to "Low (480p)")
+
+    @Test
+    fun `one row per name, a q of another's name on that row`() {
+        assertEquals(listOf("High (1080p)", "Medium (720p)", "Low (480p)"), qualityMenu(hd)!!.map { it.label })
+        val menu = qualityMenu(p720)!!
+        assertEquals(listOf("high" to "Medium (720p)", "low" to "Low (480p)"), menu.map { it.name to it.label })
+        // After a step down to medium: the one row it plays.
+        assertEquals("high", chosenQuality(menu, "medium", p720)?.name)
+        assertEquals("Medium (720p)", qualityText(menu, "medium", null, p720))
+        assertEquals(listOf("Low (576p)", "Low (480p)"), qualityMenu(pal)!!.map { it.label })
+        // A source too small for two names: nothing to pick, the name it plays.
+        assertNull(qualityMenu(p360))
+        assertEquals("Lowest (360p)", qualityText(null, "high", null, p360))
+        // A high of a size not known has no name: its word alone.
+        assertEquals(listOf("High", "Medium (720p)", "Low (480p)"), qualityMenu(unknown)!!.map { it.label })
+    }
+
+    @Test
+    fun `the original played as it is is the Original`() {
+        for (mode in listOf("passthrough", "remux")) {
+            assertEquals("Original", qualityText(null, "high", null, PlayInfo(mode = mode, width = 1920, height = 1080)))
+            assertEquals("Original", qualityLabel("high", PlayInfo(mode = mode)))
+        }
+    }
+
+    @Test
+    fun `a step down goes to the next listed rung of another name`() {
+        assertEquals("medium", lowerOnTheFlyRung("high", hd.qualities))
+        assertEquals("low", lowerOnTheFlyRung("medium", hd.qualities))
+        assertNull(lowerOnTheFlyRung("low", hd.qualities))
+        // A 720p source: high and medium are one picture, so high steps to low.
+        assertEquals("low", lowerOnTheFlyRung("high", p720.qualities))
+        assertEquals("low", lowerOnTheFlyRung("medium", p720.qualities))
+        assertEquals("low", lowerOnTheFlyRung("high", pal.qualities))
+        // A 360p source has no smaller picture.
+        assertNull(lowerOnTheFlyRung("high", p360.qualities))
+        // A high without a name is another than medium's.
+        assertEquals("medium", lowerOnTheFlyRung("high", unknown.qualities))
+        // No ladder listed - a direct stream's first step, an older server: the fixed one.
+        assertEquals("medium", lowerOnTheFlyRung("high"))
+        assertEquals("low", lowerOnTheFlyRung("medium", emptyList()))
+        val at = 120_000L
+        assertEquals(Recovery.StepDown("low"), PlaybackRecovery().onStall("transcode", "high", at, loading = true, bufferedAheadMs = 0, listed = p720.qualities))
+        assertEquals(Recovery.Wait, PlaybackRecovery().onStall("transcode", "high", at, loading = true, bufferedAheadMs = 0, listed = p360.qualities))
+        assertEquals(Recovery.GiveUp, PlaybackRecovery().onError("transcode", "high", at, listed = p360.qualities))
+    }
+
+    @Test
+    fun `a step down's notice names the picture it went to, never the one it left`() {
+        val pending = StepDown(quality = "low", fromOriginal = false, stalled = true, previous = qualityLabel("high", p720))
+        assertEquals("Switched to Low (480p) quality: the connection can't keep up.", stepDownNoticeFor(pending, "low", p720))
+        // Were a step to keep the picture, it says nothing.
+        val same = StepDown(quality = "medium", fromOriginal = false, stalled = true, previous = qualityLabel("high", p720))
+        assertNull(stepDownNoticeFor(same, "medium", p720))
+        // From the original: its next /play/info lists the ladder it is on.
+        val off = StepDown(quality = "medium", fromOriginal = true, stalled = true, previous = qualityLabel("high", PlayInfo(mode = "passthrough")))
+        assertEquals(
+            "Switched to Medium (720p) quality: the connection can't keep up with the original.",
+            stepDownNoticeFor(off, "medium", hd),
+        )
     }
 
     @Test
@@ -103,11 +216,11 @@ class QualityMenuTest {
             ),
         )!!
         assertEquals(listOf("auto", "1", "0"), menu.map { it.name })
-        assertEquals(listOf("Auto", "720p", "480p"), menu.map { it.label })
-        assertEquals(QualityRung("1", "720p", width = 1280, height = 536, codec = "avc1.64001f", bitrate = 1_505_267), menu[1])
+        assertEquals(listOf("Auto", "Medium (720p)", "Low (480p)"), menu.map { it.label })
+        assertEquals(QualityRung("1", "Medium (720p)", width = 1280, height = 536, codec = "avc1.64001f", bitrate = 1_505_267), menu[1])
         // It reads as a title's menu does.
-        assertEquals("Auto · 720p", qualityText(menu, "auto", playingLabel(1280, 536, menu)))
-        assertEquals("480p", qualityText(menu, "0", playingLabel(854, 356, menu)))
+        assertEquals("Auto · Medium (720p)", qualityText(menu, "auto", playingLabel(1280, 536, menu)))
+        assertEquals("Low (480p)", qualityText(menu, "0", playingLabel(854, 356, menu)))
         assertEquals("1", chosenQuality(menu, "1")?.name)
     }
 
@@ -159,10 +272,14 @@ class QualityMenuTest {
         )
         assertEquals("Medium (720p)", qualityLabel("medium", onTheFly))
         assertEquals("Low (480p)", qualityLabel("LOW", onTheFly))
-        assertEquals("720p", qualityLabel("v1", ladder))
-        // A server that sent no qualities: chino-stream's own names.
-        assertEquals("Medium (720p)", qualityLabel("medium", null))
-        assertEquals("Low (480p)", qualityLabel("low", PlayInfo(mode = "remux")))
+        assertEquals("Medium (720p)", qualityLabel("v1", ladder))
+        // A server that sent no qualities: the original as it is, a high by
+        // the original's frame, else the rung's word without a guessed height.
+        assertEquals("Medium", qualityLabel("medium", null))
+        assertEquals("Low", qualityLabel("low", PlayInfo(mode = "remux")))
+        assertEquals("Original", qualityLabel("high", PlayInfo(mode = "remux")))
+        assertEquals("High (1080p)", qualityLabel("high", PlayInfo(mode = "transcode", width = 1920, height = 1080)))
+        assertEquals("High", qualityLabel("high", null))
         assertEquals("v9", qualityLabel("v9", null))
     }
 
@@ -189,5 +306,21 @@ class QualityMenuTest {
             "Switched to Low (480p) quality: the connection can't keep up.",
             stepDownNotice(fromOriginal = false, stalled = true, label = "Low (480p)"),
         )
+        // An error between qualities says that, not the connection.
+        assertEquals(
+            "Switched to Low (480p) quality: Medium (720p) couldn't be streamed.",
+            stepDownNotice(fromOriginal = false, stalled = false, label = "Low (480p)", previous = "Medium (720p)"),
+        )
+    }
+
+    @Test
+    fun `a notice only for the load of its own step down, never after a pick in the menu`() {
+        val info = PlayInfo(mode = "transcode", qualities = listOf(QualityRung("high", "High (1080p)"), QualityRung("medium", "Medium (720p)")))
+        val stall = StepDown(quality = "medium", fromOriginal = false, stalled = true, previous = "High (1080p)")
+        assertEquals("Switched to Medium (720p) quality: the connection can't keep up.", stepDownNoticeFor(stall, "medium", info))
+        // The viewer picks High while the notice is up: that load says nothing.
+        assertNull(stepDownNoticeFor(null, "high", info))
+        // A load of another quality than the step down's: nothing either.
+        assertNull(stepDownNoticeFor(stall, "high", info))
     }
 }

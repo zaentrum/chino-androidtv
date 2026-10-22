@@ -222,10 +222,8 @@ class PlayerViewModel(
     private val _qualityNotice = MutableStateFlow<String?>(null)
     val qualityNotice: StateFlow<String?> = _qualityNotice.asStateFlow()
 
-    /** The step down on its way: the q it goes to, whether it leaves the
-     *  original and whether a stall made it. */
-    private data class StepDownNote(val quality: String, val fromOriginal: Boolean, val stalled: Boolean)
-    private var stepDown: StepDownNote? = null
+    /** The step down on its way, until its stream has loaded. */
+    private var stepDown: StepDown? = null
 
     /** The notice has been shown. */
     fun qualityNoticeShown() {
@@ -246,6 +244,8 @@ class PlayerViewModel(
      */
     fun prepare(quality: String?, atSec: Int? = null) {
         _state.value = PlayerUiState.Preparing
+        // Whatever was said of the stream before is not said of this one.
+        _qualityNotice.value = null
         viewModelScope.launch {
             _state.value = try {
                 val token = withContext(Dispatchers.IO) { streamTokens.valid() }
@@ -422,10 +422,10 @@ class PlayerViewModel(
                 }
                 val prev = _state.value as? PlayerUiState.Ready
                 // A step down is said once its stream is at hand, by the name
-                // the quality menu gives it ("Medium (720p)").
-                stepDown?.takeIf { it.quality.equals(resolvedQuality, ignoreCase = true) }?.let { note ->
-                    _qualityNotice.value = stepDownNotice(note.fromOriginal, note.stalled, qualityLabel(resolvedQuality, info))
-                }
+                // the quality menu gives it ("Medium (720p)"); any other load -
+                // a pick in the menu, a reload - says nothing, and takes a
+                // notice still up with it.
+                _qualityNotice.value = stepDownNoticeFor(stepDown, resolvedQuality, info)
                 stepDown = null
                 PlayerUiState.Ready(
                     masterUrl = extra?.masterUrl ?: buildString {
@@ -814,7 +814,7 @@ class PlayerViewModel(
      */
     fun recoverFromError(positionMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.GiveUp
-        val r = recovery.onError(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs)
+        val r = recovery.onError(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, cur.playInfo?.qualities.orEmpty())
         carryOut(r, cur, positionMs, cause = "error")
         return r
     }
@@ -828,7 +828,9 @@ class PlayerViewModel(
      */
     fun recoverFromStall(positionMs: Long, loading: Boolean, bufferedAheadMs: Long): Recovery {
         val cur = _state.value as? PlayerUiState.Ready ?: return Recovery.Wait
-        val r = recovery.onStall(streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, loading, bufferedAheadMs)
+        val r = recovery.onStall(
+            streamMode(mode, cur.playInfo), cur.currentQuality, positionMs, loading, bufferedAheadMs, cur.playInfo?.qualities.orEmpty(),
+        )
         carryOut(r, cur, positionMs, cause = "stall")
         return r
     }
@@ -837,10 +839,11 @@ class PlayerViewModel(
         val atSec = (positionMs / 1000L).toInt()
         when (r) {
             is Recovery.StepDown -> {
-                stepDown = StepDownNote(
+                stepDown = StepDown(
                     quality = r.quality,
                     fromOriginal = playsOriginal(streamMode(mode, cur.playInfo), cur.currentQuality),
                     stalled = cause == "stall",
+                    previous = qualityLabel(cur.currentQuality, cur.playInfo),
                 )
                 if (requests.telemetry) {
                     telemetry.event(
