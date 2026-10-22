@@ -49,7 +49,7 @@ class TrackLabelsTest {
         )
         assertEquals(
             listOf("Multiple languages", "Other language · Signs"),
-            subtitleLabels(listOf(SubtitleLabelInput("mul"), SubtitleLabelInput("mis", title = "Signs"))),
+            listOf(SubtitleLabelInput("mul"), SubtitleLabelInput("mis", title = "Signs")).map(::subtitleLabel),
         )
         assertEquals("Multiple languages", languageOrLabel("mul", "mul"))
     }
@@ -151,32 +151,6 @@ class TrackLabelsTest {
         assertEquals(null, audioCodec(null, null))
     }
 
-    @Test
-    fun subtitlesByLanguageWithWhatTheirLabelSaysBeyondItAndTheKindInWords() {
-        assertEquals(
-            listOf(
-                "German", "Dutch", "English · for deaf and hard of hearing", "English · for deaf and hard of hearing (2)",
-                "English", "German · foreign-language parts only", "No dialogue", "No dialogue · Signs", "Signs & Songs",
-                "Unknown", "Unknown (2)",
-            ),
-            subtitleLabels(
-                listOf(
-                    SubtitleLabelInput("de"),
-                    SubtitleLabelInput("nl", title = "nl"),
-                    SubtitleLabelInput("en", title = "SDH"),
-                    SubtitleLabelInput("en", title = "English [CC]"),
-                    SubtitleLabelInput("en", title = "English"),
-                    SubtitleLabelInput("de", forced = true),
-                    SubtitleLabelInput("zxx"),
-                    SubtitleLabelInput("zxx", title = "Signs"),
-                    SubtitleLabelInput("und", title = "Signs & Songs"),
-                    SubtitleLabelInput("und", title = "und"),
-                    SubtitleLabelInput(null),
-                ),
-            ),
-        )
-    }
-
     // chino-mobile's LanguagesTest (release-0.2): codes as one language, the
     // names with their script or region, and the kinds in words.
 
@@ -236,183 +210,229 @@ class TrackLabelsTest {
         )
     }
 
-    @Test
-    fun theKindInWordsAfterTheLanguageForcedFirst() {
-        assertEquals(
-            listOf(
-                "English · for deaf and hard of hearing",
-                "English · foreign-language parts only",
-                "English · foreign-language parts only · for deaf and hard of hearing",
-                "Chinese (Simplified) · foreign-language parts only",
-            ),
-            subtitleLabels(
-                listOf(
-                    SubtitleLabelInput("eng", sdh = true),
-                    SubtitleLabelInput("eng", forced = true),
-                    SubtitleLabelInput("eng", forced = true, sdh = true),
-                    SubtitleLabelInput("zh-Hans", forced = true),
-                ),
-            ),
-        )
+    /** One subtitle as chino-web's languages.test.ts asks for it: the track,
+     *  the name it gets, and the language the menu lists it by (where the
+     *  test says). */
+    private data class Case(
+        val lang: String?,
+        val title: String?,
+        val label: String,
+        val forced: Boolean = false,
+        val sdh: Boolean = false,
+        val tag: String? = null,
+    )
+
+    private fun check(cases: List<Case>) {
+        for (c in cases) {
+            val input = SubtitleLabelInput(c.lang, c.title, c.forced, c.sdh)
+            assertEquals("${c.lang} \"${c.title}\"", c.label, subtitleLabel(input))
+            c.tag?.let { assertEquals("${c.lang} \"${c.title}\" is listed as", it, subtitleLanguage(c.lang, c.title)) }
+        }
     }
+
+    // chino-web's languages.test.ts (subtitles-spec), case for case: the same
+    // track has the same name on the TV, the phone and the web.
+
+    @Test
+    fun theDemosSintelEveryTrackNamedNoneBlank() = check(
+        listOf("ger" to "German", "dut" to "Dutch", "eng" to "English", "fre" to "French", "ita" to "Italian",
+            "spa" to "Spanish", "pol" to "Polish", "por" to "Portuguese", "rus" to "Russian", "vie" to "Vietnamese")
+            .map { (lang, label) -> Case(lang, null, label) } + Case("tgl", "Tagalog", "Tagalog"),
+    )
+
+    @Test
+    fun theKindInWordsAfterTheLanguageForcedFirst() = check(
+        listOf(
+            Case("eng", null, "English · for deaf and hard of hearing", sdh = true),
+            Case("eng", null, "English · foreign-language parts only", forced = true),
+            Case("eng", null, "English · foreign-language parts only · for deaf and hard of hearing", forced = true, sdh = true),
+            Case("zh-Hans", null, "Chinese (Simplified) · foreign-language parts only", forced = true),
+            Case("eng", "English", "English"),
+            Case("eng", "English SDH", "English · for deaf and hard of hearing"),
+            Case("ger", null, "German"),
+            Case("ger", "German (forced)", "German · foreign-language parts only", forced = true),
+        ),
+    )
 
     @Test
     fun aLabelThatSaysTheKindItselfSaysItOnceInTheseWords() {
         val sdh = "English · for deaf and hard of hearing"
         val forced = "English · foreign-language parts only"
         val both = "English · foreign-language parts only · for deaf and hard of hearing"
-        val cases = mapOf(
-            "English SDH" to sdh,
-            "SDH" to sdh,
-            "English [CC]" to sdh,
-            "English (Closed Captions)" to sdh,
-            "English - Hearing Impaired" to sdh,
-            "English (for the deaf and hard of hearing)" to sdh,
-            // chino-stream's name, and this rule's own words again.
-            "English · SDH" to sdh,
-            sdh to sdh,
-            "English (Forced)" to forced,
-            "English (forced)" to forced,
-            "Forced" to forced,
-            "English Forced Narrative" to forced,
-            forced to forced,
-            "English · SDH (forced)" to both,
-            "Forced, SDH" to both,
-            both to both,
-        )
-        for ((title, label) in cases) assertEquals(title, label, subtitleLabel(SubtitleLabelInput("eng", title)))
-        // A title that says nothing of a kind is no kind.
-        assertEquals("English", subtitleLabel(SubtitleLabelInput("eng", "English")))
-    }
-
-    @Test
-    fun whatElseATitleSaysStaysBeforeTheKind() {
-        assertEquals(
+        check(
             listOf(
-                "English · Commentary",
-                "English Commentary",
-                "English · Commentary · for deaf and hard of hearing",
-                "German · Signs & Songs · foreign-language parts only",
-                // "English" on a British English track: the name says it.
-                "English (United Kingdom)",
-                // A made track's label, its script in the name already.
-                "Chinese (Simplified) · Converted",
-            ),
-            subtitleLabels(
+                "English SDH" to sdh, "SDH" to sdh, "English [CC]" to sdh, "[CC]" to sdh,
+                "English (Closed Captions)" to sdh, "English - Hearing Impaired" to sdh,
+                "English (for the deaf and hard of hearing)" to sdh,
+                // A packager's NAME, and this rule's own words again.
+                "English · SDH" to sdh, sdh to sdh,
+                "English (Forced)" to forced, "Forced" to forced, "English Forced Narrative" to forced, forced to forced,
+                "English · SDH (forced)" to both, "Forced, SDH" to both, both to both,
+                // A title that says nothing of a kind is no kind.
+                "English" to "English",
+            ).map { (title, label) -> Case("eng", title, label) },
+        )
+        assertTrue(isSdhSubtitle("English [CC]"))
+        assertFalse(isSdhSubtitle("Commentary"))
+        assertTrue(saysForced("German (Forced)"))
+        assertFalse(saysForced("Reinforced"))
+    }
+
+    @Test
+    fun wordsThatOnlyNameTheLanguageAgainGoInAnyLanguageWordsThatAddSomethingStay() = check(
+        listOf(
+            // The word list's name, never "German · Deutsch".
+            Case("de", "Deutsch", "German"),
+            Case("de", "German · Deutsch", "German"),
+            Case("zh-hans", "中文", "Chinese (Simplified)"),
+            Case("zh-Hans", "Chinese (Simplified) · 中文", "Chinese (Simplified)"),
+            Case("zh-Hant", "繁體中文", "Chinese (Traditional)"),
+            Case("pt-br", "Português", "Portuguese (Brazil)"),
+            Case("spa", "Español", "Spanish"),
+            Case("ja", "日本語", "Japanese"),
+            // Named in a third language: still only the language.
+            Case("ger", "Allemand", "German"),
+            Case("de", "Deutsch (Forced)", "German · foreign-language parts only"),
+            Case("de", "Deutsch · Kommentar", "German · Kommentar"),
+            // Another language's own name is something else.
+            Case("de", "Español", "German · Español"),
+            // Inside a part with other words, only the language's name goes -
+            // not the label's own name, which says it once - and a word that is
+            // a code elsewhere is a word ("und" is German for "and").
+            Case("de", "Deutsch Kommentar", "German · Kommentar"),
+            Case("de", "Kommentar und Analyse", "German · Kommentar und Analyse"),
+            Case("eng", "English Commentary", "English Commentary"),
+        ),
+    )
+
+    @Test
+    fun aChineseTracksTitleThatGivesItsScriptNamesItByItsScript() {
+        check(
+            listOf("简体中文", "簡體中文", "简体", "CHS", "Simplified", "Chinese (Simplified)", "Simplified Chinese")
+                .map { Case("chi", it, "Chinese (Simplified)", tag = "zh-Hans") } +
+                listOf("繁體中文", "繁体中文", "繁體", "CHT", "Traditional")
+                    .flatMap { listOf(Case("chi", it, "Chinese (Traditional)"), Case("zho", it, "Chinese (Traditional)", tag = "zh-Hant")) } +
                 listOf(
-                    SubtitleLabelInput("eng", title = "Commentary"),
-                    SubtitleLabelInput("eng", title = "English Commentary"),
-                    SubtitleLabelInput("eng", title = "Commentary (SDH)"),
-                    SubtitleLabelInput("ger", title = "Signs & Songs", forced = true),
-                    SubtitleLabelInput("en-GB", title = "English"),
-                    SubtitleLabelInput("zh-Hans", title = "Chinese (Simplified) · Converted"),
+                    // Its region in brackets, the full-width ones too.
+                    Case("chi", "繁體中文（台灣）", "Chinese (Traditional, Taiwan)"),
+                    // A tag that names the other script: the title's word stays.
+                    Case("zh-Hans", "繁體中文", "Chinese (Simplified) · 繁體中文"),
+                    // Mandarin and Cantonese in the word list's words.
+                    Case("chi", "國語", "Chinese · Mandarin"),
+                    Case("chi", "普通话", "Chinese · Mandarin"),
+                    Case("chi", "粵語", "Chinese · Cantonese"),
+                    Case("chi", "中文", "Chinese", tag = "zh"),
                 ),
-            ),
         )
     }
 
-    // The names chino-stream gives an original file's streams, and the
-    // attached sidecars' label.
+    @Test
+    fun aLanguagesOwnNameBeforeARegionTheRegionInBracketsAfterTheLanguage() = check(
+        listOf(
+            Case("spa", "Español (Latinoamérica)", "Spanish (Latin America)", tag = "es-419"),
+            Case("spa", "Español (España)", "Spanish (Spain)", tag = "es-ES"),
+            Case("spa", "Español Latino", "Spanish (Latin America)", tag = "es-419"),
+            Case("spa", "Latinoamerica", "Spanish (Latin America)", tag = "es-419"),
+            Case("fre", "Français (Canada)", "French (Canada)", tag = "fr-CA"),
+            Case("fre", "Français canadien", "French (Canada)", tag = "fr-CA"),
+            Case("pt", "Português (Brasil)", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("por", "Português - Brasil", "Portuguese (Brazil)", tag = "pt-BR"),
+            Case("spa", "Spanish (Latin America)", "Spanish (Latin America)", tag = "es-419"),
+            // The tag's region again says nothing more.
+            Case("es-419", "Español (Latinoamérica)", "Spanish (Latin America)", tag = "es-419"),
+            // Another region than the tag's stays a word.
+            Case("es-ES", "Latinoamérica", "Spanish (Spain) · Latinoamérica"),
+            // A region among other words is a word.
+            Case("fre", "Canada Commentaire", "French · Canada Commentaire"),
+            // With the kind: once, after.
+            Case("spa", "Español (Latinoamérica) (Forced)", "Spanish (Latin America) · foreign-language parts only"),
+        ),
+    )
 
     @Test
-    fun aNameThatSaysTheScriptOrRegionPutsItInBracketsAfterTheLanguage() {
-        val cases = listOf(
-            Triple("chi", "Chinese · Simplified", "Chinese (Simplified)"),
-            Triple("chi", "Chinese · Traditional", "Chinese (Traditional)"),
-            Triple("por", "Portuguese · Brazilian", "Portuguese (Brazil)"),
-            Triple("spa", "Spanish · Latin American", "Spanish (Latin America)"),
-            Triple("fre", "French · Canadian", "French (Canada)"),
-            Triple("chi", "Simplified Chinese", "Chinese (Simplified)"),
-            Triple("chi", "Chinese (Simplified)", "Chinese (Simplified)"),
-            Triple("chi", "简体", "Chinese (Simplified)"),
-            Triple("chi", "繁體中文", "Chinese (Traditional)"),
-            Triple("eng", "English (US)", "English (United States)"),
-            // The kind and the other words stay, in their places.
-            Triple("chi", "Chinese · Simplified · SDH", "Chinese (Simplified) · for deaf and hard of hearing"),
-            Triple("por", "Brazilian (Forced)", "Portuguese (Brazil) · foreign-language parts only"),
-            Triple("spa", "Spanish · Latin American · Commentary", "Spanish (Latin America) · Commentary"),
-        )
-        for ((lang, name, label) in cases) assertEquals(name, label, subtitleLabel(SubtitleLabelInput(lang, name)))
-        // A word that names a variant of another language says nothing here:
-        // "Canadian" is French (Canada), and of a German track only a word.
-        assertEquals("German · Canadian", subtitleLabel(SubtitleLabelInput("ger", "Canadian")))
-        // A script or region the tag has already is the one.
-        assertEquals("Chinese (Traditional) · Simplified", subtitleLabel(SubtitleLabelInput("zh-Hant", "Simplified")))
-        // "us" in a sentence is no region.
-        assertEquals("English · talk to us", subtitleLabel(SubtitleLabelInput("eng", "talk to us")))
-    }
+    fun whatElseATitleSaysStaysBeforeTheKind() = check(
+        listOf(
+            Case("eng", "Commentary", "English · Commentary"),
+            Case("eng", "English Commentary", "English Commentary"),
+            Case("eng", "Commentary (SDH)", "English · Commentary · for deaf and hard of hearing"),
+            Case("ger", "Signs & Songs", "German · Signs & Songs · foreign-language parts only", forced = true),
+            // "English" on a British English track: the name says it.
+            Case("en-GB", "English", "English (United Kingdom)"),
+            // A made track's label, its script in the name already.
+            Case("zh-Hans", "Chinese (Simplified) · Converted", "Chinese (Simplified) · Converted"),
+            // The language again before what the title adds: said once.
+            Case("eng", "English · Commentary", "English · Commentary"),
+        ),
+    )
 
     @Test
-    fun aTitleThatOnlyNamesTheLanguageAgainSaysNothingMore() {
-        val cases = listOf(
-            Triple("ger", "Deutsch", "German"),
-            Triple("de", "Deutsch (Forced)", "German · foreign-language parts only"),
-            Triple("ita", "Italiano", "Italian"),
-            Triple("fre", "Français", "French"),
-            Triple("jpn", "日本語", "Japanese"),
-            Triple("zh-Hans", "中文", "Chinese (Simplified)"),
-            Triple("chi", "简体中文", "Chinese (Simplified)"),
-            Triple("por", "Português (Brasil)", "Portuguese (Brazil)"),
+    fun aSidecarTheServerMadeSaysAiAfterTheLanguage() = check(
+        listOf(
+            Case("de", "AI", "German · AI", tag = "de"),
+            Case("en", "AI", "English · AI"),
+            Case("zh-Hans", "AI", "Chinese (Simplified) · AI", tag = "zh-Hans"),
+        ),
+    )
+
+    @Test
+    fun aServersNumberOrALanguageCodeIsNoName() = check(
+        // The menu never numbers a subtitle: tracks that read the same show
+        // once (SubtitleChoicesTest).
+        listOf(
+            Case("eng", "eng", "English"),
+            Case("eng", "English (2)", "English"),
+            Case("eng", "SDH", "English · for deaf and hard of hearing"),
+            Case("eng", "English · SDH (2)", "English · for deaf and hard of hearing"),
+            Case("ger", null, "German · foreign-language parts only", forced = true),
+            Case("ger", "Forced", "German · foreign-language parts only", forced = true),
+            Case("und", null, "Unknown"),
+        ),
+    )
+
+    @Test
+    fun subtitlesWithoutDialogueOrInNoKnownLanguage() = check(
+        listOf(
+            Case("zxx", null, "No dialogue"),
+            Case("zxx", "zxx", "No dialogue"),
+            Case("zxx", "Signs", "No dialogue · Signs"),
+            Case("und", "Signs & Songs", "Signs & Songs"),
+            Case("und", "und", "Unknown"),
+            Case("", "Forced", "Unknown · foreign-language parts only", forced = true),
+            Case(null, null, "Unknown"),
+            Case("mul", null, "Multiple languages"),
+            Case("mis", "Signs", "Other language · Signs"),
+        ),
+    )
+
+    // The TV's own: what Media3 and chino-stream hand it.
+
+    @Test
+    fun theWordsChinoStreamNamesAStreamWithReadAsTheWebReadsThem() = check(
+        listOf(
+            Case("chi", "Chinese · Simplified", "Chinese (Simplified)", tag = "zh-Hans"),
+            Case("chi", "Chinese · Traditional", "Chinese (Traditional)", tag = "zh-Hant"),
+            Case("chi", "Chinese · Simplified · SDH", "Chinese (Simplified) · for deaf and hard of hearing"),
+            Case("eng", "English (US)", "English (United States)", tag = "en-US"),
+            Case("eng", "English · SDH", "English · for deaf and hard of hearing", tag = "en"),
+            Case("und", "Signs", "Signs", tag = ""),
+            // A region's name in English, not a demonym: chino-web reads
+            // "Brazilian", "Latin American" and "Canadian" as words.
+            Case("por", "Portuguese · Brazilian", "Portuguese · Brazilian", tag = "pt"),
+            Case("spa", "Spanish · Latin American", "Spanish · Latin American"),
+            Case("fre", "French · Canadian", "French · Canadian"),
+            // A script the tag has already is the one; a word of another
+            // language's region says nothing here.
+            Case("zh-Hant", "Simplified", "Chinese (Traditional) · Simplified"),
+            Case("ger", "Canadian", "German · Canadian"),
+            // "us" in a sentence is no region.
+            Case("eng", "talk to us", "English · talk to us"),
             // In another language than its own, too.
-            Triple("ger", "Allemand", "German"),
-            Triple("eng", "Englisch", "English"),
-            Triple("spa", "Spanish", "Spanish"),
-        )
-        for ((lang, title, label) in cases) assertEquals(title, label, subtitleLabel(SubtitleLabelInput(lang, title)))
-        // Words that add something stay.
-        assertEquals("German · Commentary", subtitleLabel(SubtitleLabelInput("ger", "Commentary")))
-        assertEquals("German · Deutsch Kommentar", subtitleLabel(SubtitleLabelInput("ger", "Deutsch Kommentar")))
-        // Another language's name on a track is no name of its own.
-        assertEquals("German · Français", subtitleLabel(SubtitleLabelInput("ger", "Français")))
-    }
-
-    @Test
-    fun theTagOfASubtitleCarriesWhatItsNameSays() {
-        assertEquals("zh-Hans", subtitleTag("chi", "Chinese · Simplified").tag)
-        assertEquals("zh-Hant", subtitleTag("chi", "Chinese · Traditional").tag)
-        assertEquals("pt-BR", subtitleTag("por", "Portuguese · Brazilian").tag)
-        assertEquals("es-419", subtitleTag("spa", "Spanish · Latin American").tag)
-        assertEquals("zh-Hans", subtitleTag("zh-Hans", "AI").tag)
-        assertEquals("en", subtitleTag("eng", "English · SDH").tag)
-        assertEquals("", subtitleTag("und", "Signs").tag)
-    }
-
-    @Test
-    fun anAttachedSidecarsLabelStaysAfterTheLanguage() {
-        assertEquals(
-            listOf("German · AI", "English · AI", "Chinese (Simplified) · AI"),
-            subtitleLabels(listOf(SubtitleLabelInput("de", "AI"), SubtitleLabelInput("en", "AI"), SubtitleLabelInput("zh-Hans", "AI"))),
-        )
-    }
-
-    @Test
-    fun theSameLabelTwiceIsNumberedTheServersNumberNoMore() {
-        assertEquals(
-            listOf(
-                "English",
-                "English (2)",
-                "English (3)",
-                "English · for deaf and hard of hearing",
-                "English · for deaf and hard of hearing (2)",
-                "German · foreign-language parts only",
-                "German · foreign-language parts only (2)",
-                "Unknown",
-            ),
-            subtitleLabels(
-                listOf(
-                    SubtitleLabelInput("eng", title = "eng"),
-                    SubtitleLabelInput("eng", title = "English"),
-                    // chino-stream's unique NAME: numbered by the labels, once.
-                    SubtitleLabelInput("eng", title = "English (2)"),
-                    SubtitleLabelInput("eng", title = "SDH"),
-                    SubtitleLabelInput("eng", title = "English · SDH (2)"),
-                    SubtitleLabelInput("ger", forced = true),
-                    SubtitleLabelInput("ger", title = "Forced", forced = true),
-                    SubtitleLabelInput("und"),
-                ),
-            ),
-        )
-    }
+            Case("eng", "Englisch", "English"),
+            Case("ita", "Italiano", "Italian"),
+            Case("fre", "Français (Commentaire)", "French · Commentaire"),
+            Case("ger", "Français", "German · Français"),
+        ),
+    )
 
     @Test
     fun aSubtitleForTheDeafSaysSo() {

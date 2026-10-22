@@ -75,9 +75,9 @@ fun keepRendition(
     sidecars: List<SidecarSubtitle>,
 ): Boolean {
     val kind = renditionKind(name, forced, characteristics)
-    val tag = subtitleTag(language, name).tag
+    val tag = subtitleLanguage(language, name)
     val kinds = sidecarKinds(sidecars)
-    return sidecars.indices.none { kinds[it] == kind && sameLanguage(tag, subtitleTag(sidecars[it].lang, sidecars[it].label).tag) }
+    return sidecars.indices.none { kinds[it] == kind && sameLanguage(tag, subtitleLanguage(sidecars[it].lang, sidecars[it].label)) }
 }
 
 /**

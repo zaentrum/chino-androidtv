@@ -103,13 +103,16 @@ class SubtitleChoicesTest {
             labels(menu.top),
         )
         assertEquals(listOf("emb:0", "emb:1", "side:ai-en", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans"), menu.top.map { it.id })
+        // The rest by language in the file's order, a language's tracks
+        // together. chino-stream's "Spanish · Latin American" reads as the web
+        // reads it (TrackLabelsTest).
         assertEquals(
             listOf(
-                "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Dutch", "Estonian", "Finnish",
-                "French", "French (Canada)", "Greek", "Hebrew", "Hindi", "Hungarian", "Indonesian", "Italian",
-                "Japanese", "Korean", "Latvian", "Lithuanian", "Malay", "Norwegian", "Polish", "Portuguese",
-                "Portuguese (Brazil)", "Russian", "Slovak", "Slovenian", "Spanish", "Spanish (Latin America)",
-                "Swedish", "Tamil", "Telugu", "Thai", "Turkish", "Ukrainian", "Vietnamese",
+                "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Greek", "Spanish · Latin American",
+                "Spanish", "Estonian", "Finnish", "French · Canadian", "French", "Hebrew", "Hindi", "Hungarian",
+                "Indonesian", "Italian", "Japanese", "Korean", "Lithuanian", "Latvian", "Malay", "Dutch", "Norwegian",
+                "Polish", "Portuguese", "Portuguese · Brazilian", "Russian", "Slovak", "Slovenian", "Swedish", "Tamil",
+                "Telugu", "Thai", "Turkish", "Ukrainian", "Vietnamese",
             ),
             labels(menu.more),
         )
@@ -127,9 +130,10 @@ class SubtitleChoicesTest {
             listOf("German", "German · AI", "English", "English · for deaf and hard of hearing", "English · AI", "Chinese (Simplified)", "Chinese (Simplified) · AI"),
             labels(german.top),
         )
-        // A language the server is not set up for: first, its variants after it.
+        // A language the server is not set up for: first, its tracks in the
+        // file's order.
         val french = subtitleMenu(tracks, preferred = "fr", serverLanguages = server)
-        assertEquals(listOf("French", "French (Canada)", "English"), labels(french.top).take(3))
+        assertEquals(listOf("French · Canadian", "French", "English"), labels(french.top).take(3))
         assertFalse("French" in labels(french.more))
         assertTrue("German" in labels(french.top))
     }
@@ -141,10 +145,15 @@ class SubtitleChoicesTest {
             val noServer = subtitleMenu(tracks, preferred = "off", serverLanguages = none)
             assertTrue(noServer.more.isEmpty())
             assertEquals(44, noServer.top.size)
-            assertEquals(listOf("Arabic", "Bulgarian", "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)"), labels(noServer.top).take(5))
+            // The file's order, a language's tracks together, its AI ones and
+            // its scripts among them.
             assertEquals(
-                listOf("English", "English · for deaf and hard of hearing", "English · AI"),
-                labels(noServer.top).filter { it.startsWith("English") },
+                listOf(
+                    "English", "English · for deaf and hard of hearing", "English · AI", "Arabic", "Bulgarian",
+                    "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)", "Czech", "Danish",
+                    "German", "German · AI", "Greek",
+                ),
+                labels(noServer.top).take(13),
             )
         }
         val italian = subtitleMenu(tracks, preferred = "it", serverLanguages = emptyList())
@@ -154,21 +163,43 @@ class SubtitleChoicesTest {
     }
 
     @Test
-    fun `a packaged title lists its tracks directly, the server's languages first`() {
-        // A package keeps what its source brought besides the server's languages.
+    fun `a packaged title follows the same rule, what its source brought behind more languages`() {
+        // A package keeps what its source brought besides the server's
+        // languages: its renditions, as Media3 lists the master's.
         val packaged = listOf(
-            SubtitleTrackInfo("side:fr", "fre"),
-            SubtitleTrackInfo("side:en", "eng"),
-            SubtitleTrackInfo("side:it", "ita"),
-            SubtitleTrackInfo("side:de", "ger"),
+            SubtitleTrackInfo("0:subs#0", "fre", "French"),
+            SubtitleTrackInfo("0:subs#1", "eng", "English"),
+            SubtitleTrackInfo("0:subs#2", "ita", "Italian"),
+            SubtitleTrackInfo("0:subs#3", "ger", "German"),
         )
-        val menu = subtitleMenu(packaged, preferred = "off", serverLanguages = listOf("en", "de"), packaged = true)
-        assertEquals(listOf("English", "German", "French", "Italian"), labels(menu.top))
-        assertTrue(menu.more.isEmpty())
-        // The same tracks of a title played from its file: the rest behind more languages.
-        val unpackaged = subtitleMenu(packaged, preferred = "off", serverLanguages = listOf("en", "de"))
-        assertEquals(listOf("English", "German"), labels(unpackaged.top))
-        assertEquals(listOf("French", "Italian"), labels(unpackaged.more))
+        val menu = subtitleMenu(packaged, preferred = "off", serverLanguages = listOf("en", "de"))
+        assertEquals(listOf("English", "German"), labels(menu.top))
+        assertEquals(listOf("French", "Italian"), labels(menu.more))
+        // Only a server that names no languages lists them all.
+        assertEquals(listOf("French", "English", "Italian", "German"), labels(subtitleMenu(packaged, "off", emptyList()).top))
+    }
+
+    @Test
+    fun `Mandarin and Cantonese are two, never one`() {
+        val hk = listOf(SubtitleTrackInfo("emb:2", "chi", "國語"), SubtitleTrackInfo("emb:3", "chi", "粵語"), SubtitleTrackInfo("emb:4", "chi", "中文"))
+        assertEquals(listOf("Chinese · Mandarin", "Chinese · Cantonese", "Chinese"), labels(subtitleMenu(hk, "off", emptyList()).top))
+        assertEquals(listOf("Chinese · Mandarin", "Chinese · Cantonese", "Chinese"), labels(subtitleMenu(hk, "off", listOf("en")).more))
+    }
+
+    @Test
+    fun `tracks that read the same show once, never numbered`() {
+        val twice = listOf(
+            SubtitleTrackInfo("side:en", "en"),
+            SubtitleTrackInfo("emb:6", "eng"),
+            SubtitleTrackInfo("emb:7", "eng", "English (2)"),
+            SubtitleTrackInfo("emb:8", "eng", "Commentary"),
+        )
+        val menu = subtitleMenu(twice, "en", listOf("en"))
+        // The file's own before the one the server attached, wherever the
+        // player lists them.
+        assertEquals(listOf("emb:6", "emb:8"), menu.top.map { it.id })
+        assertEquals(listOf("English", "English · Commentary"), labels(menu.top))
+        assertTrue(menu.all.none { it.label.endsWith("(2)") })
     }
 
     @Test

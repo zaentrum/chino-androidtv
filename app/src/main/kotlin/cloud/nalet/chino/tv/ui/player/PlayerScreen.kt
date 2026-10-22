@@ -475,11 +475,9 @@ private fun ExoPlayback(
     var audioTracks by remember { mutableStateOf<List<AudioTrack>>(emptyList()) }
     // The subtitle menu of the tracks the player has (SubtitleChoices.kt):
     // the viewer's language and the server's first, the rest behind "more
-    // languages" - all of them directly for a package (a title's, an
-    // extra's) and where the server names no language.
-    val packaged = isPackaged(streamMode(viewModel.mode, ready.playInfo))
-    val subtitleMenu = remember(tracks, ready.subtitlePreference, ready.serverSubtitleLanguages, packaged) {
-        subtitleMenu(tracks.map { it.info }, ready.subtitlePreference, ready.serverSubtitleLanguages, packaged)
+    // languages" - all of them directly where the server names no language.
+    val subtitleMenu = remember(tracks, ready.subtitlePreference, ready.serverSubtitleLanguages) {
+        subtitleMenu(tracks.map { it.info }, ready.subtitlePreference, ready.serverSubtitleLanguages)
     }
     // What comes on by itself (autoSubtitle): the viewer's preferred
     // subtitle language when the audio is in another language and the title

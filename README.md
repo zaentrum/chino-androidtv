@@ -70,14 +70,18 @@ real values always come from the connected server at runtime.
   menu, "subtitles", lists "off", then your subtitle language (Settings), then
   the subtitle languages your server is set up for
   (`/api/v1/subtitles/languages`), then "more languages" with the rest of the
-  title's tracks - its sidecars and, for a title played from its original
-  file, the file's own text streams, each fetched only once it is switched
-  on. A packaged title, and any title on a server that names no subtitle
-  languages, lists all of its tracks directly, your language first. A track
-  is named by its language, its script or region in brackets, and its kind in
-  words ("Chinese (Simplified)", "English · for deaf and hard of hearing",
-  "German · AI"); words in its own label that only name the language again
-  are dropped, and two that read the same show once, the file's own first.
+  title's tracks - a package's other renditions, its sidecars and, for a
+  title played from its original file, the file's own text streams, each
+  fetched only once it is switched on. On a server that names no subtitle
+  languages, all of the tracks are listed directly: your language first, then
+  the file's order, a language's tracks together. A track is named by
+  chino-web's rule, so the TV, the phone and the web call it the same: its
+  language, its script or region in brackets, and its kind in words
+  ("Chinese (Simplified)", "English · for deaf and hard of hearing", "German
+  · AI", "Chinese · Cantonese"); words in its own label that only name the
+  language again are dropped wherever they stand ("Deutsch Kommentar" is
+  "German · Kommentar"), and tracks that read the same show once, never
+  numbered, the file's own first.
   What comes on by itself: your subtitle language when the audio is in
   another language, else the foreign-language parts only in the language of
   the audio, which follow the audio into another language; nothing else, and
