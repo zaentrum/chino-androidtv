@@ -295,10 +295,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                         // the previous (default) server config; save() doesn't rebuild
                         // them. Restart the process so the graph re-reads the just-saved
                         // server — the boot gate then routes to AUTH on the new server.
-                        val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
-                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        appCtx.startActivity(intent)
-                        Runtime.getRuntime().exit(0)
+                        restartApp(appCtx)
                     },
                 )
             }
@@ -315,10 +312,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                         // rebuild them. Restart the process so the graph re-reads the
                         // just-saved server; the boot gate then routes to AUTH because
                         // accounts were cleared.
-                        val intent = appCtx.packageManager.getLaunchIntentForPackage(appCtx.packageName)
-                        intent?.addFlags(android.content.Intent.FLAG_ACTIVITY_NEW_TASK or android.content.Intent.FLAG_ACTIVITY_CLEAR_TASK)
-                        appCtx.startActivity(intent)
-                        Runtime.getRuntime().exit(0)
+                        restartApp(appCtx)
                     },
                     onCancel = { navController.popBackStack() },
                 )
