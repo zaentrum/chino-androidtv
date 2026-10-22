@@ -144,8 +144,8 @@ private val LOADING_MESSAGES: List<String> = listOf(
  *  about it (PlaybackRecovery: an on-the-fly title drops a quality rung, a
  *  packaged one is retried in place). The playback buffer is huge (4 min), so
  *  entering STATE_BUFFERING means it fully drained; 12 s of continued stall past
- *  that is clearly the current rung out-running what nas001 can serve under
- *  contention — the BRAVIA 4K-high "stutters every few minutes but never
+ *  that is clearly the current rung out-running what the server's storage can
+ *  serve under contention — the BRAVIA 4K-high "stutters every few minutes but never
  *  errors" case. */
 private const val REBUFFER_FALLBACK_MS = 12_000L
 
@@ -342,9 +342,9 @@ private fun ExoPlayback(
             .setMimeType(MimeTypes.APPLICATION_M3U8)
             .setSubtitleConfigurations(sideSubs)
             .build()
-        // Big playback buffer to ride out nas001 NFS read-latency spikes (the
-        // "lags every ~5 min" rebuffering): chino-stream segment serves stall
-        // up to ~17s under NFS contention, and the 50s ExoPlayer default drains
+        // Big playback buffer to ride out the server's storage read-latency
+        // spikes (the "lags every ~5 min" rebuffering): chino-stream segment
+        // serves stall up to ~17s under storage contention, and the 50s ExoPlayer default drains
         // before the stall clears. Mirror chino-web's PlayerPage hls.js config
         // (maxBufferLength 300 / backBuffer 60) — buffer up to 4 min ahead, but
         // cap by BYTES (160 MiB) so a 4K HEVC stream on the BRAVIA can't OOM the
@@ -731,7 +731,7 @@ private fun ExoPlayback(
     // eventually lands so no PlaybackException ever fires. When a mid-stream
     // rebuffer persists past REBUFFER_FALLBACK_MS the player recovers
     // (PlaybackRecovery): an on-the-fly title drops a rung — smaller segments
-    // keep ahead of nas001 NFS contention — and a packaged one is left to load
+    // keep ahead of storage contention — and a packaged one is left to load
     // while it is fetching, else nudged where it stands (a seek to the
     // playhead restarts its renderers on what is buffered) and rebuilt at its
     // quality after that. A drop or a rebuild makes a new player and with it a

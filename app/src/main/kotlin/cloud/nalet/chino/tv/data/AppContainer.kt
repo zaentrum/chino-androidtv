@@ -221,7 +221,7 @@ class AppContainer(context: Context) {
      *    the `?stream=<token>` token in the query string
      *
      * Read timeout is LONG (120s): cold ffmpeg invocations take >20s, AND under
-     * nas001 NFS read contention a single packaged /seg-N.m4s can stall far
+     * read contention on the server's network storage a single packaged /seg-N.m4s can stall far
      * past 45s (metadata GETATTR stalls were measured at ~18-38s and worse) —
      * the old 45s timeout ABORTED those fetches (SocketTimeoutException), so the
      * buffer could never fill and playback rebuffered. With a long timeout the

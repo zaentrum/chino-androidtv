@@ -36,6 +36,10 @@ upper() { printf '%s' "$1" | tr '[:lower:]' '[:upper:]'; }
 
 tld='cloud'
 host_re="nalet\\.${tld}"
+# The internal machines by their names: a storage box or a workstation and
+# its three-digit number.
+n1="n""as" n2="w""s"
+node_re=$(word "($n1|$n2)[0-9]{3}")
 # Other media products, and the internal one's name.
 p1="jelly""fin" p2="p""lex" p3="em""by" p4="k""odi" p5="nalet""flix"
 names_re=$(word "$p1|$p2|$p3|$p4|$p5")
@@ -83,6 +87,11 @@ self_test() {
   expect host "$host_re" hit "https://sso.nalet.${tld}/realms/x"
   expect host "$host_re" hit "API_BASE_URL=https://API.NALET.$(upper "$tld")"
   expect host "$host_re" miss 'https://media.example.org'
+  expect node "$node_re" hit "// ride out ${n1}001 read spikes"
+  expect node "$node_re" hit "$(upper "$n1")002_HOST=x"
+  expect node "$node_re" hit "ssh ${n2}005.lan"
+  expect node "$node_re" miss 'canvas001'
+  expect node "$node_re" miss "${n1}1 and ${n2}12"
   return $bad
 }
 
@@ -114,6 +123,7 @@ scan() {
 }
 
 scan "internal hostname" "$host_re" .
+scan "internal machine name" "$node_re" .
 scan "competitor product name" "$names_re" .
 # User-facing surfaces only: the Android resources and the docs.
 shopt -s nullglob
