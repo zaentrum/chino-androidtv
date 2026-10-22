@@ -368,29 +368,36 @@ class DetailViewModel(
     }
 
     /** Per-episode watched toggle in the series episode list (web parity:
-     *  EpisodesList row). Flips the loaded episode's watchedAt optimistically
-     *  inside the Ready.seasons list so the green check updates instantly, then
-     *  POSTs/DELETEs. `watched` is the NEXT desired state (true = mark). */
-    fun toggleEpisodeWatched(episodeId: String, watched: Boolean) {
+     *  EpisodesList row): the file's episodes [ids], its holder first. Flips
+     *  their watchedAt optimistically inside the Ready.seasons list so the
+     *  green check updates instantly, then POSTs/DELETEs the holder's.
+     *  `watched` is the NEXT desired state (true = mark). */
+    fun toggleEpisodeWatched(ids: List<String>, watched: Boolean) {
         val ready = _state.value as? DetailUiState.Ready ?: return
+        val holder = ids.firstOrNull() ?: return
         telemetry.event(
             "episode_watched_toggle",
-            itemId = episodeId,
+            itemId = holder,
             extra = mapOf("watched" to watched.toString()),
         )
+        // chino-api marks and un-marks every episode of a file together:
+        // the row shows them all as they will be.
         val newSeasons = ready.seasons.map { season ->
-            if (season.episodes.none { it.id == episodeId }) season
+            if (season.episodes.none { it.id in ids }) season
             else season.copy(
                 episodes = season.episodes.map { ep ->
-                    if (ep.id == episodeId) ep.copy(watchedAt = if (watched) "now" else null) else ep
+                    if (ep.id in ids) ep.copy(watchedAt = if (watched) "now" else null) else ep
                 },
             )
         }
         _state.value = ready.copy(seasons = newSeasons)
         viewModelScope.launch {
-            runCatching { if (watched) api.postWatched(episodeId) else api.deleteWatched(episodeId) }
+            runCatching { if (watched) api.postWatched(holder) else api.deleteWatched(holder) }
         }
     }
+
+    /** An episode's bookmark: into the Watchlist or out of it, as it is now. */
+    fun toggleEpisodeWatchlist(id: String) = setInWatchlist(id, id !in watchlist.value)
 
     companion object {
         fun factory(container: AppContainer, itemId: String) = object : ViewModelProvider.Factory {

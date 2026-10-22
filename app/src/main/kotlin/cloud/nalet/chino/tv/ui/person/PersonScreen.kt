@@ -95,6 +95,7 @@ fun PersonScreen(
     onBack: () -> Unit = {},
 ) {
     val state by viewModel.state.collectAsState()
+    val watchlist by viewModel.watchlist.collectAsState()
     // True while the whole biography is up over the page; BACK closes it.
     var readingBiography by remember { mutableStateOf(false) }
     val readMoreFocus = remember { FocusRequester() }
@@ -128,6 +129,7 @@ fun PersonScreen(
                             onBack = onBack,
                         )
                         is PersonUiState.Ready -> Filmography(
+                            watchlist = watchlist,
                             s = s,
                             onItemSelected = onItemSelected,
                             readMoreFocus = readMoreFocus,
@@ -156,6 +158,8 @@ fun PersonScreen(
 @Composable
 private fun Filmography(
     s: PersonUiState.Ready,
+    /** The Watchlist's ids: a card's bookmark. */
+    watchlist: Set<String>,
     onItemSelected: (String) -> Unit,
     readMoreFocus: FocusRequester,
     onReadBiography: () -> Unit,
@@ -194,6 +198,7 @@ private fun Filmography(
                 item = item,
                 posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
                 onClick = { onItemSelected(item.id) },
+                saved = item.id in watchlist,
                 // The person's roles on this title: "Director · Writer".
                 credit = formatRoles(item.roles).ifEmpty { null },
             )

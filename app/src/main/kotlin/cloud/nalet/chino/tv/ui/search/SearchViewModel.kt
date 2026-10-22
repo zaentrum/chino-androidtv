@@ -26,6 +26,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.serialization.json.JsonElement
+import cloud.nalet.chino.tv.data.UserFlagsRepository
 
 sealed interface SearchUiState {
     data object Empty : SearchUiState                          // no query yet
@@ -53,11 +54,19 @@ class SearchViewModel(
     private val telemetry: Telemetry,
     private val baseUrl: String,
     private val slotActions: SlotActions,
+    /** The Watchlist, for the cards' bookmarks. */
+    private val userFlags: UserFlagsRepository,
     /** Where a slot action is sent from: the app's scope, so leaving the
      *  screen right after a press never drops the POST on its way out. */
     private val appScope: CoroutineScope,
 ) : ViewModel() {
-    init { telemetry.event("screen_view", extra = mapOf("screen" to "search")) }
+    init {
+        telemetry.event("screen_view", extra = mapOf("screen" to "search"))
+        viewModelScope.launch { userFlags.warm() }
+    }
+
+    /** Item ids in the Watchlist: a card's bookmark. */
+    val watchlist: StateFlow<Set<String>> = userFlags.watchlist
     private val _query = MutableStateFlow("")
     val query: StateFlow<String> = _query.asStateFlow()
 
@@ -183,6 +192,7 @@ class SearchViewModel(
                     telemetry = container.telemetry,
                     baseUrl = container.baseUrl,
                     slotActions = container.slotActions,
+                    userFlags = container.userFlags,
                     appScope = container.appScope,
                 ) as T
         }

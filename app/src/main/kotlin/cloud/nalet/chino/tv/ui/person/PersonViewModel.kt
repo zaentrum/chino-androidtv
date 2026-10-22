@@ -19,6 +19,7 @@ import kotlinx.coroutines.withContext
 import java.util.Locale
 import cloud.nalet.chino.tv.data.api.LoadFailure
 import cloud.nalet.chino.tv.data.api.loadFailureOf
+import cloud.nalet.chino.tv.data.UserFlagsRepository
 
 sealed interface PersonUiState {
     data object Loading : PersonUiState
@@ -56,13 +57,19 @@ class PersonViewModel(
     private val telemetry: Telemetry,
     private val baseUrl: String,
     val personId: String,
+    /** The Watchlist, for the cards' bookmarks. */
+    private val userFlags: UserFlagsRepository,
 ) : ViewModel() {
+    /** Item ids in the Watchlist: a card's bookmark. */
+    val watchlist: StateFlow<Set<String>> = userFlags.watchlist
+
     private val _state = MutableStateFlow<PersonUiState>(PersonUiState.Loading)
     val state: StateFlow<PersonUiState> = _state.asStateFlow()
 
     init {
         telemetry.event("screen_view", itemId = personId, extra = mapOf("screen" to "person"))
         load()
+        viewModelScope.launch { userFlags.warm() }
     }
 
     fun load() {
@@ -105,6 +112,7 @@ class PersonViewModel(
                     telemetry = container.telemetry,
                     baseUrl = container.baseUrl,
                     personId = personId,
+                    userFlags = container.userFlags,
                 ) as T
         }
     }

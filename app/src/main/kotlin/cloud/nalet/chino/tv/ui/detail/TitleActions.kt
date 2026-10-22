@@ -40,7 +40,8 @@ import com.composables.icons.lucide.Lucide
 
 /** The look of the title actions, in one place. */
 internal object TitleActionLook {
-    /** The TV's control height, and an icon button's width. */
+    /** The TV's control height - every control of the title page's row has
+     *  it, Play, Start over and Trailer too - and an icon button's width. */
     val Size = 44.dp
 
     /** The "⌄" part of add to list, at the full height. */
@@ -76,7 +77,8 @@ const val CHOOSE_LISTS = "choose lists"
  * part shows and toggles the Watchlist only - an outlined bookmark, or a dark
  * one on blue - and never touches other lists; "⌄" opens the list picker,
  * where a title leaves them. A 1 dp divider between them; two focus stops on
- * a TV, each with its own ring.
+ * a TV, each with its own ring - the page's colour between a part and its
+ * ring, so the ring stands out where it lies on the other part's blue.
  */
 @Composable
 internal fun AddToListControl(
@@ -95,6 +97,7 @@ internal fun AddToListControl(
             content = content,
             filled = inWatchlist,
             contentPadding = PaddingValues(0.dp),
+            ringGap = ChinoBg,
         ) {
             Icon(
                 imageVector = if (inWatchlist) StateIcons.BookmarkFilled else Lucide.Bookmark,
@@ -115,6 +118,7 @@ internal fun AddToListControl(
             content = content,
             filled = inWatchlist,
             contentPadding = PaddingValues(0.dp),
+            ringGap = ChinoBg,
         ) {
             Icon(
                 imageVector = Lucide.ChevronDown,

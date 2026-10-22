@@ -84,6 +84,7 @@ import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
+import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 
 @Composable
 fun SearchScreen(
@@ -101,11 +102,13 @@ fun SearchScreen(
 ) {
     val q by viewModel.query.collectAsState()
     val state by viewModel.state.collectAsState()
+    val watchlist by viewModel.watchlist.collectAsState()
     val emptySlot by viewModel.emptySlot.collectAsState()
     val slotActionStates by viewModel.slotActionStates.collectAsState()
     SearchContent(
         query = q,
         state = state,
+        watchlist = watchlist,
         emptySlot = emptySlot,
         slotActionStates = slotActionStates,
         onQueryChange = viewModel::onQueryChange,
@@ -129,6 +132,8 @@ fun SearchScreen(
 internal fun SearchContent(
     query: String,
     state: SearchUiState,
+    /** The Watchlist's ids: a card's bookmark. */
+    watchlist: Set<String> = emptySet(),
     emptySlot: List<cloud.nalet.chino.tv.data.SlotButton>,
     slotActionStates: Map<String, cloud.nalet.chino.tv.ui.slots.SlotActionState>,
     onQueryChange: (String) -> Unit,
@@ -211,6 +216,7 @@ internal fun SearchContent(
                         )
                         is SearchUiState.Results -> ResultsGrid(
                             s = s,
+                            watchlist = watchlist,
                             query = q,
                             onItemSelected = onItemSelected,
                             onPersonSelected = onPersonSelected,
@@ -311,6 +317,8 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
 @Composable
 private fun ResultsGrid(
     s: SearchUiState.Results,
+    /** The Watchlist's ids: a card's bookmark. */
+    watchlist: Set<String>,
     query: String,
     onItemSelected: (String) -> Unit,
     onPersonSelected: (String) -> Unit,
@@ -364,6 +372,7 @@ private fun ResultsGrid(
                 item = item,
                 posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
                 onClick = { onItemSelected(item.id) },
+                saved = item.id in watchlist,
                 // First title card only takes the DOWN-from-input focus when
                 // there are no people above it to receive it first.
                 focusRequester = firstCardFocus.takeIf { idx == 0 && !hasPeople },
@@ -471,7 +480,7 @@ private fun PersonChip(
 }
 
 @Composable
-private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focusRequester: FocusRequester? = null) {
+private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, saved: Boolean = false, focusRequester: FocusRequester? = null) {
     val focus = rememberItemFocus()
     ChinoCard(
         onClick = onClick,
@@ -491,8 +500,9 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // The watched check, dark on green, the same mark as the
-                // PosterCard's.
+                // The Watchlist's bookmark top-left and the watched check
+                // top-right, the same marks as Browse's cards.
+                if (saved) WatchlistMark(Modifier.align(Alignment.TopStart).padding(6.dp))
                 if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(

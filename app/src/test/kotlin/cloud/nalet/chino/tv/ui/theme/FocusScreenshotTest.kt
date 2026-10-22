@@ -144,6 +144,11 @@ class FocusScreenshotTest {
     @Test fun filledActionsAtRest() = shot("fills_detail_actions_rest") { Actions(on = true) }
     @Test fun filledActionFocused() = shot("fills_detail_actions_focused", focusLabel = "liked") { Actions(on = true) }
     @Test fun actionsOff() = shot("detail_actions_off") { Actions(on = false) }
+    // The two parts of add to list, each focused while the title is in the
+    // Watchlist: the page's colour between a part and its ring, which then
+    // stands out where it lies on the other part's blue.
+    @Test fun watchlistPartFocused() = shot("fills_detail_actions_watchlist_focused", focusLabel = "in your Watchlist") { Actions(on = true) }
+    @Test fun listsPartFocused() = shot("fills_detail_actions_lists_focused", focusLabel = "choose lists") { Actions(on = true) }
     @Test fun badges() = shot("fills_badges") { Badges() }
 
     // The library, as any screen whose content did not load: its way on, try

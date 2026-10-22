@@ -57,6 +57,7 @@ import cloud.nalet.chino.tv.ui.player.firstVariantTrackSelector
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Lucide
+import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 
 /** How long the channel-info overlay lingers before fading (old-TV info-bar feel). */
 private const val OVERLAY_LINGER_MS = 60_000L
@@ -366,9 +367,10 @@ private fun SaveChip(saved: Boolean) {
     Row(
         modifier = Modifier
             // The Watchlist's one look (docs/chino, title actions): a dark
-            // bookmark on blue, else outlined.
+            // bookmark on blue, else outlined on the plain surface - solid
+            // either way, nothing over the picture is see-through.
             .background(
-                color = if (saved) ChinoAccent else Color.White.copy(alpha = 0.12f),
+                color = if (saved) ChinoAccent else ChinoSurfaceHi,
                 shape = RectangleShape,
             )
             .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -378,12 +380,12 @@ private fun SaveChip(saved: Boolean) {
         Icon(
             imageVector = if (saved) StateIcons.BookmarkFilled else Lucide.Bookmark,
             contentDescription = null,
-            tint = if (saved) ChinoBg else Color.White,
+            tint = if (saved) ChinoBg else ChinoText,
             modifier = Modifier.size(18.dp),
         )
         Text(
             text = if (saved) "in your Watchlist" else "add to Watchlist",
-            color = if (saved) ChinoBg else Color.White,
+            color = if (saved) ChinoBg else ChinoText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )

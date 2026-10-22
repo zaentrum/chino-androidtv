@@ -102,8 +102,9 @@ real values always come from the connected server at runtime.
 - Watchlists (named lists). On a title's page and its episode rows the
   bookmark adds the title to the Watchlist or takes it off - that list only -
   and "⌄" beside it, in the same frame, picks the other lists; watched is a
-  check, liked a heart, each dark on its colour when on. Cards mark the
-  Watchlist and watched the same way
+  check, liked a heart, each dark on its colour when on, every control of the
+  title page's row at one height. Cards - Browse, the Watchlist, search, a
+  person's titles - mark the Watchlist and watched the same way
 - Zap — a channel-surf discovery mode
 - Multi-account, with an in-app account picker
 - Delete Account (Settings → Account): deletes the signed-in account and what

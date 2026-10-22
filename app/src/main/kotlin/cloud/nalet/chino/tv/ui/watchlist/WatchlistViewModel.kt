@@ -60,7 +60,12 @@ class WatchlistViewModel(
     private val telemetry: Telemetry,
     private val baseUrl: String,
 ) : ViewModel() {
-    init { telemetry.event("screen_view", extra = mapOf("screen" to "watchlist")) }
+    init {
+        telemetry.event("screen_view", extra = mapOf("screen" to "watchlist"))
+        // The cards' bookmarks are the Watchlist's: warm it, as every screen
+        // with cards does - this one may be the first after Home.
+        viewModelScope.launch { userFlags.warm() }
+    }
 
     private val _state = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()

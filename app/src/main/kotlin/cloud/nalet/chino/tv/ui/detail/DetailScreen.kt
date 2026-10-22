@@ -121,6 +121,10 @@ fun DetailScreen(
     val state by viewModel.state.collectAsState()
     // The Watchlist alone: what the bookmark of add to list shows and toggles.
     val watchlist by viewModel.watchlist.collectAsState()
+    // The episode rows' callbacks, made once: a change of the Watchlist or of
+    // one episode redraws that episode's row, not every row of the season.
+    val onToggleEpisodeWatched = remember(viewModel) { { ids: List<String>, watched: Boolean -> viewModel.toggleEpisodeWatched(ids, watched) } }
+    val onToggleEpisodeWatchlist = remember(viewModel) { { id: String -> viewModel.toggleEpisodeWatchlist(id) } }
     val lists by viewModel.lists.collectAsState()
     val memberships by viewModel.memberships.collectAsState()
     val likes by viewModel.likes.collectAsState()
@@ -179,9 +183,9 @@ fun DetailScreen(
                 onOpenListPicker = { listPickerTarget = viewModel.displayItemId },
                 onToggleLike = { viewModel.toggleLike(it) },
                 onToggleWatched = { viewModel.toggleWatched() },
-                onToggleEpisodeWatched = { id, watched -> viewModel.toggleEpisodeWatched(id, watched) },
+                onToggleEpisodeWatched = onToggleEpisodeWatched,
                 onAddEpisodeToList = { episodeId -> listPickerTarget = episodeId },
-                onToggleEpisodeWatchlist = { episodeId, present -> viewModel.setInWatchlist(episodeId, present) },
+                onToggleEpisodeWatchlist = onToggleEpisodeWatchlist,
                 onTrailerLaunch = { viewModel.reportTrailerLaunch() },
                 // The rendered title's: the series' for an episode entry.
                 onPlayTrailer = { extraId -> onPlayTrailer(s.item.id, extraId) },
@@ -219,9 +223,9 @@ private fun DetailContent(
     onOpenListPicker: () -> Unit,
     onToggleLike: (Boolean) -> Unit,
     onToggleWatched: () -> Unit,
-    onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onToggleEpisodeWatched: (List<String>, Boolean) -> Unit,
     onAddEpisodeToList: (String) -> Unit,
-    onToggleEpisodeWatchlist: (String, Boolean) -> Unit,
+    onToggleEpisodeWatchlist: (String) -> Unit,
     onTrailerLaunch: () -> Unit,
     onPlayTrailer: (extraId: String) -> Unit,
     onPlayEpisode: (String) -> Unit,
@@ -414,14 +418,21 @@ internal fun DetailActions(
         // Without a position to resume (a series' next episode included) the
         // player starts at 0:00 rather than at a finished episode's last
         // saved second.
-        PlayButton(label = primaryLabel, onClick = { onPlay(canResume) })
+        // One height for the whole row, the title actions' (TitleActions.kt),
+        // and one plain surface for what is off and what is not filled.
+        PlayButton(label = primaryLabel, onClick = { onPlay(canResume) }, modifier = Modifier.height(TitleActionLook.Size))
         // "Start over" — secondary CTA shown only when there's a saved position
         // (so the primary reads "Resume"; for a series, the episode it
         // resumes). Plays from the beginning via onPlay(false); the player
         // distinguishes resume vs fromStart. Sits second in the D-pad order
         // (Resume first, Start over next).
         if (canResume) {
-            ChinoButton(onClick = { onPlay(false) }) {
+            ChinoButton(
+                onClick = { onPlay(false) },
+                modifier = Modifier.height(TitleActionLook.Size),
+                container = TitleActionLook.OffFill,
+                content = TitleActionLook.OffContent,
+            ) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
                 Text(text = "Start over")
@@ -433,6 +444,9 @@ internal fun DetailActions(
         trailerChoice(item)?.let { choice ->
             val context = androidx.compose.ui.platform.LocalContext.current
             ChinoButton(
+                modifier = Modifier.height(TitleActionLook.Size),
+                container = TitleActionLook.OffFill,
+                content = TitleActionLook.OffContent,
                 onClick = {
                     when (choice) {
                         is TrailerChoice.Local -> onPlayTrailer(choice.extra.id)
@@ -467,9 +481,10 @@ internal fun DetailActions(
 /** The detail's emphasized action, Play or Resume: a filled button, its fill
  *  kept on focus, its label in the page's colour. */
 @Composable
-internal fun PlayButton(label: String, onClick: () -> Unit, focus: ItemFocus = rememberItemFocus()) {
+internal fun PlayButton(label: String, onClick: () -> Unit, modifier: Modifier = Modifier, focus: ItemFocus = rememberItemFocus()) {
     ChinoButton(
         onClick = onClick,
+        modifier = modifier,
         container = MaterialTheme.colorScheme.primary,
         content = MaterialTheme.colorScheme.onPrimary,
         filled = true,
@@ -574,11 +589,13 @@ private fun AddToListRow(
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown &&
-                    (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                        e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)) {
+                val ok = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                    e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                // A held OK repeats its key-down: one change of the list per
+                // press, never a stream of them.
+                if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
                     onClick(); true
-                } else false
+                } else ok
             }
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
@@ -677,10 +694,10 @@ private fun EpisodesBlock(
     focusEpisodeId: String?,
     episodeResume: Map<String, EpisodeResume>,
     onPlayEpisode: (String) -> Unit,
-    onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onToggleEpisodeWatched: (List<String>, Boolean) -> Unit,
     onAddEpisodeToList: (String) -> Unit,
     watchlist: Set<String>,
-    onToggleEpisodeWatchlist: (String, Boolean) -> Unit,
+    onToggleEpisodeWatchlist: (String) -> Unit,
 ) {
     // Vertical accordion matching chino-web's EpisodesList: an "Episodes"
     // heading, then one collapsible season card per season expanding into a
@@ -733,10 +750,10 @@ private fun SeasonSection(
     focusEpisodeId: String?,
     episodeResume: Map<String, EpisodeResume>,
     onPlayEpisode: (String) -> Unit,
-    onToggleEpisodeWatched: (String, Boolean) -> Unit,
+    onToggleEpisodeWatched: (List<String>, Boolean) -> Unit,
     onAddEpisodeToList: (String) -> Unit,
     watchlist: Set<String>,
-    onToggleEpisodeWatchlist: (String, Boolean) -> Unit,
+    onToggleEpisodeWatchlist: (String) -> Unit,
 ) {
     var expanded by remember { mutableStateOf(initiallyExpanded) }
     val headerFocus = rememberItemFocus()
@@ -785,7 +802,8 @@ private fun SeasonSection(
         if (expanded) {
             // One entry per file: a file that holds several episodes is one
             // thing to play, a box around them (EpisodeRow's held).
-            fileEntries(season.episodes).forEachIndexed { i, entry ->
+            val entries = remember(season.episodes) { fileEntries(season.episodes) }
+            entries.forEachIndexed { i, entry ->
                 val ep = entry.episode
                 if (i > 0) {
                     Box(
@@ -806,11 +824,12 @@ private fun SeasonSection(
                     selected = isTarget,
                     focusRequester = targetRowFocus.takeIf { isTarget },
                     onClick = { onPlayEpisode(ep.id) },
-                    // Watched is the file's: any of its episodes marked means the file is.
-                    onToggleWatched = { onToggleEpisodeWatched(ep.id, entry.held.none { it.watchedAt != null }) },
+                    // Watched is the file's: any of its episodes marked means
+                    // the file is, and a press marks or un-marks them all.
+                    onToggleWatched = { onToggleEpisodeWatched(entry.ids, entry.held.none { it.watchedAt != null }) },
                     onAddToList = { onAddEpisodeToList(ep.id) },
                     inWatchlist = ep.id in watchlist,
-                    onToggleWatchlist = { onToggleEpisodeWatchlist(ep.id, ep.id !in watchlist) },
+                    onToggleWatchlist = { onToggleEpisodeWatchlist(ep.id) },
                 )
             }
         }
