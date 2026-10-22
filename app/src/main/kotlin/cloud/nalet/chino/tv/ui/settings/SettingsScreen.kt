@@ -76,6 +76,7 @@ fun SettingsScreen(
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
 ) {
     val s by viewModel.state.collectAsState()
+    val reportsTaken by viewModel.reportsTaken.collectAsState()
     val bugReport by viewModel.bugReport.collectAsState()
     var showReportPanel by remember { mutableStateOf(false) }
     // Integrated into the same shell as the rest of the app — rail (Settings
@@ -159,8 +160,10 @@ fun SettingsScreen(
             }
             Section(
                 title = "Subtitles",
-                subtitle = "Default subtitle language. Picks the closest matching track on each item. " +
-                    "Off keeps subtitles disabled by default.",
+                // The same text in every app (docs/chino, subtitles).
+                subtitle = "Subtitles in the language you pick here come on when a title's audio is in another " +
+                    "language. Otherwise, only the foreign-language parts get subtitles, where a title has them. " +
+                    "A choice in the player applies only to what's playing now.",
             ) {
                 LangPickerRow(
                     label = "Preferred language",
@@ -223,10 +226,11 @@ fun SettingsScreen(
             // files the report through BugReporter.reportManual. Mirrors
             // chino-mobile's Settings "Report a bug" dialog minus the
             // keyboard.
-            Section(
+            // Only where the server takes reports: the line promises them a
+            // recipient (features.feedback in /api/config).
+            if (reportsTaken) Section(
                 title = "Feedback",
-                subtitle = "Something not working? Tell the people who run this server — " +
-                    "no typing needed: the app's and the device's details go with your report.",
+                subtitle = "Tell the people who run this server. The app's and the device's details go with your report.",
             ) {
                 ChinoButton(
                     onClick = {
@@ -325,7 +329,7 @@ private fun ReportProblemDialog(
                 )
             } else {
                 Text(
-                    text = "REPORT A PROBLEM",
+                    text = "report a problem",
                     color = ChinoMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,

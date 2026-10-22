@@ -175,10 +175,11 @@ fun PlayerScreen(
         PlayerUiState.Preparing -> Centered("Preparing…")
         is PlayerUiState.Error -> {
             val report by viewModel.errorReport.collectAsState()
+            val reportsTaken by viewModel.reportsTaken.collectAsState()
             TerminalErrorScreen(
                 message = s.message,
                 report = report,
-                onReport = viewModel::fileTerminalErrorBug,
+                onReport = viewModel::fileTerminalErrorBug.takeIf { reportsTaken },
             )
         }
         is PlayerUiState.NotAvailable -> NotAvailableScreen(
@@ -241,13 +242,15 @@ private fun NotAvailableScreen(link: Trailer?, onOpenLink: (Trailer) -> Unit) {
 private fun TerminalErrorScreen(
     message: String,
     report: BugReportState,
-    onReport: () -> Unit,
+    /** Sends a report; null where the server takes none, and nothing offers
+     *  to send one. */
+    onReport: (() -> Unit)?,
 ) {
     val reportRow = remember { FocusRequester() }
     // Park focus on the report row — it's the only focusable on this screen,
     // so without this the first CENTER press would land in a void (same
     // BRAVIA last-focused-view trap the chrome's play/pause parking covers).
-    LaunchedEffect(Unit) { runCatching { reportRow.requestFocus() } }
+    LaunchedEffect(onReport != null) { if (onReport != null) runCatching { reportRow.requestFocus() } }
     Box(
         modifier = Modifier.fillMaxSize().background(Color.Black),
         contentAlignment = Alignment.Center,
@@ -273,7 +276,7 @@ private fun TerminalErrorScreen(
                         fontSize = 13.sp,
                     )
                 }
-                else -> {
+                else -> if (onReport != null) {
                     if (report is BugReportState.Failed) {
                         Text(text = report.message, color = ChinoError, fontSize = 13.sp)
                     }

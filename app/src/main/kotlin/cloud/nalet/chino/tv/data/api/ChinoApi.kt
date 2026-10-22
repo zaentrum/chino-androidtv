@@ -303,6 +303,11 @@ interface ChinoApi {
     @GET("v1/subtitles/languages")
     suspend fun subtitleLanguages(): SubtitleLanguagesResponse
 
+    /** The server's self-description (GET /api/config): here, what it offers
+     *  that a client shows only where it does ([ServerConfigResponse.features]). */
+    @GET("config")
+    suspend fun serverConfig(): ServerConfigResponse
+
     /**
      * Pre-playback probe: chino-stream's transcode decision + container/codec
      * metadata + the ladder of qualities the server can serve. Result is
@@ -495,6 +500,17 @@ data class SidecarSubtitle(
 data class SubtitlesResponse(
     val subtitles: List<SidecarSubtitle> = emptyList(),
 )
+
+/** GET /api/config, the part the app reads once signed in: what the server
+ *  offers. A server older than the field offers nothing. */
+@Serializable
+data class ServerConfigResponse(val features: Features = Features()) {
+    @Serializable
+    data class Features(
+        /** POST /v1/feedback files bug reports (it answers 503 without). */
+        val feedback: Boolean = false,
+    )
+}
 
 /** GET /v1/subtitles/languages: the server's subtitle languages, its order. */
 @Serializable

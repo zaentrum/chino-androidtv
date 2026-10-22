@@ -239,7 +239,7 @@ private fun HubContent(
                 shelf == null -> ShelfHint("Loading…")
                 shelf.isEmpty() -> ShelfHint(
                     if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
-                    else "Add titles with ⌄ beside the bookmark on a movie's or a show's page.",
+                    else "Add titles with the arrow beside the bookmark on a movie's or a show's page.",
                 )
                 else -> LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(20.dp),

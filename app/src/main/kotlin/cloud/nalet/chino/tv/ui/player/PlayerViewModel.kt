@@ -154,6 +154,8 @@ class PlayerViewModel(
     /** The server's subtitle languages, asked once a session
      *  ([cloud.nalet.chino.tv.data.SubtitleLanguages]). */
     private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
+    /** Whether the server takes bug reports ([cloud.nalet.chino.tv.data.ServerFeatures]). */
+    private val takesReports: suspend () -> Boolean = { false },
 ) : ViewModel() {
 
     private val itemId: String = mode.itemId
@@ -206,6 +208,12 @@ class PlayerViewModel(
     private val _errorReport = MutableStateFlow<BugReportState>(BugReportState.Idle)
     val errorReport: StateFlow<BugReportState> = _errorReport.asStateFlow()
 
+    private val _reportsTaken = MutableStateFlow(false)
+
+    /** Whether the server takes bug reports: the error screen offers to send
+     *  one only then. */
+    val reportsTaken: StateFlow<Boolean> = _reportsTaken.asStateFlow()
+
     /** An extra's title's trailer link, offered should its master answer 404. */
     private var link: Trailer? = null
 
@@ -230,7 +238,10 @@ class PlayerViewModel(
         _qualityNotice.value = null
     }
 
-    init { prepare(quality = null) }
+    init {
+        viewModelScope.launch { _reportsTaken.value = runCatching { takesReports() }.getOrDefault(false) }
+        prepare(quality = null)
+    }
 
     /**
      * Loads everything we need for playback in parallel. `quality` overrides
@@ -881,6 +892,7 @@ class PlayerViewModel(
                     baseUrl = container.baseUrl,
                     playCaps = container::playCaps,
                     subtitleLanguages = container.subtitleLanguages::get,
+                    takesReports = container.serverFeatures::feedback,
                 )
             }
         }

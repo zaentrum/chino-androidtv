@@ -32,8 +32,18 @@ class SettingsViewModel(
     /** Connected-server host stamped onto manual reports (the static context
      *  already carries the app version / flavor / device fields). */
     private val serverHost: String?,
+    /** Whether the server takes bug reports ([cloud.nalet.chino.tv.data.ServerFeatures]). */
+    private val takesReports: suspend () -> Boolean = { false },
 ) : ViewModel() {
     init { telemetry.event("screen_view", extra = mapOf("screen" to "settings")) }
+
+    private val _reportsTaken = MutableStateFlow(false)
+
+    /** Whether the server takes bug reports: the Feedback section shows only
+     *  then, as its line promises them a recipient. */
+    val reportsTaken: StateFlow<Boolean> = _reportsTaken.asStateFlow()
+
+    init { viewModelScope.launch { _reportsTaken.value = takesReports() } }
     val state: StateFlow<AppSettings> = store.flow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -120,6 +130,7 @@ class SettingsViewModel(
                         .substringAfter("://")
                         .substringBefore("/")
                         .takeIf { it.isNotBlank() },
+                    takesReports = container.serverFeatures::feedback,
                 ) as T
         }
     }

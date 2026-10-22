@@ -136,6 +136,12 @@ class AppContainer(context: Context) {
         SubtitleLanguages { chinoApi.subtitleLanguages().languages }
     }
 
+    /** What the server offers that the app shows only where it does - bug
+     *  reports - asked once a session. */
+    val serverFeatures: ServerFeatures by lazy {
+        ServerFeatures { chinoApi.serverConfig().features.feedback }
+    }
+
     /** Sends the actions addons put in a UI slot: a POST with the bearer that
      *  follows no redirect (see [SlotActions]). Built on first use, by the
      *  Search screen — which only exists once an account is signed in. */

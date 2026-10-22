@@ -115,7 +115,8 @@ real values always come from the connected server at runtime.
 - Addon buttons where a search finds nothing (the `search.empty` slot): an
   action is sent from the TV; a link shows its address as a QR code to open on
   your phone, since a TV has no browser
-- In-app feedback / bug reporting to the connected server
+- In-app feedback / bug reporting to the people who run the connected
+  server, where it takes reports (`features.feedback` in `/api/config`)
 
 ## Build
 
