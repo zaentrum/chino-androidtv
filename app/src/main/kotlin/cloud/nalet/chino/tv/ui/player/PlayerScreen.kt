@@ -15,7 +15,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.focusable
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
@@ -61,7 +60,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.focusGroup
@@ -1541,8 +1539,10 @@ private fun PlayerMenuHeader(title: String, trailing: String? = null) {
 /**
  * A row of a player menu. The menus - subtitles, audio, quality, speed - are
  * of one choice each (docs/chino, playback): the picked row in the accent
- * blue with a small filled dot before it, no checkboxes; every row keeps the
- * dot's place, so the labels line up. OK picks, once per press.
+ * blue with a small filled square before it, square like every shape in the
+ * design system, no checkboxes and no check marks; every row keeps the
+ * square's column, picked or not ("off" and "more languages" too), so the
+ * names line up. OK picks, once per press.
  */
 @Composable
 private fun PlayerMenuRow(
@@ -1573,7 +1573,7 @@ private fun PlayerMenuRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(10.dp),
     ) {
-        PickedDot(selected)
+        PickedMark(selected)
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
@@ -1597,14 +1597,17 @@ private fun PlayerMenuRow(
     }
 }
 
-/** The picked row's small filled dot, in the accent blue; its place kept
- *  empty on the other rows. */
+/** The picked row's small filled square, in the accent blue; its column
+ *  kept, empty, on every other row. */
 @Composable
-private fun PickedDot(selected: Boolean) {
-    Box(modifier = Modifier.size(8.dp), contentAlignment = Alignment.Center) {
-        if (selected) Box(Modifier.size(8.dp).clip(CircleShape).background(ChinoAccent))
+private fun PickedMark(selected: Boolean) {
+    Box(modifier = Modifier.size(PICKED_MARK), contentAlignment = Alignment.Center) {
+        if (selected) Box(Modifier.size(PICKED_MARK).background(ChinoAccent, RectangleShape))
     }
 }
+
+/** The picked mark's side: small, beside a 15 sp name. */
+private val PICKED_MARK = 8.dp
 
 /** Splits the TV audio label "primary • channels • codec" into
  *  (primary, "channels · codec") to match web/mobile's two-line row. */
@@ -1646,7 +1649,7 @@ private fun QualityPanel(
  *  2dp blue focus border, first-row auto-focus). Mirrors mobile's SpeedMenuCard
  *  rates; 1.0x renders as "Normal". */
 @Composable
-private fun SpeedPanel(
+internal fun SpeedPanel(
     current: Float,
     onPick: (Float) -> Unit,
     onDismiss: () -> Unit,
@@ -1846,7 +1849,7 @@ private fun NextEpisodeButton(
  * BackHandler).
  */
 @Composable
-private fun SubtitlePanel(
+internal fun SubtitlePanel(
     menu: SubtitleMenu,
     /** The menu id of the subtitle on; null for off. */
     selected: String?,

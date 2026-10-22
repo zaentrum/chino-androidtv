@@ -51,6 +51,10 @@ import cloud.nalet.chino.tv.ui.library.PosterCard
 import cloud.nalet.chino.tv.ui.library.RatingBadge
 import cloud.nalet.chino.tv.ui.library.TvRailButton
 import cloud.nalet.chino.tv.ui.notices.BellWithCount
+import cloud.nalet.chino.tv.ui.player.SpeedPanel
+import cloud.nalet.chino.tv.ui.player.SubtitlePanel
+import cloud.nalet.chino.tv.ui.player.SubtitleTrackInfo
+import cloud.nalet.chino.tv.ui.player.subtitleMenu
 import cloud.nalet.chino.tv.ui.settings.AUDIO_LANGS
 import cloud.nalet.chino.tv.ui.settings.LangPickerRow
 import cloud.nalet.chino.tv.ui.settings.Section
@@ -81,8 +85,8 @@ import org.robolectric.annotation.GraphicsMode
  * the one the page was opened on), a card (a poster), a filled and a plain
  * button, a chip and a nav item, each beside neighbours at rest, and
  * Settings' row of language chips with one focused; and the labels and icons
- * on filled colours, in the page's colour (the detail's toggles, the badges).
- * Rendered on
+ * on filled colours, in the page's colour (the detail's toggles, the badges);
+ * and the player's menus of one choice, the picked row's mark. Rendered on
  * the JVM under Robolectric's native graphics, at the TV's 960 × 540 dp
  * (1920 × 1080 px), in the app's theme.
  *
@@ -150,6 +154,14 @@ class FocusScreenshotTest {
     @Test fun watchlistPartFocused() = shot("fills_detail_actions_watchlist_focused", focusLabel = "in your Watchlist") { Actions(on = true) }
     @Test fun listsPartFocused() = shot("fills_detail_actions_lists_focused", focusLabel = "choose lists") { Actions(on = true) }
     @Test fun badges() = shot("fills_badges") { Badges() }
+
+    // The player's menus of one choice: the picked row in the accent blue
+    // with a small filled square before it, every row - "off" and "more
+    // languages" too - keeping the square's column, so the names line up.
+    // The subtitles menu opens on the subtitle on; the speed menu on its
+    // first row, the picked one further down.
+    @Test fun subtitlesMenu() = shot("player_menu_subtitles") { SubtitlesMenu() }
+    @Test fun speedMenu() = shot("player_menu_speed") { SpeedPanel(current = 1.25f, onPick = {}, onDismiss = {}) }
 
     // The library, as any screen whose content did not load: its way on, try
     // again, at rest and focused - it takes the focus first. At rest without
@@ -298,6 +310,18 @@ class FocusScreenshotTest {
                 LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
             }
         }
+    }
+
+    @Composable
+    private fun SubtitlesMenu() {
+        val tracks = listOf(
+            SubtitleTrackInfo("emb:2", "eng"),
+            SubtitleTrackInfo("emb:3", "eng", "SDH"),
+            SubtitleTrackInfo("emb:4", "ger"),
+            SubtitleTrackInfo("side:de", "de", "AI"),
+            SubtitleTrackInfo("emb:5", "fre"),
+        )
+        SubtitlePanel(menu = subtitleMenu(tracks, "en", listOf("en", "de")), selected = "side:de", onSelect = {})
     }
 
     @Composable
