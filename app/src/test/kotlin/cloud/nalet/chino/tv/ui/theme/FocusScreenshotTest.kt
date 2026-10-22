@@ -51,6 +51,7 @@ import cloud.nalet.chino.tv.ui.library.PosterCard
 import cloud.nalet.chino.tv.ui.library.RatingBadge
 import cloud.nalet.chino.tv.ui.library.TvRailButton
 import cloud.nalet.chino.tv.ui.notices.BellWithCount
+import cloud.nalet.chino.tv.ui.player.ControlIconButton
 import cloud.nalet.chino.tv.ui.player.SpeedPanel
 import cloud.nalet.chino.tv.ui.player.SubtitlePanel
 import cloud.nalet.chino.tv.ui.player.SubtitleTrackInfo
@@ -62,7 +63,11 @@ import coil.Coil
 import coil.ImageLoader
 import coil.annotation.ExperimentalCoilApi
 import coil.test.FakeImageLoaderEngine
+import com.composables.icons.lucide.AudioLines
 import com.composables.icons.lucide.Bookmark
+import com.composables.icons.lucide.Captions
+import com.composables.icons.lucide.Gauge
+import com.composables.icons.lucide.Info
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Lucide
@@ -86,7 +91,8 @@ import org.robolectric.annotation.GraphicsMode
  * button, a chip and a nav item, each beside neighbours at rest, and
  * Settings' row of language chips with one focused; and the labels and icons
  * on filled colours, in the page's colour (the detail's toggles, the badges);
- * and the player's menus of one choice, the picked row's mark. Rendered on
+ * the player's menus of one choice, the picked row's mark, and its controls
+ * on their solid surfaces over the picture. Rendered on
  * the JVM under Robolectric's native graphics, at the TV's 960 × 540 dp
  * (1920 × 1080 px), in the app's theme.
  *
@@ -162,6 +168,11 @@ class FocusScreenshotTest {
     // first row, the picked one further down.
     @Test fun subtitlesMenu() = shot("player_menu_subtitles") { SubtitlesMenu() }
     @Test fun speedMenu() = shot("player_menu_speed") { SpeedPanel(current = 1.25f, onPick = {}, onDismiss = {}) }
+
+    // The player's controls over the picture, each on a solid surface, never
+    // a see-through one: play focused, subtitles on in solid blue with a dark
+    // icon, audio at rest, one disabled.
+    @Test fun playerControlsOverPicture() = shot("player_controls_solid", focus = 0) { PlayerButtons(it) }
 
     // The library, as any screen whose content did not load: its way on, try
     // again, at rest and focused - it takes the focus first. At rest without
@@ -308,6 +319,26 @@ class FocusScreenshotTest {
                     "Original keeps whatever the source marks as the default track.",
             ) {
                 LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
+            }
+        }
+    }
+
+    @Composable
+    private fun PlayerButtons(focus: Pair<Int, FocusRequester>?) {
+        // The picture behind: the painted artwork's blue and amber.
+        Box(
+            Modifier.width(600.dp).height(120.dp).background(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(androidx.compose.ui.graphics.Color(0xFF1E88E5), androidx.compose.ui.graphics.Color(0xFFE0A040)),
+                ),
+            ).padding(40.dp),
+        ) {
+            Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+                Box(Modifier.requester(focus, 0)) { ControlIconButton(icon = Lucide.Play, contentDescription = "Play", onClick = {}) }
+                ControlIconButton(icon = Lucide.Captions, contentDescription = "Subtitles", onClick = {}, accent = true)
+                ControlIconButton(icon = Lucide.AudioLines, contentDescription = "Audio track", onClick = {})
+                ControlIconButton(icon = Lucide.Gauge, contentDescription = "Playback speed", onClick = {})
+                ControlIconButton(icon = Lucide.Info, contentDescription = "Playback info", onClick = {}, enabled = false)
             }
         }
     }

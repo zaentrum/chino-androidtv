@@ -7,6 +7,9 @@ import cloud.nalet.chino.tv.ui.theme.ItemFocus
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoDim
+import cloud.nalet.chino.tv.ui.theme.ChinoSurface
+import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -579,13 +582,14 @@ private fun VolumeControl(
     onToggleMute: () -> Unit,
     onVolumeChange: (Float) -> Unit,
 ) {
-    // A plain control in the focus style.
+    // A plain control in the focus style, on the solid surface the other
+    // controls over the picture sit on.
     val focus = rememberItemFocus()
     val level = if (muted) 0f else volume.coerceIn(0f, 1f)
     Row(
         modifier = Modifier
             .height(40.dp)
-            .focusStyle(focus, FocusKind.Control, surface = Color.Transparent)
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurfaceHi)
             .onPreviewKeyEvent { e ->
                 if (e.type != KeyEventType.KeyDown) return@onPreviewKeyEvent false
                 when (e.key) {
@@ -635,19 +639,23 @@ internal fun ControlIconButton(
     accent: Boolean = false,
     focus: ItemFocus = rememberItemFocus(),
 ) {
-    // Web/mobile ChromeButton metrics: 36px circle / 20px icon, idle bg
-    // white@0.1, accent #58A6FF@0.3. Bumped to 40dp for 10-ft legibility.
-    // A plain control in the focus style; the accent tint (subtitles on, a
-    // menu open) is a fill it keeps on focus.
+    // Web/mobile ChromeButton metrics (36px / 20px icon), bumped to 40dp for
+    // 10-ft legibility. Over the picture on a solid surface, never a
+    // see-through one (docs/chino, playback): the raised surface at rest, a
+    // plain control in the focus style; the accent (subtitles on, a speed
+    // set) a solid blue it keeps on focus, its icon in the page's colour as
+    // on every filled blue control; disabled, the plain surface and a dim
+    // icon.
     val size = 40.dp
     val iconSize = 20.dp
     val bg = when {
-        !enabled -> Color.White.copy(alpha = 0.05f)
-        accent -> ChinoAccent.copy(alpha = 0.3f) // ChromeBtnVariant.Accent (subs on / menu open)
-        else -> Color.White.copy(alpha = 0.1f) // ChromeBtnVariant.Neutral
+        !enabled -> ChinoSurface
+        accent -> ChinoAccent
+        else -> ChinoSurfaceHi
     }
     val fg = when {
-        !enabled -> Color.White.copy(alpha = 0.35f)
+        !enabled -> ChinoDim
+        accent -> ChinoBg
         else -> Color.White
     }
     Box(
