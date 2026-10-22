@@ -3,7 +3,6 @@ package cloud.nalet.chino.tv.ui.browse
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -46,19 +45,14 @@ import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
-import com.composables.icons.lucide.Bookmark
-import com.composables.icons.lucide.Lucide
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.library.CardAction
@@ -67,6 +61,8 @@ import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.library.watchedCardAction
+import cloud.nalet.chino.tv.ui.theme.WatchedMark
+import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 
 @Composable
 fun BrowseScreen(
@@ -292,9 +288,9 @@ private fun FilterBar(
 }
 
 /** Poster grid card shared by Browse and Watchlist so the two grids stay
- *  pixel-identical: 2:3 poster on #0D1117, watched ✓ badge, a "saved" bookmark
- *  badge when the item is in >=1 list, title + year•rating on a #161B22 footer,
- *  a card in the focus style. */
+ *  pixel-identical: 2:3 poster on #0D1117, the watched check, the Watchlist's
+ *  bookmark when the item is in the Watchlist, title + year•rating on a
+ *  #161B22 footer, a card in the focus style. */
 @Composable
 internal fun PosterGridCard(
     item: Item,
@@ -340,37 +336,10 @@ internal fun PosterGridCard(
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // "Saved" bookmark badge — top-LEFT so it never collides with the
-                // watched ✓ badge (top-right). Shown when the item is in any list.
-                if (saved) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(6.dp)
-                            .clip(RectangleShape)
-                            .background(ChinoAccent)
-                            .padding(4.dp),
-                    ) {
-                        Icon(
-                            imageVector = Lucide.Bookmark,
-                            contentDescription = "Saved",
-                            tint = ChinoBg,
-                            modifier = Modifier.size(13.dp),
-                        )
-                    }
-                }
-                if (item.watchedAt != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .clip(RectangleShape)
-                            .background(ChinoSignalGreen)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(text = "✓", color = ChinoBg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
+                // The Watchlist's bookmark, dark on blue — top-LEFT so it never
+                // collides with the watched check (top-right).
+                if (saved) WatchlistMark(Modifier.align(Alignment.TopStart).padding(6.dp))
+                if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),

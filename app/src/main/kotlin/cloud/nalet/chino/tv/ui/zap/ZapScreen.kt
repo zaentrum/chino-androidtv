@@ -1,8 +1,9 @@
 package cloud.nalet.chino.tv.ui.zap
 
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoBg
+import cloud.nalet.chino.tv.ui.theme.StateIcons
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
@@ -55,7 +56,6 @@ import cloud.nalet.chino.tv.ChinoTvApp
 import cloud.nalet.chino.tv.ui.player.firstVariantTrackSelector
 import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
-import com.composables.icons.lucide.BookmarkCheck
 import com.composables.icons.lucide.Lucide
 
 /** How long the channel-info overlay lingers before fading (old-TV info-bar feel). */
@@ -349,7 +349,7 @@ private fun ChannelInfoOverlay(
                 )
             }
             Text(
-                text = "OK · Watch from here     ▼ / CH+ Next     CH- Back     ▲ Info     ◀ ${if (muted) "Unmute" else "Mute"}     ▶ ${if (saved) "Saved" else "Save"}",
+                text = "OK · Watch from here     ▼ / CH+ Next     CH- Back     ▲ Info     ◀ ${if (muted) "Unmute" else "Mute"}     ▶ Watchlist",
                 color = ChinoMuted,
                 fontSize = 14.sp,
             )
@@ -357,16 +357,18 @@ private fun ChannelInfoOverlay(
     }
 }
 
-/** Save-state pill in the channel-info overlay. Bookmark when unsaved,
- *  BookmarkCheck (emerald) when in the watchlist. DPAD-RIGHT toggles it (see
+/** Watchlist pill in the channel-info overlay: an outlined bookmark, or a dark
+ *  one on blue when the title is in the Watchlist. DPAD-RIGHT toggles it (see
  *  the root key handler); this just reflects the current membership so the
  *  surf keys stay unblocked. Mirrors web/mobile's Zap save affordance. */
 @Composable
 private fun SaveChip(saved: Boolean) {
     Row(
         modifier = Modifier
+            // The Watchlist's one look (docs/chino, title actions): a dark
+            // bookmark on blue, else outlined.
             .background(
-                color = if (saved) ChinoSignalGreen.copy(alpha = 0.22f) else Color.White.copy(alpha = 0.12f),
+                color = if (saved) ChinoAccent else Color.White.copy(alpha = 0.12f),
                 shape = RectangleShape,
             )
             .padding(horizontal = 14.dp, vertical = 8.dp),
@@ -374,14 +376,14 @@ private fun SaveChip(saved: Boolean) {
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
         Icon(
-            imageVector = if (saved) Lucide.BookmarkCheck else Lucide.Bookmark,
-            contentDescription = if (saved) "Saved to watchlist" else "Save to watchlist",
-            tint = if (saved) ChinoSignalGreen else Color.White,
+            imageVector = if (saved) StateIcons.BookmarkFilled else Lucide.Bookmark,
+            contentDescription = null,
+            tint = if (saved) ChinoBg else Color.White,
             modifier = Modifier.size(18.dp),
         )
         Text(
-            text = if (saved) "Saved" else "Save",
-            color = if (saved) ChinoSignalGreen else Color.White,
+            text = if (saved) "in your Watchlist" else "add to Watchlist",
+            color = if (saved) ChinoBg else Color.White,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,
         )

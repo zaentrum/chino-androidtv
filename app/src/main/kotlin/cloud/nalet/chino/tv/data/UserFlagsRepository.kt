@@ -19,10 +19,10 @@ import kotlinx.coroutines.sync.withLock
  *
  * Named lists: each user always has a default list ("Watchlist", isDefault).
  * We expose three derived StateFlows:
- *  - [savedItems]   — item ids in >=1 list (drives the card "saved" badge +
- *                     the detail filled/empty icon).
- *  - [watchlist]    — item ids in the DEFAULT list only (back-compat: the
- *                     plain "+"-press default behaviour + legacy callers).
+ *  - [savedItems]   — item ids in >=1 list.
+ *  - [watchlist]    — item ids in the DEFAULT list only: what the bookmark
+ *                     on a title's page, its episode rows, cards and Zap
+ *                     shows and toggles (docs/chino, title actions).
  *  - [memberships]  — item id → the list ids that contain it (powers the
  *                     add-to-list picker checkmarks).
  * Plus [lists] for the watchlist surface chips.
@@ -123,8 +123,9 @@ class UserFlagsRepository(private val api: ChinoApi) {
         scope.launch { mutex.withLock { runCatching { loadListsLocked() } } }
     }
 
-    /** Plain "+"-press behaviour: add to the default list when the item is in
-     *  no list, otherwise the caller opens the picker. Optimistic. */
+    /** The bookmark's press: add [itemId] to the Watchlist (the default
+     *  list) or take it off - that list only; other lists are left as they
+     *  are, the picker's to change. Optimistic. */
     fun setWatchlist(itemId: String, present: Boolean) {
         val defId = defaultListId
         if (defId == null) {

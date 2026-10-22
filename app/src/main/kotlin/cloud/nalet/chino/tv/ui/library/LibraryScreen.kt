@@ -68,7 +68,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoCard
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -84,8 +83,6 @@ import coil.compose.AsyncImage
 import coil.request.ImageRequest
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.ChevronRight
-import com.composables.icons.lucide.Eye
-import com.composables.icons.lucide.EyeOff
 import com.composables.icons.lucide.Film
 import com.composables.icons.lucide.House
 import com.composables.icons.lucide.Info
@@ -98,6 +95,8 @@ import com.composables.icons.lucide.Tv
 import com.composables.icons.lucide.User
 import com.composables.icons.lucide.X
 import com.composables.icons.lucide.Zap
+import com.composables.icons.lucide.Check
+import cloud.nalet.chino.tv.ui.theme.WatchedMark
 
 @Composable
 fun LibraryScreen(
@@ -985,26 +984,10 @@ private fun ContinueWatchingCard(
                     contentDescription = displayTitle,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // Watched ✓ badge — top-right, shown once the user finishes a
-                // CW/Next-Up item (e.g. just un-marked then re-marked). Mirrors
-                // the PosterCard / Browse badge so the surface is consistent.
-                if (item.watchedAt != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .clip(RectangleShape)
-                            .background(ChinoSignalGreen)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = "✓",
-                            color = ChinoBg,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
+                // The watched check — top-right, shown once the user finishes a
+                // CW/Next-Up item (e.g. just un-marked then re-marked). The
+                // same mark as the PosterCard's and Browse's.
+                if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
                 if (progress != null && progress > 0f) {
                     Box(
                         modifier = Modifier
@@ -1398,27 +1381,10 @@ internal fun PosterCard(
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // Watched badge — top-right of the poster. Server stamps
+                // The watched check — top-right of the poster. Server stamps
                 // watched_at when the user has finished an item; non-null
-                // means "show the check". Matches MediaCard's
-                // bg-emerald-500 corner pill on web.
-                if (item.watchedAt != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .clip(RectangleShape)
-                            .background(ChinoSignalGreen)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(
-                            text = "✓",
-                            color = ChinoBg,
-                            fontWeight = FontWeight.Bold,
-                            style = MaterialTheme.typography.bodyMedium,
-                        )
-                    }
-                }
+                // means "show the check", dark on green as everywhere.
+                if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(
                 modifier = Modifier
@@ -1496,13 +1462,13 @@ internal data class CardAction(
 )
 
 /** Builds the "Mark as watched" / "Mark as unwatched" action — exact web
- *  wording, Eye when unwatched (tap to mark) / EyeOff when watched (tap to
- *  un-mark). `watched` is the item's CURRENT state (watchedAt != null);
- *  `onToggle` receives the NEXT desired state (true = mark watched). Reused on
- *  every card surface so wording/behaviour stay identical. */
+ *  wording, with watched's one icon, the check (docs/chino, title actions).
+ *  `watched` is the item's CURRENT state (watchedAt != null); `onToggle`
+ *  receives the NEXT desired state (true = mark watched). Reused on every
+ *  card surface so wording/behaviour stay identical. */
 internal fun watchedCardAction(watched: Boolean, onToggle: (Boolean) -> Unit): CardAction =
     CardAction(
-        icon = if (watched) Lucide.EyeOff else Lucide.Eye,
+        icon = Lucide.Check,
         label = if (watched) "Mark as unwatched" else "Mark as watched",
         onClick = { onToggle(!watched) },
     )

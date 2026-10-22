@@ -143,6 +143,7 @@ fun WatchlistScreen(
                             if (openList == null) {
                                 HubContent(
                                     s = s,
+                                    savedItems = savedItems,
                                     onItemSelected = onItemSelected,
                                     onOpenList = viewModel::openList,
                                     onNewList = { overlay = ListOverlay.Create },
@@ -204,6 +205,8 @@ private sealed interface ListOverlay {
 @Composable
 private fun HubContent(
     s: WatchlistUiState.Ready,
+    /** The Watchlist's ids: a card's bookmark. */
+    savedItems: Set<String>,
     onItemSelected: (String) -> Unit,
     onOpenList: (String) -> Unit,
     onNewList: () -> Unit,
@@ -234,7 +237,10 @@ private fun HubContent(
             val shelf = s.shelves[list.id]
             when {
                 shelf == null -> ShelfHint("Loading…")
-                shelf.isEmpty() -> ShelfHint("Save titles with the + button on any movie or show.")
+                shelf.isEmpty() -> ShelfHint(
+                    if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
+                    else "Add titles with ⌄ beside the bookmark on a movie's or a show's page.",
+                )
                 else -> LazyRow(
                     horizontalArrangement = Arrangement.spacedBy(20.dp),
                     contentPadding = PaddingValues(horizontal = 24.dp),
@@ -245,7 +251,8 @@ private fun HubContent(
                             item = item,
                             posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
                             onClick = { onItemSelected(item.id) },
-                            saved = true, // everything on a watchlist shelf is saved by definition
+                            // The bookmark is the Watchlist's, on any list's shelf.
+                            saved = item.id in savedItems,
                             // Saved EPISODES get the SxxEyy line under the title
                             // (Library CW card parity) so they don't read as the
                             // whole series.

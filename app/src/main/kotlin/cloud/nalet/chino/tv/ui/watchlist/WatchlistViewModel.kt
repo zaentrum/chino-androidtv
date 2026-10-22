@@ -65,8 +65,8 @@ class WatchlistViewModel(
     private val _state = MutableStateFlow<WatchlistUiState>(WatchlistUiState.Loading)
     val state: StateFlow<WatchlistUiState> = _state.asStateFlow()
 
-    /** Item ids belonging to >=1 list — drives the MORE-grid card badges. */
-    val savedItems: StateFlow<Set<String>> = userFlags.savedItems
+    /** Item ids in the Watchlist — drives the cards' Watchlist bookmark. */
+    val savedItems: StateFlow<Set<String>> = userFlags.watchlist
 
     /** The list whose MORE view is open (null = the hub is showing). */
     private val _openListId = MutableStateFlow<String?>(null)

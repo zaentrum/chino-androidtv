@@ -84,8 +84,8 @@ class BrowseViewModel(
     private val _state = MutableStateFlow<BrowseUiState>(BrowseUiState.Loading)
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
 
-    /** Item ids in >=1 watchlist — drives the poster "saved" badge. */
-    val savedItems: StateFlow<Set<String>> = userFlags.savedItems
+    /** Item ids in the Watchlist — drives the poster's Watchlist bookmark. */
+    val savedItems: StateFlow<Set<String>> = userFlags.watchlist
 
     private var filters = BrowseFilters()
     private var genres: List<String> = emptyList()

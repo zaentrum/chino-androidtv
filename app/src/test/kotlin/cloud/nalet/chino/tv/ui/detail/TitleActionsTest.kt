@@ -1,21 +1,18 @@
 package cloud.nalet.chino.tv.ui.detail
 
-import cloud.nalet.chino.tv.data.api.Watchlist
 import org.junit.Assert.assertEquals
 import org.junit.Test
 
-/** The title page's add-to-list control says the state in its name. */
+/** The title actions' names say the state, in the words of docs/chino. */
 class TitleActionsTest {
-    private val watchlist = Watchlist(id = "w", name = "Watchlist", isDefault = true)
-
     @Test
-    fun `add to a list, in your watchlist, in two lists`() {
-        assertEquals("Add to a list", listControlName(emptySet(), watchlist))
-        assertEquals("In your Watchlist", listControlName(setOf("w"), watchlist))
-        assertEquals("In 2 lists", listControlName(setOf("w", "films"), watchlist))
-        assertEquals("In 1 list", listControlName(setOf("films"), watchlist))
-        // The default list by its own name, as the server has it.
-        assertEquals("In your To watch", listControlName(setOf("w"), watchlist.copy(name = "To watch")))
-        assertEquals("In 1 list", listControlName(setOf("w"), null))
+    fun `the names a screen reader says`() {
+        assertEquals("add to Watchlist", addToListName(inWatchlist = false))
+        assertEquals("in your Watchlist", addToListName(inWatchlist = true))
+        assertEquals("choose lists", CHOOSE_LISTS)
+        assertEquals("mark as watched", watchedName(watched = false))
+        assertEquals("watched", watchedName(watched = true))
+        assertEquals("like", likedName(liked = false))
+        assertEquals("liked", likedName(liked = true))
     }
 }

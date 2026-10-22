@@ -84,7 +84,11 @@ real values always come from the connected server at runtime.
   start with sound, and closes at its end; it writes no progress, so Continue
   Watching is left alone. Without one, the Trailer button opens the title's
   YouTube link
-- Watchlists (named lists)
+- Watchlists (named lists). On a title's page and its episode rows the
+  bookmark adds the title to the Watchlist or takes it off - that list only -
+  and "⌄" beside it, in the same frame, picks the other lists; watched is a
+  check, liked a heart, each dark on its colour when on. Cards mark the
+  Watchlist and watched the same way
 - Zap — a channel-surf discovery mode
 - Multi-account, with an in-app account picker
 - Delete Account (Settings → Account): deletes the signed-in account and what

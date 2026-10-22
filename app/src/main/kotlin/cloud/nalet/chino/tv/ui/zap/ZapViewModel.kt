@@ -83,11 +83,11 @@ class ZapViewModel(
     private val _state = MutableStateFlow<ZapUiState>(ZapUiState.Loading)
     val state: StateFlow<ZapUiState> = _state.asStateFlow()
 
-    /** Item ids in >=1 of the user's lists — drives the channel-info save
-     *  control's Bookmark/BookmarkCheck state. Empty flow when no userFlags
-     *  cache is wired (tests / context-less construction). */
+    /** Item ids in the Watchlist — what RIGHT toggles, and the channel-info
+     *  chip's bookmark. Empty flow when no userFlags cache is wired (tests /
+     *  context-less construction). */
     val savedItems: StateFlow<Set<String>> =
-        userFlags?.savedItems ?: MutableStateFlow(emptySet<String>()).asStateFlow()
+        userFlags?.watchlist ?: MutableStateFlow(emptySet<String>()).asStateFlow()
 
     private val history = ArrayList<ZapEntry>()
     private var cursor = -1
@@ -158,13 +158,13 @@ class ZapViewModel(
      *  a save bumps the preference vector by the SAVE strength and writes
      *  through to the watchlist (so it shows up on Detail), telemetry fires for
      *  both directions. Optimism + server reconciliation are handled inside
-     *  [UserFlagsRepository.setWatchlist]; the savedItems flow drives the icon.
+     *  [UserFlagsRepository.setWatchlist]; the Watchlist flow drives the icon.
      *  No-op without a userFlags cache. */
     fun onSaveToggle() {
         val flags = userFlags ?: return
         val entry = currentEntry() ?: return
         val id = entry.item.id
-        val nowSaved = id !in flags.savedItems.value
+        val nowSaved = id !in flags.watchlist.value
         if (nowSaved) prefs.update(entry.features, ZapPreferences.SAVE)
         flags.setWatchlist(id, nowSaved)
         telemetry.event(

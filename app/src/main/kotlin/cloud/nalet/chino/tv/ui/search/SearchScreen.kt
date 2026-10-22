@@ -4,7 +4,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
-import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.PosterImage
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -53,7 +52,6 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
@@ -85,6 +83,7 @@ import androidx.compose.ui.input.key.onPreviewKeyEvent
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.input.TextFieldValue
+import cloud.nalet.chino.tv.ui.theme.WatchedMark
 
 @Composable
 fun SearchScreen(
@@ -492,20 +491,9 @@ private fun SearchCard(item: Item, posterUrl: String, onClick: () -> Unit, focus
                     contentDescription = item.title,
                     modifier = Modifier.fillMaxSize(),
                 )
-                // Watched ✓ badge — emerald, same as PosterCard (tv-ahead of
-                // mobile, at web parity).
-                if (item.watchedAt != null) {
-                    Box(
-                        modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp)
-                            .clip(RectangleShape)
-                            .background(ChinoSignalGreen)
-                            .padding(horizontal = 6.dp, vertical = 2.dp),
-                    ) {
-                        Text(text = "✓", color = ChinoBg, fontWeight = FontWeight.Bold, fontSize = 12.sp)
-                    }
-                }
+                // The watched check, dark on green, the same mark as the
+                // PosterCard's.
+                if (item.watchedAt != null) WatchedMark(Modifier.align(Alignment.TopEnd).padding(6.dp))
             }
             Column(
                 modifier = Modifier.fillMaxWidth().padding(12.dp),

@@ -75,8 +75,8 @@ class DetailViewModel(
     private val _state = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
-    /** Item ids in >=1 list — drives the filled/empty "+" icon. */
-    val savedItems: StateFlow<Set<String>> = userFlags.savedItems
+    /** Item ids in the Watchlist - what add to list's bookmark shows. */
+    val watchlist: StateFlow<Set<String>> = userFlags.watchlist
     /** item id → list ids containing it — drives the add-to-list checkmarks. */
     val memberships: StateFlow<Map<String, Set<String>>> = userFlags.memberships
     /** The user's named lists (default first) for the add-to-list picker. */
@@ -299,26 +299,20 @@ class DetailViewModel(
         return ready.resumeSec
     }
 
-    /** Plain "+"-press: add the item to the DEFAULT list when it's in no list,
-     *  or (when already saved) remove it from every list. The specific-list
-     *  picker is reached separately via [setItemInList]. */
-    fun toggleWatchlist(present: Boolean) {
-        val id = displayItemId
+    /** The bookmark of add to list: the rendered title into the Watchlist or
+     *  out of it - the Watchlist alone, never another list (the "⌄" picker,
+     *  [setItemInList], is where a title leaves those). */
+    fun toggleWatchlist(present: Boolean) = setInWatchlist(displayItemId, present)
+
+    /** [id] - the rendered title, or an episode of it - into the Watchlist or
+     *  out of it. */
+    fun setInWatchlist(id: String, present: Boolean) {
         telemetry.event(
             "watchlist_toggle",
             itemId = id,
             extra = mapOf("present" to present.toString()),
         )
-        if (present) {
-            userFlags.setWatchlist(id, true)
-        } else {
-            // The item is in >=1 list and the user pressed the filled icon —
-            // clear it from all of them so the icon empties (web parity: the
-            // plain toggle removes the "saved" state).
-            val current = memberships.value[id].orEmpty()
-            if (current.isEmpty()) userFlags.setWatchlist(id, false)
-            else current.forEach { listId -> userFlags.setItemInList(listId, id, false) }
-        }
+        userFlags.setWatchlist(id, present)
     }
 
     /** Toggle membership in a specific named list (picker checkbox).

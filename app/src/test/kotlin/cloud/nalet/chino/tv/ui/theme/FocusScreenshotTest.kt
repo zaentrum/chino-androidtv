@@ -140,8 +140,10 @@ class FocusScreenshotTest {
     // A label or an icon on a filled colour is the page's colour: the
     // detail's actions with every toggle on, and the liked one focused, its
     // fill kept; the badges on cards, the hero's rating and the bell's count.
-    @Test fun filledActionsAtRest() = shot("fills_detail_actions_rest") { Actions() }
-    @Test fun filledActionFocused() = shot("fills_detail_actions_focused", focusLabel = "Liked") { Actions() }
+    // Off, the toggles' icons outlined on the plain surface.
+    @Test fun filledActionsAtRest() = shot("fills_detail_actions_rest") { Actions(on = true) }
+    @Test fun filledActionFocused() = shot("fills_detail_actions_focused", focusLabel = "liked") { Actions(on = true) }
+    @Test fun actionsOff() = shot("detail_actions_off") { Actions(on = false) }
     @Test fun badges() = shot("fills_badges") { Badges() }
 
     // The library, as any screen whose content did not load: its way on, try
@@ -212,6 +214,7 @@ class FocusScreenshotTest {
                     onClick = {},
                     onToggleWatched = {},
                     onAddToList = {},
+                    inWatchlist = i == 0,
                     selected = i == 1,
                     focusRequester = focus?.second?.takeIf { focus.first == i },
                 )
@@ -324,15 +327,19 @@ class FocusScreenshotTest {
     }
 
     @Composable
-    private fun Actions() {
-        // The detail's actions: Resume filled blue, then the toggles on - in a
-        // list (blue, a dark check), watched (green, a dark eye), liked (red).
+    private fun Actions(on: Boolean) {
+        // The detail's actions: Resume filled blue, then the toggles - on, in
+        // the Watchlist (a dark bookmark on blue, its "⌄" in the same fill),
+        // watched (a dark check on green), liked (a dark heart on red).
         DetailActions(
-            item = Item(id = "p1", title = "Quiet Orchard", kind = "movie", year = 2021, watchedAt = "2026-10-01T20:00:00Z"),
+            item = Item(
+                id = "p1", title = "Quiet Orchard", kind = "movie", year = 2021,
+                watchedAt = if (on) "2026-10-01T20:00:00Z" else null,
+            ),
             primaryLabel = "Resume 12:34",
             canResume = true,
-            inWatchlist = true,
-            liked = true,
+            inWatchlist = on,
+            liked = on,
             onPlay = {},
             onToggleWatchlist = {},
             onOpenListPicker = {},
