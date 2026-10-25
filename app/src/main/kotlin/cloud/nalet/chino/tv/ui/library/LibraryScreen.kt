@@ -942,7 +942,7 @@ private fun ContinueWatchingRow(
                 item = item,
                 baseUrl = baseUrl,
                 streamToken = streamToken,
-                saved = item.id in saved,
+                saved = cardInWatchlist(item, saved),
                 showProgress = showProgress,
                 onClick = { onItemSelected(item.id) },
                 onLongPress = openMenu,
@@ -955,12 +955,27 @@ private fun ContinueWatchingRow(
     }
 }
 
+/**
+ * Whether a continue-watching card shows the Watchlist's bookmark: an
+ * episode's card is its series' - its title and its poster are the series' -
+ * so it is marked when the series is in the Watchlist; a movie's when the
+ * movie is.
+ */
+internal fun cardInWatchlist(
+    item: cloud.nalet.chino.tv.data.api.ContinueWatchingItem,
+    watchlist: Set<String>,
+): Boolean {
+    val series = item.parentId?.takeIf { item.type == "episode" && it.isNotBlank() }
+    return (series ?: item.id) in watchlist
+}
+
 @Composable
 private fun ContinueWatchingCard(
     item: cloud.nalet.chino.tv.data.api.ContinueWatchingItem,
     baseUrl: String,
     streamToken: String,
-    /** In the Watchlist: its bookmark, top-left. */
+    /** In the Watchlist, an episode by its series ([cardInWatchlist]): its
+     *  bookmark, top-left. */
     saved: Boolean,
     showProgress: Boolean,
     onClick: () -> Unit,
