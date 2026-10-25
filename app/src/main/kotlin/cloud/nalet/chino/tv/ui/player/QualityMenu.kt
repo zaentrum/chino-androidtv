@@ -218,11 +218,14 @@ fun qualityName(height: Int): String {
  * counts as that height: 2048x858 and 1916x800 are 1080p, DCI 4096x2160 is
  * 2160p, a 16:9 frame of 1076 lines 1080p. Any other step is its own height:
  * 1666x900 is 937p, a scope film's 720-line encode, 1728x720, 972p, and
- * 1600x900 900p. A width of 0 leaves the height; 0 without a height.
+ * 1600x900 900p. The width's height at 16:9 is to the nearest pixel, as
+ * the server has it, so a frame is named the same everywhere: 1242x520 is
+ * 699 lines and 720p. A width of 0 leaves the height; 0 without a height.
  */
 fun namedHeight(width: Int, height: Int): Int {
     if (height <= 0) return 0
-    val step = if (width > 0) maxOf(height, width * 9 / 16) else height
+    // The width's 16:9 height to the nearest pixel, as the server names it.
+    val step = if (width > 0) maxOf(height, (width * 9 + 8) / 16) else height
     for (c in SIZE_CLASSES.reversed()) if (height <= c && step >= c && step * 10 <= c * 11) return c
     for (c in SIZE_CLASSES) if (step < c && step * 100 >= c * 97) return c
     return step

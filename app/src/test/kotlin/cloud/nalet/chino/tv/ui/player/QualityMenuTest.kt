@@ -204,6 +204,10 @@ class QualityMenuTest {
             Triple(2560, 1080, "High (1440p)"), Triple(7680, 4320, "Ultra (4320p)"),
             // A taller frame than the standard one is not that height.
             Triple(1200, 1100, "High (1100p)"),
+            // The width's 16:9 height to the nearest pixel, as the server's:
+            // 698.6 is 699, within 3 % of 720; 528.75 is 529, within 3 % of
+            // 540; 646.9 is 647.
+            Triple(1242, 520, "Medium (720p)"), Triple(940, 392, "Low (540p)"), Triple(1150, 480, "Low (647p)"),
         )
         for ((w, h, name) in frames) assertEquals("${w}x$h", name, frameQualityName(w, h))
         // A 16:9 frame, and a height alone: the standard height within 3 %
