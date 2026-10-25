@@ -1249,7 +1249,9 @@ private fun ExoPlayback(
                         { showAudioPanel = true }
                     } else null,
                     onSubtitles = { showSubtitlePanel = true },
-                    captionsOn = tracks.any { it.selected },
+                    // A button is marked while its menu is open, and the
+                    // subtitles' while one is on.
+                    captionsOn = showSubtitlePanel || tracks.any { it.selected },
                     onQuality = if (menu != null) {
                         { showQualityPanel = true }
                     } else null,
@@ -1260,6 +1262,8 @@ private fun ExoPlayback(
                         showQualityPanel = false
                     },
                     speedActive = showSpeedPanel || playbackSpeed != 1f,
+                    qualityActive = showQualityPanel,
+                    audioActive = showAudioPanel,
                     onInfo = { showInfoOverlay = true },
                     // Prev/next chevrons only for episodes (parentSeriesId != null),
                     // matching web which hides them on movies.
@@ -1573,7 +1577,7 @@ private fun splitAudioLabel(label: String): Pair<String, String?> {
  *  [active] is the entry the player is on; on Auto, its row names the rung
  *  that plays ([playing]): "Auto · Medium (720p)". */
 @Composable
-private fun QualityPanel(
+internal fun QualityPanel(
     rungs: List<cloud.nalet.chino.tv.data.api.QualityRung>,
     active: String?,
     playing: String?,
@@ -1582,12 +1586,14 @@ private fun QualityPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    // It opens on the quality picked.
+    val picked = rungs.indexOfFirst { it.name == active }.coerceAtLeast(0)
     MenuPopover(header = "quality", width = 200.dp) {
         rungs.forEachIndexed { idx, rung ->
             ChoiceRow(
                 label = if (rung.name == AUTO && active == AUTO) autoLabel(rung.label, playing) else rung.label,
                 selected = rung.name == active,
-                focusRequester = focusRequester.takeIf { idx == 0 },
+                focusRequester = focusRequester.takeIf { idx == picked },
                 onClick = { onPick(rung.name) },
             )
         }
@@ -1604,12 +1610,15 @@ internal fun SpeedPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    // It opens on the speed picked, as every menu of one choice does: an
+    // OK at once changes nothing.
+    val picked = SPEEDS.indexOf(current).takeIf { it >= 0 } ?: SPEEDS.indexOf(1.0f)
     MenuPopover(header = "speed", width = 180.dp) {
         SPEEDS.forEachIndexed { idx, rate ->
             ChoiceRow(
                 label = speedLabel(rate),
                 selected = rate == current,
-                focusRequester = focusRequester.takeIf { idx == 0 },
+                focusRequester = focusRequester.takeIf { idx == picked },
                 onClick = { onPick(rate) },
             )
         }
@@ -2010,7 +2019,7 @@ private fun applyAudioSelection(player: ExoPlayer, track: AudioTrack): String {
  *  (could be refactored to a generic TrackPanel<T> once we hit a fourth panel
  *  variant, but two near-clones is not yet pulling weight). */
 @Composable
-private fun AudioPanel(
+internal fun AudioPanel(
     tracks: List<AudioTrack>,
     onSelect: (AudioTrack) -> Unit,
     onDismiss: () -> Unit,
@@ -2021,13 +2030,15 @@ private fun AudioPanel(
         if (tracks.isEmpty()) {
             ChoiceNote("No audio tracks")
         } else {
+            // It opens on the track that plays.
+            val picked = tracks.indexOfFirst { it.selected }.coerceAtLeast(0)
             tracks.forEachIndexed { idx, track ->
                 val (primary, suffix) = splitAudioLabel(track.label)
                 ChoiceRow(
                     label = primary,
                     secondary = suffix,
                     selected = track.selected,
-                    focusRequester = focusRequester.takeIf { idx == 0 },
+                    focusRequester = focusRequester.takeIf { idx == picked },
                     onClick = { onSelect(track) },
                 )
             }

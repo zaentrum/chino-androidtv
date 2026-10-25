@@ -196,10 +196,13 @@ class FocusScreenshotTest {
     // The player's menus of one choice: the picked row in the accent blue
     // with a small filled square before it, every row - "off" and "more
     // languages" too - keeping the square's column, so the names line up.
-    // The subtitles menu opens on the subtitle on; the speed menu on its
-    // first row, the picked one further down.
+    // Each opens on its picked row: the subtitles menu on the subtitle on,
+    // the speed menu on the speed set.
     @Test fun subtitlesMenu() = shot("player_menu_subtitles") { SubtitlesMenu() }
     @Test fun speedMenu() = shot("player_menu_speed") { SpeedPanel(current = 1.25f, onPick = {}, onDismiss = {}) }
+    // A button is marked while its menu is open: the quality's, in solid
+    // blue with a dark icon, as the speed's and the subtitles' are.
+    @Test fun qualityOpen() = shot("player_bar_quality_open") { PlayerBar(qualityActive = true) }
 
     // The player's controls over the picture, each on a solid surface, never
     // a see-through one: play focused, subtitles on in solid blue with a dark
@@ -392,6 +395,22 @@ class FocusScreenshotTest {
                 ControlIconButton(icon = Lucide.Gauge, contentDescription = "Playback speed", onClick = {})
                 ControlIconButton(icon = Lucide.Info, contentDescription = "Playback info", onClick = {}, enabled = false)
             }
+        }
+    }
+
+    @Composable
+    private fun PlayerBar(qualityActive: Boolean) {
+        Column(Modifier.width(900.dp)) {
+            PlayerBottomChrome(
+                isPlaying = true, positionMs = 112_000, durationMs = 887_000, bufferedMs = 300_000,
+                segments = emptyList(),
+                trickplayCues = emptyList(), trickplayBaseUrl = "", streamToken = "",
+                muted = false, volume = 0.6f, onPlayPause = {}, onToggleMute = {}, onVolumeChange = {},
+                onScrubberSeek = {}, onAudio = {}, onSubtitles = {}, onQuality = {}, onSpeed = {},
+                qualityActive = qualityActive,
+                onInfo = {}, onPrevEpisode = null, onNextEpisode = null,
+                playPauseFocusRequester = FocusRequester(), onUserInteraction = {},
+            )
         }
     }
 

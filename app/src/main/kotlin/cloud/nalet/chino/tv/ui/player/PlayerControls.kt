@@ -134,6 +134,10 @@ internal fun PlayerBottomChrome(
     onQuality: (() -> Unit)?,
     onSpeed: () -> Unit,
     speedActive: Boolean = false,
+    /** The quality's menu is open: its button marked, as the others' are. */
+    qualityActive: Boolean = false,
+    /** The audio's menu is open. */
+    audioActive: Boolean = false,
     onInfo: () -> Unit,
     onPrevEpisode: (() -> Unit)?,
     onNextEpisode: (() -> Unit)?,
@@ -194,6 +198,7 @@ internal fun PlayerBottomChrome(
                 ControlIconButton(
                     icon = Lucide.AudioLines,
                     contentDescription = "Audio track",
+                    accent = audioActive,
                     onClick = { onUserInteraction(); onAudio() },
                 )
             }
@@ -215,6 +220,7 @@ internal fun PlayerBottomChrome(
                 ControlIconButton(
                     icon = Lucide.Settings2,
                     contentDescription = "Quality",
+                    accent = qualityActive,
                     onClick = { onUserInteraction(); onQuality() },
                 )
             }
