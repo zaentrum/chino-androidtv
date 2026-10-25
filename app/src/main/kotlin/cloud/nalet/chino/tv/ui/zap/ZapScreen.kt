@@ -301,7 +301,7 @@ fun ZapScreen(
 }
 
 @Composable
-private fun ChannelInfoOverlay(
+internal fun ChannelInfoOverlay(
     item: cloud.nalet.chino.tv.data.model.Item,
     muted: Boolean,
     saved: Boolean,
@@ -309,15 +309,10 @@ private fun ChannelInfoOverlay(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .paintToScreenEdges(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    0.6f to Color(0xCC000000),
-                    1f to Color(0xF2000000),
-                ),
-                top = false,
-            )
-            .padding(top = 80.dp),
+            // One solid surface under the whole block, out to the screen's
+            // edges: no line of it on the picture, none see-through.
+            .paintToScreenEdges(ChinoBg, top = false)
+            .padding(top = 24.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(

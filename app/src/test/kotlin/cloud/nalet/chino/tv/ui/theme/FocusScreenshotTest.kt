@@ -198,6 +198,10 @@ class FocusScreenshotTest {
     // cloud-blue as the volume's level, the time labels whole.
     @Test fun playerSeekRow() = shot("player_seek_row") { SeekRow() }
 
+    // Zap's channel info over the picture, the whole block on one solid
+    // band inside the safe area, the band out to the screen's edges.
+    @Test fun zapInfo() = shot("zap_info") { ZapInfo() }
+
     // The library, as any screen whose content did not load: its way on, try
     // again, at rest and focused - it takes the focus first. At rest without
     // the remote: with the remote, a screen whose one focusable is the button
@@ -397,6 +401,31 @@ class FocusScreenshotTest {
                 onInfo = {}, onPrevEpisode = null, onNextEpisode = null,
                 playPauseFocusRequester = FocusRequester(), onUserInteraction = {},
             )
+        }
+    }
+
+    @Composable
+    private fun ZapInfo() {
+        Box(
+            Modifier.width(912.dp).height(492.dp).background(
+                androidx.compose.ui.graphics.Brush.verticalGradient(
+                    listOf(androidx.compose.ui.graphics.Color(0xFF1E88E5), androidx.compose.ui.graphics.Color(0xFFE0A040)),
+                ),
+            ),
+        ) {
+            SafeAreaOverlay {
+                Box(Modifier.align(Alignment.BottomStart)) {
+                    cloud.nalet.chino.tv.ui.zap.ChannelInfoOverlay(
+                        item = posters[0].copy(
+                            genres = listOf("Drama", "Mystery"),
+                            overview = "A ship comes into the harbour at night, and the town wakes to find it empty. " +
+                                "The harbour master keeps a list of every ship that came in, and one name is missing.",
+                        ),
+                        muted = false,
+                        saved = true,
+                    )
+                }
+            }
         }
     }
 
