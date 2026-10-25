@@ -479,6 +479,10 @@ class ReturnFocus internal constructor(private val opened: MutableState<String?>
         opened.value = key
     }
 
+    /** The screen comes back from what one of its items opened, the focus
+     *  not given back to it yet ([restore]). */
+    val pending: Boolean get() = opened.value != null
+
     /** Gives the focus back to the item that opened what the screen comes
      *  back from, where it is still there - a few frames for a list to
      *  place it; true when it has it. */

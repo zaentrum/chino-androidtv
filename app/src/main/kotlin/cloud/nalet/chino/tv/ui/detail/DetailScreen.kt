@@ -90,6 +90,10 @@ import cloud.nalet.chino.tv.ui.theme.ReadingOrder
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.inWrappingRow
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.ReturnFocus
+import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
+import androidx.compose.foundation.focusGroup
+import androidx.compose.ui.focus.focusProperties
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.theme.LoadError
@@ -269,6 +273,17 @@ private fun DetailContent(
     // it scrolls.
     var pageTop by remember { mutableFloatStateOf(0f) }
     var contentTop by remember { mutableFloatStateOf(Float.NaN) }
+    // BACK from what a card opened - a person's page, another title's -
+    // gives the focus back to that card, its row and the page scrolled as
+    // they were (both saved with the page). Coming back so, the episode an
+    // episode entry lands on leaves the focus where it was.
+    val back = rememberReturnFocus()
+    val returning = remember { back.pending }
+    LaunchedEffect(Unit) { back.restore() }
+    // DOWN from a starring card goes to the row below the credits' own, the
+    // first of what follows them: the episodes, else more like this.
+    val afterCredits = remember { FocusRequester() }
+    val followsCredits = s.seasons.isNotEmpty() || s.similar.isNotEmpty()
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -405,16 +420,24 @@ private fun DetailContent(
             // Writers, Music, …), as chino-web's detail page lists them. Every
             // name is a DPAD focus target so the credits are remote-navigable;
             // hidden when chino-api hasn't populated cast for the item.
-            CreditsSection(cast = s.item.cast, onPersonSelected = onPersonSelected)
+            CreditsSection(
+                cast = s.item.cast,
+                onPersonSelected = onPersonSelected,
+                back = back,
+                below = afterCredits.takeIf { followsCredits },
+            )
             // Episodes block — only rendered for series with at least one
             // season. Sits below the action row inside the scrollable column
             // so the user can DPAD_DOWN past the buttons into the list.
+            if (followsCredits) Column(Modifier.focusRequester(afterCredits).focusGroup()) {
             if (s.seasons.isNotEmpty()) {
                 EpisodesBlock(
                     seasons = s.seasons,
                     baseUrl = s.baseUrl,
                     streamToken = s.streamToken,
                     focusEpisodeId = s.focusEpisodeId,
+                    // Back from a card's page the focus goes back to the card.
+                    landOnEpisode = !returning,
                     episodeResume = s.episodeResume,
                     onPlayEpisode = onPlayEpisode,
                     onToggleEpisodeWatched = onToggleEpisodeWatched,
@@ -432,7 +455,9 @@ private fun DetailContent(
                     streamToken = s.streamToken,
                     watchlist = watchlist,
                     onSelect = onSimilarSelected,
+                    back = back,
                 )
+            }
             }
         }
         }
@@ -793,6 +818,9 @@ private fun EpisodesBlock(
     onAddEpisodeToList: (String) -> Unit,
     watchlist: Set<String>,
     onToggleEpisodeWatchlist: (String) -> Unit,
+    /** The focus lands on [focusEpisodeId]'s row - not where the page comes
+     *  back from what a card opened, the focus going back to that card. */
+    landOnEpisode: Boolean = true,
 ) {
     // Vertical accordion matching chino-web's EpisodesList: an "Episodes"
     // heading, then one collapsible season card per season expanding into a
@@ -825,6 +853,7 @@ private fun EpisodesBlock(
                 // Expand the target season on an episode entry, else season 0.
                 initiallyExpanded = if (focusSeasonIndex != null) index == focusSeasonIndex else index == 0,
                 focusEpisodeId = focusEpisodeId?.takeIf { index == focusSeasonIndex },
+                landOnEpisode = landOnEpisode,
                 episodeResume = episodeResume,
                 onPlayEpisode = onPlayEpisode,
                 onToggleEpisodeWatched = onToggleEpisodeWatched,
@@ -843,6 +872,7 @@ private fun SeasonSection(
     streamToken: String,
     initiallyExpanded: Boolean,
     focusEpisodeId: String?,
+    landOnEpisode: Boolean = true,
     episodeResume: Map<String, EpisodeResume>,
     onPlayEpisode: (String) -> Unit,
     onToggleEpisodeWatched: (List<String>, Boolean) -> Unit,
@@ -856,8 +886,9 @@ private fun SeasonSection(
     // is expanded (the parent already expanded it via initiallyExpanded).
     val targetRowFocus = remember(focusEpisodeId) { FocusRequester() }
     LaunchedEffect(focusEpisodeId, expanded) {
-        if (focusEpisodeId != null && expanded) {
-            runCatching { targetRowFocus.requestFocus() }
+        if (focusEpisodeId != null && expanded && landOnEpisode) {
+            // Over the next few frames, until its row is laid out.
+            cloud.nalet.chino.tv.ui.theme.focusFirstOf(listOf(targetRowFocus), frames = 4)
         }
     }
     // Not clipped: a focused row grows past the season's edge.
@@ -1276,6 +1307,8 @@ private fun MoreLikeThisSection(
     /** The ids in the Watchlist: the cards' bookmarks. */
     watchlist: Set<String>,
     onSelect: (String) -> Unit,
+    /** Where the focus comes back to: the card that opened a title. */
+    back: ReturnFocus? = null,
 ) {
     Column(
         modifier = Modifier.padding(top = 40.dp),
@@ -1294,11 +1327,13 @@ private fun MoreLikeThisSection(
             modifier = Modifier.runToScreenEnd(RowRun).shelfRoom().fillMaxWidth(),
         ) {
             items(items, key = { it.id }) { entry ->
+                val key = "similar/${entry.id}"
                 SimilarCard(
                     item = entry,
                     posterUrl = "$baseUrl/v1/items/${entry.id}/poster?stream=$streamToken",
                     saved = entry.id in watchlist,
-                    onClick = { onSelect(entry.id) },
+                    onClick = { back?.opens(key); onSelect(entry.id) },
+                    modifier = back?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier,
                 )
             }
         }
@@ -1309,12 +1344,15 @@ private fun MoreLikeThisSection(
 /** A card of "More like this", with a card's status marks (docs/chino,
  *  title actions): the Watchlist's bookmark top-left where [saved], the
  *  watched check top-right. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
-private fun SimilarCard(item: Item, posterUrl: String, saved: Boolean, onClick: () -> Unit) {
+private fun SimilarCard(item: Item, posterUrl: String, saved: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
     val focus = rememberItemFocus()
     ChinoCard(
         onClick = onClick,
-        modifier = Modifier.width(180.dp),
+        // The page's last row: DOWN stays on it, never sideways onto a
+        // taller card beside it.
+        modifier = modifier.focusProperties { down = FocusRequester.Cancel }.width(180.dp),
         focus = focus,
     ) {
         Column(modifier = Modifier.background(ChinoSurface)) {
@@ -1377,9 +1415,20 @@ private fun SimilarCard(item: Item, posterUrl: String, saved: Boolean, onClick: 
 private fun CreditsSection(
     cast: List<CastMember>,
     onPersonSelected: (String) -> Unit,
+    /** Where the focus comes back to: the card or the name that opened a
+     *  person's page. */
+    back: ReturnFocus? = null,
+    /** What follows the credits on the page, where DOWN from the starring
+     *  row goes when there is no crew below it; null for nothing. */
+    below: FocusRequester? = null,
 ) {
     val credits = remember(cast) { groupCredits(cast) }
     if (credits.actors.isEmpty() && credits.crew.isEmpty()) return
+    // DOWN from a starring card goes to the row below - the first crew line,
+    // else what follows the credits - never sideways onto a taller card
+    // beside it, which a geometric search would pick.
+    val firstCrew = remember { FocusRequester() }
+    val starringDown = if (credits.crew.isNotEmpty()) firstCrew else below ?: FocusRequester.Cancel
     Column(
         modifier = Modifier.padding(top = 40.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
@@ -1401,9 +1450,12 @@ private fun CreditsSection(
                 // id (else name) keys a card uniquely; a name alone does not
                 // (two actors can share one, and a duplicate key crashes the row).
                 items(credits.actors, key = ::creditKey) { actor ->
+                    val key = "cast/${creditKey(actor)}"
                     ActorCard(
                         actor = actor,
-                        onClick = actor.personId?.let { id -> { onPersonSelected(id) } },
+                        onClick = actor.personId?.let { id -> { back?.opens(key); onPersonSelected(id) } },
+                        modifier = (back?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier)
+                            .focusProperties { down = starringDown },
                     )
                 }
             }
@@ -1414,7 +1466,9 @@ private fun CreditsSection(
                 modifier = Modifier.padding(top = 8.dp),
                 verticalArrangement = Arrangement.spacedBy(10.dp),
             ) {
-                credits.crew.forEach { group -> CrewLine(group, onPersonSelected) }
+                credits.crew.forEachIndexed { i, group ->
+                    CrewLine(group, onPersonSelected, back, focusRequester = firstCrew.takeIf { i == 0 })
+                }
             }
         }
     }
@@ -1423,11 +1477,11 @@ private fun CreditsSection(
 /** An actor: initials, name, and the character beneath it ("Old Thom /
  *  Narrator" when the catalog credits two). */
 @Composable
-private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
+private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     // A card: a person, the initials for their artwork.
     val focus = rememberItemFocus()
     Column(
-        modifier = Modifier
+        modifier = modifier
             .width(128.dp)
             .focusStyle(focus, FocusKind.Card)
             .creditTarget(onClick)
@@ -1470,9 +1524,15 @@ private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
     }
 }
 
-/** One crew role: its label ("Writers") beside a scrollable row of names. */
+/** One crew role: its label ("Writers") beside a scrollable row of names.
+ *  [focusRequester] on the row: it gives the focus to its first name. */
 @Composable
-private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
+private fun CrewLine(
+    group: CreditGroup,
+    onPersonSelected: (String) -> Unit,
+    back: ReturnFocus? = null,
+    focusRequester: FocusRequester? = null,
+) {
     Row(verticalAlignment = Alignment.CenterVertically) {
         // The role's heading, as "starring" above the actors: chrome, in the
         // mono face, lowercase ("director", "writers", "music").
@@ -1490,12 +1550,18 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(end = 32.dp + RowRun, top = 2.dp, bottom = 2.dp),
-            modifier = Modifier.weight(1f).runToScreenEnd(RowRun).shelfRoom(),
+            modifier = Modifier
+                .weight(1f)
+                .then(focusRequester?.let { Modifier.focusRequester(it).focusGroup() } ?: Modifier)
+                .runToScreenEnd(RowRun)
+                .shelfRoom(),
         ) {
             items(group.people, key = ::creditKey) { person ->
+                val key = "crew/${creditKey(person)}"
                 CrewName(
                     name = person.name,
-                    onClick = person.personId?.let { id -> { onPersonSelected(id) } },
+                    onClick = person.personId?.let { id -> { back?.opens(key); onPersonSelected(id) } },
+                    modifier = back?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier,
                 )
             }
         }
@@ -1505,10 +1571,10 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
 
 /** A crew name: a chip. */
 @Composable
-private fun CrewName(name: String, onClick: (() -> Unit)?) {
+private fun CrewName(name: String, onClick: (() -> Unit)?, modifier: Modifier = Modifier) {
     val focus = rememberItemFocus()
     Box(
-        modifier = Modifier
+        modifier = modifier
             // A plain chip: surface-2.
             .focusStyle(focus, FocusKind.Control, surface = ChinoSurfaceHi)
             .border(1.dp, ChinoBorder, RectangleShape)
