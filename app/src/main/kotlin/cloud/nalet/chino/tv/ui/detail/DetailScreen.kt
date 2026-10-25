@@ -94,6 +94,14 @@ import cloud.nalet.chino.tv.ui.theme.LoadError
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
 import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 import cloud.nalet.chino.tv.ui.theme.bleedToScreenEdges
+import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
+import cloud.nalet.chino.tv.ui.theme.SafeArea
+import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.layout.boundsInWindow
+import androidx.compose.ui.layout.onGloballyPositioned
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
@@ -249,10 +257,19 @@ private fun DetailContent(
         canResume -> "Resume ${formatHM(s.resumeSec)}"
         else -> "Play"
     }
-    Box(modifier = Modifier.fillMaxSize().background(ChinoBg)) {
-        // Backdrop: top 60% of the screen with a gradient that fades into the
-        // page background. Matches chino-web DetailPage's aspect-[21/9] hero +
-        // bg-gradient-to-t treatment.
+    // Where the content column starts on the page, from the page's top: the
+    // still shows above it, where nothing sits on it; from there down the
+    // page is the solid canvas, under everything the column holds - the
+    // focus gaps around its controls included - and it follows the column as
+    // it scrolls.
+    var pageTop by remember { mutableFloatStateOf(0f) }
+    var contentTop by remember { mutableFloatStateOf(Float.NaN) }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(ChinoBg)
+            .onGloballyPositioned { pageTop = it.boundsInWindow().top },
+    ) {
         // The still reaches the screen's edges past the safe area the page
         // sits in; what sits on it stays inside.
         Box(modifier = Modifier.fillMaxWidth().height(560.dp).bleedToScreenEdges(bottom = false)) {
@@ -265,16 +282,26 @@ private fun DetailContent(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0x33000000),
-                                Color(0xCC0D1117),
-                                ChinoBg,
-                            ),
-                            startY = 200f,
-                        ),
-                    ),
+                    .drawBehind {
+                        // The still starts above the page by the safe area's
+                        // top; until the column is placed, the canvas from
+                        // under the still's middle.
+                        val solidFrom = if (contentTop.isNaN()) size.height * 0.45f
+                        else (contentTop + SafeArea.Vertical.toPx()).coerceIn(0f, size.height)
+                        val fade = STILL_FADE.toPx().coerceAtMost(solidFrom)
+                        if (fade > 0f) {
+                            drawRect(
+                                brush = Brush.verticalGradient(
+                                    listOf(ChinoBg.copy(alpha = 0f), ChinoBg),
+                                    startY = solidFrom - fade,
+                                    endY = solidFrom,
+                                ),
+                                topLeft = Offset(0f, solidFrom - fade),
+                                size = Size(size.width, fade),
+                            )
+                        }
+                        drawRect(ChinoBg, topLeft = Offset(0f, solidFrom), size = Size(size.width, size.height - solidFrom))
+                    },
             )
         }
         // Content overlays the bottom half of the backdrop so the title + CTAs
@@ -294,7 +321,9 @@ private fun DetailContent(
             // Poster (left) + content (right), overlapping the backdrop —
             // matches chino-web/tablet's detail layout.
             Row(
-                modifier = Modifier.fillMaxWidth(0.82f),
+                modifier = Modifier
+                    .fillMaxWidth(0.82f)
+                    .onGloballyPositioned { contentTop = it.boundsInWindow().top - pageTop },
                 horizontalArrangement = Arrangement.spacedBy(32.dp),
                 verticalAlignment = Alignment.Bottom,
             ) {
@@ -419,8 +448,10 @@ internal fun DetailActions(
 ) {
     val watched = item.watchedAt != null
     Row(
-        modifier = Modifier.padding(top = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp),
+        // Room for a focused control's ring and growth: 12 dp between the
+        // controls, and 12 dp between a ring and the description under it.
+        modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Without a position to resume (a series' next episode included) the
@@ -1089,15 +1120,18 @@ private fun MetaRow(year: Int?, durationMs: Long?, rating: Double?, kind: String
             }
         }
         kind?.takeIf { it.isNotBlank() }?.let { k ->
+            // A badge: opaque, on surface-2, its word lowercase in the mono
+            // face ("movie").
             Box(
                 modifier = Modifier
-                    .clip(RectangleShape)
-                    .background(Color.White.copy(alpha = 0.1f))
+                    .background(ChinoSurfaceHi)
+                    .border(1.dp, ChinoBorder, RectangleShape)
                     .padding(horizontal = 8.dp, vertical = 2.dp),
             ) {
                 Text(
-                    text = k.uppercase(),
-                    color = Color.White,
+                    text = k.lowercase(),
+                    style = MaterialTheme.typography.titleSmall,
+                    color = ChinoText,
                     fontSize = 11.sp,
                     fontWeight = FontWeight.Medium,
                 )
@@ -1121,10 +1155,11 @@ private fun GenreChips(genres: List<String>) {
         verticalArrangement = Arrangement.spacedBy(8.dp),
     ) {
         genres.forEach { genre ->
+            // On surface-2, as every plain chip rests; the focused surface
+            // is focus's alone.
             Box(
                 modifier = Modifier
-                    .clip(RectangleShape)
-                    .background(ChinoBorderHi)
+                    .background(ChinoSurfaceHi)
                     .border(BorderStroke(1.dp, ChinoBorder), RectangleShape)
                     .padding(horizontal = 12.dp, vertical = 4.dp),
             ) {
@@ -1143,20 +1178,11 @@ private fun FooterGrid(item: Item) {
         .distinct()
         .joinToString(", ")
         .takeIf { it.isNotBlank() }
-    val analyzedLabel = item.segments?.takeIf { it.count > 0 }?.let { seg ->
-        listOfNotNull(
-            "Intro".takeIf { seg.hasIntro },
-            "Credits".takeIf { seg.hasCredits },
-            "Recap".takeIf { seg.hasRecap },
-        ).joinToString(" · ").ifEmpty { "Segments available" }
-    }
-    if (subtitleLabel == null && analyzedLabel == null) return
-    Row(
-        modifier = Modifier.padding(top = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(32.dp),
-    ) {
-        subtitleLabel?.let { FooterColumn("Subtitles", it) }
-        analyzedLabel?.let { FooterColumn("Analyzed", it) }
+    // What the server found in the file - its intro, its credits - is the
+    // server's, for the player's skips, not something to read here.
+    if (subtitleLabel == null) return
+    Row(modifier = Modifier.padding(top = 16.dp)) {
+        FooterColumn("Subtitles", subtitleLabel)
     }
 }
 
@@ -1457,3 +1483,6 @@ private fun formatHM(sec: Int): String {
     val s = sec % 60
     return if (h > 0) "%d:%02d:%02d".format(h, m, s) else "%d:%02d".format(m, s)
 }
+
+/** How far above the content column the still fades into the canvas. */
+private val STILL_FADE = 160.dp
