@@ -648,7 +648,8 @@ internal fun TvTopBar(
         ) {
             // Search fills the remaining width, capped at 576dp (web's
             // max-w-xl), then a 24dp gap to the right cluster; bell + avatar
-            // 16dp apart (web `ml-6` + `gap-4`). Matches the mobile TopBar.
+            // the control gap apart - room for a focused one's grown ring,
+            // as between every two buttons on the TV.
             if (searchSlot != null) {
                 Box(modifier = Modifier.widthIn(max = 576.dp).fillMaxWidth()) { searchSlot() }
             } else {
@@ -663,7 +664,7 @@ internal fun TvTopBar(
             androidx.compose.foundation.layout.Row(
                 modifier = Modifier.padding(start = 24.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(16.dp),
+                horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             ) {
                 if (noticesBell != null && activeAccount != null) {
                     cloud.nalet.chino.tv.ui.notices.NoticesBellCell(bell = noticesBell, account = activeAccount)

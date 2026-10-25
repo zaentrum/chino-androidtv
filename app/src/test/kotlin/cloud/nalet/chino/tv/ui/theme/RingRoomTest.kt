@@ -5,14 +5,22 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.test.SemanticsMatcher
+import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.unit.dp
 import androidx.tv.material3.Text
+import cloud.nalet.chino.tv.data.NoticesRepository
+import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.detail.DetailActions
+import cloud.nalet.chino.tv.ui.library.TvTopBar
+import cloud.nalet.chino.tv.ui.notices.NoticesBell
+import cloud.nalet.chino.tv.ui.player.PlayerTopChrome
 import cloud.nalet.chino.tv.ui.settings.SettingButtons
+import kotlinx.serialization.json.Json
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -24,7 +32,8 @@ import org.robolectric.annotation.Config
  * Ring room (the design system's tv focus): 12 dp between a focused
  * control's GROWN ring - its growth and the ring outside its 2 dp gap - and
  * the next control, measured in the TV's dp (2 px each on 1920 × 1080): the
- * title page's row, Settings' buttons.
+ * title page's row, Settings' buttons, the player's Back and Home, the top
+ * bar's bell and account.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w960dp-h540dp-xhdpi")
@@ -102,5 +111,44 @@ class RingRoomTest {
         assertRingRoom(
             listOf("see your account", "switch account", "delete account").map { it to (hasText(it) to true) },
         )
+    }
+
+    @Test
+    fun `the player's Back and Home - 12 dp from a grown ring to the next`() {
+        show {
+            androidx.compose.foundation.layout.Box(Modifier.width(900.dp)) {
+                PlayerTopChrome(title = "Quiet Orchard", onBack = {}, onUserInteraction = {}, onHome = {})
+            }
+        }
+        assertRingRoom(listOf("Back", "Home").map { it to ((hasContentDescription(it) and hasClickAction()) to true) })
+    }
+
+    @Test
+    fun `the top bar's bell and account - 12 dp from a grown ring to the next`() {
+        // The bell shows once the server answers for the account's notices.
+        val api = java.lang.reflect.Proxy.newProxyInstance(
+            ChinoApi::class.java.classLoader, arrayOf(ChinoApi::class.java),
+        ) { _, method, _ ->
+            when (method.name) {
+                "notices" -> Json.parseToJsonElement("""{"notices":[],"unread":0,"available":true}""")
+                "hashCode" -> 0
+                "equals" -> false
+                "toString" -> "the server"
+                else -> throw java.io.IOException("not asked here")
+            }
+        } as ChinoApi
+        val account = Account(
+            id = "u-1", displayName = "Robin Vale", email = "", accessToken = "t", refreshToken = null,
+            expiresAtEpochMillis = 0L, lastUsedAt = 0L,
+        )
+        val bell = NoticesBell(NoticesRepository(api = { api }, activeAccount = { "u-1" }), open = {})
+        show {
+            androidx.compose.foundation.layout.Box(Modifier.width(900.dp)) {
+                TvTopBar(noticesBell = bell, activeAccount = account, onAccountClick = {})
+            }
+        }
+        val bellNode = hasContentDescription("Notices") and hasClickAction()
+        compose.waitUntil(5_000) { compose.onAllNodes(bellNode).fetchSemanticsNodes().isNotEmpty() }
+        assertRingRoom(listOf("bell" to (bellNode to true), "account" to ((hasText("RV") and hasClickAction()) to true)))
     }
 }

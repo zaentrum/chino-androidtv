@@ -271,7 +271,9 @@ internal fun PlayerTopChrome(
             )
             .padding(ChinoFocus.Room),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
+        // Back and Home far enough apart for a focused one's growth and
+        // ring, as the bottom bar's buttons.
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
     ) {
         ControlIconButton(
             icon = Lucide.ArrowLeft,
