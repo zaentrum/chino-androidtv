@@ -56,9 +56,11 @@ import cloud.nalet.chino.tv.ui.player.SpeedPanel
 import cloud.nalet.chino.tv.ui.player.SubtitlePanel
 import cloud.nalet.chino.tv.ui.player.SubtitleTrackInfo
 import cloud.nalet.chino.tv.ui.player.subtitleMenu
-import cloud.nalet.chino.tv.ui.settings.AUDIO_LANGS
-import cloud.nalet.chino.tv.ui.settings.LangPickerRow
+import cloud.nalet.chino.tv.ui.settings.LanguageMenu
+import cloud.nalet.chino.tv.ui.settings.LanguageSettingRow
 import cloud.nalet.chino.tv.ui.settings.Section
+import cloud.nalet.chino.tv.ui.settings.audioLanguageChoices
+import cloud.nalet.chino.tv.ui.settings.subtitleLanguageChoices
 import coil.Coil
 import coil.ImageLoader
 import coil.annotation.ExperimentalCoilApi
@@ -141,11 +143,22 @@ class FocusScreenshotTest {
     @Test fun navAtRest() = shot("focus_nav_rest") { Nav(focus = null) }
     @Test fun navFocused() = shot("focus_nav_focused", focus = 1) { Nav(focus = it) }
 
-    // Settings' language chips go on to a second line where one is too
-    // narrow for them: Nederlands focused, on one line, its ring clear of its
-    // neighbours.
-    @Test fun languageChipFocused() =
-        shot("focus_settings_languages_focused", focusLabel = "Nederlands") { Languages() }
+    // Settings' audio language: a row with the language set, focused, the
+    // text under it; and the subtitle language's menu of one choice, the
+    // server's languages by the player's names, German picked.
+    @Test fun languageSettingFocused() =
+        shot("settings_language_focused", focusLabel = "Language") { Languages() }
+    @Test fun languageMenu() = shot("settings_language_menu") {
+        Box(Modifier.width(1152.dp).height(600.dp)) {
+            LanguageMenu(
+                header = "subtitle language",
+                choices = subtitleLanguageChoices(listOf("en", "de", "zh-Hans", "zh-Hant"), "de"),
+                value = "de",
+                onPick = {},
+                onDismiss = {},
+            )
+        }
+    }
 
     // A label or an icon on a filled colour is the page's colour: the
     // detail's actions with every toggle on, and the liked one focused, its
@@ -315,10 +328,11 @@ class FocusScreenshotTest {
         Box(Modifier.width(1152.dp).background(ChinoSurface)) {
             Section(
                 title = "Audio",
-                subtitle = "Default audio language. Picks the closest matching track on each item. " +
-                    "Original keeps whatever the source marks as the default track.",
+                subtitle = "Titles play with audio in the language you pick here, where they have it. " +
+                    "With Original, each title plays in the language it was made in. " +
+                    "A choice in the player applies only to what's playing now.",
             ) {
-                LangPickerRow(label = "Preferred language", value = "orig", options = AUDIO_LANGS, onChange = {})
+                LanguageSettingRow(choices = audioLanguageChoices("orig"), value = "orig", onOpen = {})
             }
         }
     }

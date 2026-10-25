@@ -34,6 +34,8 @@ class SettingsViewModel(
     private val serverHost: String?,
     /** Whether the server takes bug reports ([cloud.nalet.chino.tv.data.ServerFeatures]). */
     private val takesReports: suspend () -> Boolean = { false },
+    /** The server's subtitle languages ([cloud.nalet.chino.tv.data.SubtitleLanguages]). */
+    private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
 ) : ViewModel() {
     init { telemetry.event("screen_view", extra = mapOf("screen" to "settings")) }
 
@@ -44,6 +46,19 @@ class SettingsViewModel(
     val reportsTaken: StateFlow<Boolean> = _reportsTaken.asStateFlow()
 
     init { viewModelScope.launch { _reportsTaken.value = takesReports() } }
+
+    private val _serverSubtitleLanguages = MutableStateFlow<List<String>>(emptyList())
+
+    /** The subtitle languages the server names, its order: what the subtitle
+     *  setting offers (LanguageChoices.kt); none - every language - until it
+     *  has answered, and from a server that names none. */
+    val serverSubtitleLanguages: StateFlow<List<String>> = _serverSubtitleLanguages.asStateFlow()
+
+    init {
+        viewModelScope.launch {
+            _serverSubtitleLanguages.value = runCatching { subtitleLanguages() }.getOrDefault(emptyList())
+        }
+    }
     val state: StateFlow<AppSettings> = store.flow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -131,6 +146,7 @@ class SettingsViewModel(
                         .substringBefore("/")
                         .takeIf { it.isNotBlank() },
                     takesReports = container.serverFeatures::feedback,
+                    subtitleLanguages = container.subtitleLanguages::get,
                 ) as T
         }
     }

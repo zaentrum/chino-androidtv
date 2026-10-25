@@ -50,6 +50,16 @@ import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
+import androidx.tv.material3.Icon
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.semantics
+import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChoiceMenu
+import cloud.nalet.chino.tv.ui.theme.ChoiceRow
+import cloud.nalet.chino.tv.ui.theme.scrim
+import com.composables.icons.lucide.ChevronDown
+import com.composables.icons.lucide.Lucide
 
 @Composable
 fun SettingsScreen(
@@ -79,6 +89,15 @@ fun SettingsScreen(
     val reportsTaken by viewModel.reportsTaken.collectAsState()
     val bugReport by viewModel.bugReport.collectAsState()
     var showReportPanel by remember { mutableStateOf(false) }
+    // The languages each setting offers (LanguageChoices.kt): the server's
+    // subtitle languages, every language for the audio.
+    val serverLanguages by viewModel.serverSubtitleLanguages.collectAsState()
+    val subtitleChoices = remember(serverLanguages, s.preferredSubLang) {
+        subtitleLanguageChoices(serverLanguages, s.preferredSubLang)
+    }
+    val audioChoices = remember(s.preferredAudioLang) { audioLanguageChoices(s.preferredAudioLang) }
+    // The language menu open, if one is.
+    var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
     // Integrated into the same shell as the rest of the app — rail (Settings
     // active) + top bar — instead of a standalone full-screen page.
     Surface(modifier = Modifier.fillMaxSize()) {
@@ -148,14 +167,16 @@ fun SettingsScreen(
             }
             Section(
                 title = "Audio",
-                subtitle = "Default audio language. Picks the closest matching track on each item. " +
-                    "Original keeps whatever the source marks as the default track.",
+                // The same text in every app (docs/chino, playback: the audio
+                // setting).
+                subtitle = "Titles play with audio in the language you pick here, where they have it. " +
+                    "With Original, each title plays in the language it was made in. " +
+                    "A choice in the player applies only to what's playing now.",
             ) {
-                LangPickerRow(
-                    label = "Preferred language",
+                LanguageSettingRow(
+                    choices = audioChoices,
                     value = s.preferredAudioLang,
-                    options = AUDIO_LANGS,
-                    onChange = viewModel::setPreferredAudioLang,
+                    onOpen = { languageMenu = LanguageMenuFor.Audio },
                 )
             }
             Section(
@@ -165,11 +186,10 @@ fun SettingsScreen(
                     "language. Otherwise, only the foreign-language parts get subtitles, where a title has them. " +
                     "A choice in the player applies only to what's playing now.",
             ) {
-                LangPickerRow(
-                    label = "Preferred language",
+                LanguageSettingRow(
+                    choices = subtitleChoices,
                     value = s.preferredSubLang,
-                    options = SUB_LANGS,
-                    onChange = viewModel::setPreferredSubLang,
+                    onOpen = { languageMenu = LanguageMenuFor.Subtitles },
                 )
             }
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
@@ -245,6 +265,23 @@ fun SettingsScreen(
             }
                 }
             }
+        }
+        when (languageMenu) {
+            LanguageMenuFor.Audio -> LanguageMenu(
+                header = "audio language",
+                choices = audioChoices,
+                value = s.preferredAudioLang,
+                onPick = { code -> viewModel.setPreferredAudioLang(code); languageMenu = null },
+                onDismiss = { languageMenu = null },
+            )
+            LanguageMenuFor.Subtitles -> LanguageMenu(
+                header = "subtitle language",
+                choices = subtitleChoices,
+                value = s.preferredSubLang,
+                onPick = { code -> viewModel.setPreferredSubLang(code); languageMenu = null },
+                onDismiss = { languageMenu = null },
+            )
+            null -> Unit
         }
         if (showReportPanel) {
             ReportProblemDialog(
@@ -390,56 +427,88 @@ private fun ReportDialogRow(
     }
 }
 
-// Shared ISO-639-1 language list offered by both pickers. The leading sentinel
-// row differs: subtitles offer "Off" (disable), audio offers "Original" (keep
-// the source's default track) — mirroring chino-web's subtitles.preferredLang
-// ('…'|'off') vs audio.preferredLang ('…'|'orig').
-private val LANG_CHOICES = listOf(
-    "en" to "English",
-    "de" to "Deutsch",
-    "fr" to "Français",
-    "es" to "Español",
-    "it" to "Italiano",
-    "ja" to "日本語",
-    "pt" to "Português",
-    "nl" to "Nederlands",
-)
-private val SUB_LANGS = listOf("off" to "Off") + LANG_CHOICES
-internal val AUDIO_LANGS = listOf("orig" to "Original") + LANG_CHOICES
+/** Which language setting's menu is open. */
+private enum class LanguageMenuFor { Audio, Subtitles }
 
-@OptIn(ExperimentalLayoutApi::class)
+/**
+ * A language setting: a row in the focus style with the language set ("Off",
+ * "Original", "German"), which opens its menu of one choice ([LanguageMenu]),
+ * as the languages can be many - every language, where the server names none.
+ */
 @Composable
-internal fun LangPickerRow(
-    label: String,
+internal fun LanguageSettingRow(
+    choices: List<LanguageChoice>,
     value: String,
-    options: List<Pair<String, String>>,
-    onChange: (String) -> Unit,
+    onOpen: () -> Unit,
+    focus: cloud.nalet.chino.tv.ui.theme.ItemFocus = rememberItemFocus(),
 ) {
-    Column(
+    val name = chosenLanguage(choices, value)?.name ?: choices.first().name
+    Row(
         modifier = Modifier
+            // Set in from the section's sides by more than a focused row
+            // grows (1 % each side), its text where the other rows' is.
+            .padding(horizontal = 8.dp)
             .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 12.dp),
-        verticalArrangement = Arrangement.spacedBy(8.dp),
+            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
+            .semantics(mergeDescendants = true) {}
+            .focusable()
+            .onKeyEvent { e ->
+                val ok = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
+                    e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
+                if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
+                    onOpen(); true
+                } else ok
+            }
+            .clickable(onClick = onOpen)
+            .padding(horizontal = 8.dp, vertical = 14.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-        // The chips go on to another line where they do not fit on one, each
-        // on one line, and 12 dp apart: a focused one's ring and growth stay
-        // clear of its neighbours.
-        FlowRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-            verticalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-        ) {
-            options.forEach { (code, name) ->
-                val on = value == code
-                // A chip: filled in the accent while chosen, plain otherwise.
-                ChinoButton(
-                    onClick = { onChange(code) },
-                    container = if (on) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
-                    content = if (on) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
-                    filled = on,
-                ) {
-                    Text(text = name)
-                }
+        Text(
+            text = "Language",
+            color = MaterialTheme.colorScheme.onSurface,
+            fontWeight = FontWeight.Medium,
+            modifier = Modifier.weight(1f),
+        )
+        Text(text = name, color = ChinoFocus.title(ChinoText, focus.focused))
+        Icon(
+            imageVector = Lucide.ChevronDown,
+            contentDescription = null,
+            tint = ChinoFocus.text(ChinoMuted, focus.focused),
+            modifier = Modifier.size(18.dp),
+        )
+    }
+}
+
+/**
+ * A language setting's menu of one choice (ChoiceMenu, the player's menus'
+ * look): [choices] by name, the one set picked and focused first; OK picks
+ * and closes, BACK closes.
+ */
+@Composable
+internal fun LanguageMenu(
+    header: String,
+    choices: List<LanguageChoice>,
+    value: String,
+    onPick: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BackHandler { onDismiss() }
+    val picked = chosenLanguage(choices, value)?.code ?: choices.first().code
+    val focusRequester = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
+    Box(
+        modifier = Modifier.fillMaxSize().scrim(),
+        contentAlignment = Alignment.Center,
+    ) {
+        ChoiceMenu(header = header, width = 360.dp, maxHeight = 440.dp) {
+            choices.forEach { choice ->
+                ChoiceRow(
+                    label = choice.name,
+                    selected = choice.code == picked,
+                    focusRequester = focusRequester.takeIf { choice.code == picked },
+                    onClick = { onPick(choice.code) },
+                )
             }
         }
     }
@@ -461,17 +530,18 @@ internal fun Section(
             fontWeight = FontWeight.SemiBold,
             color = Color.White,
         )
+        // Not clipped: a focused row grows past the section's edge.
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(MaterialTheme.colorScheme.surface)
+                .padding(vertical = 8.dp),
+        ) { content() }
+        // What the setting does, under it: read after the choice it explains.
         Text(
             text = subtitle,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .clip(RectangleShape)
-                .background(MaterialTheme.colorScheme.surface)
-                .padding(vertical = 8.dp),
-        ) { content() }
     }
 }
 
