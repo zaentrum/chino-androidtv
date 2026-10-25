@@ -62,7 +62,9 @@ import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.library.CardAction
-import cloud.nalet.chino.tv.ui.library.CardActionsMenu
+import cloud.nalet.chino.tv.ui.library.CardMenuOverlay
+import cloud.nalet.chino.tv.ui.library.CardMenuRequest
+import cloud.nalet.chino.tv.ui.library.besidesOf
 import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
@@ -157,19 +159,17 @@ fun BrowseScreen(
                     }
                 }
             }
-            activeCardMenu?.let { req ->
-                CardActionsMenu(
-                    title = req.title,
-                    actions = req.actions,
-                    onDismiss = { activeCardMenu = null },
-                )
-            }
+            // Closing it gives the focus back to the card that opened it, or
+            // the one beside it where a pick took it away, else the first
+            // chip - never the rail's Home.
+            CardMenuOverlay(
+                request = activeCardMenu,
+                onClose = { activeCardMenu = null },
+                fallback = firstChip,
+            )
         }
     }
 }
-
-/** What a grid card hands [BrowseScreen] to open the shared actions menu. */
-private data class CardMenuRequest(val title: String, val actions: List<CardAction>)
 
 @Composable
 private fun BrowseGrid(
@@ -242,6 +242,10 @@ private fun BrowseGrid(
                         CardMenuRequest(
                             title = item.title,
                             actions = cardActions(item, onPlay, watched) { next -> onToggleWatched(item.id, next) },
+                            opener = returnFocus?.requester(item.id),
+                            besides = returnFocus?.let { r ->
+                                besidesOf(s.items.indexOf(item), s.items.size) { i -> r.requester(s.items[i].id) }
+                            }.orEmpty(),
                         ),
                     )
                 },

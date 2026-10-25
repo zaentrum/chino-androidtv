@@ -506,6 +506,28 @@ suspend fun requestSoon(target: FocusRequester, frames: Int = 4): Boolean {
     return false
 }
 
+/** Asks for the focus and tells whether the item has it now: false where it
+ *  is gone - off its list, its requester left on nothing that can take it -
+ *  or cannot take it. */
+fun FocusRequester.takesFocus(): Boolean = runCatching {
+    requestFocus()
+    // Only the item that has the focus can hold it.
+    captureFocus().also { if (it) freeFocus() }
+}.getOrDefault(false)
+
+/** Gives the focus to the first of [targets] that takes it ([takesFocus]),
+ *  each asked over the next [frames] frames until it is laid out; true once
+ *  one has it. */
+suspend fun focusFirstOf(targets: List<FocusRequester>, frames: Int = 2): Boolean {
+    for (target in targets) {
+        repeat(frames) {
+            if (target.takesFocus()) return true
+            withFrameNanos { }
+        }
+    }
+    return false
+}
+
 /**
  * A page's controls in reading order, for the remote (Settings): RIGHT goes
  * to the next one - beside it, else the first of the next row - never up the

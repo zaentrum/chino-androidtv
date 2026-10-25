@@ -89,6 +89,10 @@ import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
 import cloud.nalet.chino.tv.ui.theme.runToScreenEnd
 import cloud.nalet.chino.tv.ui.theme.ReturnFocus
 import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
+import cloud.nalet.chino.tv.ui.theme.focusFirstOf
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.layout.IntrinsicSize
+import androidx.compose.ui.input.pointer.pointerInput
 import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.LoadError
 import coil.compose.AsyncImage
@@ -475,19 +479,68 @@ internal fun LibraryContent(
         }
         // Card-actions overlay — a single instance hosted above the whole page
         // so its scrim dims the rail + topbar + shelves. Opened by hold-OK on
-        // any card (Home rails or CW shelf); BACK / scrim tap closes it.
-        activeCardMenu?.let { req ->
-            CardActionsMenu(
-                title = req.title,
-                actions = req.actions,
-                onDismiss = { activeCardMenu = null },
-            )
-        }
+        // any card (Home rails or CW shelf); BACK / scrim tap closes it, the
+        // focus back on the card - or, where a pick took the card off its
+        // shelf, the one beside it, else the hero's play.
+        CardMenuOverlay(
+            request = activeCardMenu,
+            onClose = { activeCardMenu = null },
+            fallback = heroPlayFocus,
+        )
     }
 }
 
-/** What a card hands [LibraryContent] to open the shared actions menu. */
-internal data class CardMenuRequest(val title: String, val actions: List<CardAction>)
+/**
+ * What a card hands its screen to open the shared actions menu: its [title]
+ * and [actions], and where the focus goes back to as the menu closes - the
+ * card that opened it ([opener]), or, where a pick took that card off the
+ * screen (marked as watched off an unwatched shelf, removed from continue
+ * watching), the first of [besides] still there: the card after it, then
+ * the one before.
+ */
+internal data class CardMenuRequest(
+    val title: String,
+    val actions: List<CardAction>,
+    val opener: FocusRequester? = null,
+    val besides: List<FocusRequester> = emptyList(),
+)
+
+/** The cards beside the one at [index] of [count], the one after it first:
+ *  where the focus goes where a card's menu took that card away. */
+internal fun <T> besidesOf(index: Int, count: Int, requester: (Int) -> T): List<T> =
+    listOf(index + 1, index - 1).filter { it in 0 until count }.map(requester)
+
+/**
+ * The card menu [request] opens, while there is one, and the focus given back
+ * as it closes - a pick, BACK, a tap on the scrim: to the card that opened it,
+ * else to the first of the cards beside it still on the screen, else to
+ * [fallback] - never to the first item on the screen, the rail's Home, where
+ * the next OK would leave the screen.
+ */
+@Composable
+internal fun CardMenuOverlay(
+    request: CardMenuRequest?,
+    onClose: () -> Unit,
+    fallback: FocusRequester? = null,
+) {
+    // Each close once, the menu that closed by its identity: two menus of
+    // one card are two closes.
+    var closed by remember { mutableStateOf<CardMenuRequest?>(null, androidx.compose.runtime.referentialEqualityPolicy()) }
+    request?.let { req ->
+        CardActionsMenu(
+            title = req.title,
+            actions = req.actions,
+            onDismiss = { closed = req; onClose() },
+        )
+    }
+    LaunchedEffect(closed) {
+        val req = closed ?: return@LaunchedEffect
+        // A frame for the menu to go and for what the pick changed - a card
+        // off its shelf - to be laid out.
+        androidx.compose.runtime.withFrameNanos { }
+        focusFirstOf(listOfNotNull(req.opener) + req.besides + listOfNotNull(fallback))
+    }
+}
 
 /** The hero's "see details", as [ReturnFocus] knows it. */
 private const val HERO_DETAILS = "hero/details"
@@ -868,7 +921,16 @@ private fun ContinueWatchingRow(
                         )
                     }
                 }
-                onShowMenu(CardMenuRequest(title = cardTitle, actions = actions))
+                onShowMenu(
+                    CardMenuRequest(
+                        title = cardTitle,
+                        actions = actions,
+                        opener = returnFocus?.requester(key),
+                        besides = returnFocus?.let { r ->
+                            besidesOf(items.indexOf(item), items.size) { i -> r.requester("$shelf/${items[i].id}") }
+                        }.orEmpty(),
+                    ),
+                )
             }
             ContinueWatchingCard(
                 item = item,
@@ -1281,6 +1343,10 @@ internal fun ItemGrid(
                             actions = cardActions(item, onPlay?.let { play -> { id: String -> returnFocus?.opens(key); play(id) } }, watched) { next ->
                                 onToggleWatched(item.id, next)
                             },
+                            opener = returnFocus?.requester(key),
+                            besides = returnFocus?.let { r ->
+                                besidesOf(items.indexOf(item), items.size) { i -> r.requester("$shelf/${items[i].id}") }
+                            }.orEmpty(),
                         ),
                     )
                 },
@@ -1503,6 +1569,13 @@ internal fun cardActions(item: Item, onPlay: ((String) -> Unit)?, watched: Boole
         add(watchedCardAction(watched, onToggleWatched))
     }
 
+/** How narrow a card menu gets, for a short title and short labels. */
+internal val CARD_MENU_MIN_WIDTH = 320.dp
+
+/** A card menu's widest: past it, a label wraps rather than being cut. */
+internal val CARD_MENU_MAX_WIDTH = 560.dp
+
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun CardActionsMenu(
     title: String,
@@ -1516,21 +1589,27 @@ internal fun CardActionsMenu(
         modifier = Modifier
             .fillMaxSize()
             // Scrim — dim the page behind so the focused menu reads at 10ft.
-            // The scrim itself is clickable so a pointer tap outside dismisses;
-            // DPAD users press BACK (handled above).
+            // A tap on it outside the menu closes it; it is no stop of the
+            // focus - a clickable would be one, the parent of the rows, which
+            // the remote's BACK leaves the rows for before it closes the menu.
             .scrim()
-            .clickable(onClick = onDismiss),
+            .pointerInput(onDismiss) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center,
     ) {
         // Its rows set in from its sides, so a focused row's growth stays
-        // inside it, as in every menu (ChoiceMenu).
+        // inside it, as in every menu (ChoiceMenu). As wide as its longest
+        // label, so none is cut ("remove from continue watching"); past its
+        // widest a label wraps. The focus stays inside while it is open.
         Column(
             modifier = Modifier
-                .width(320.dp)
+                .focusProperties { exit = { FocusRequester.Cancel } }
+                .focusGroup()
+                .widthIn(min = CARD_MENU_MIN_WIDTH, max = CARD_MENU_MAX_WIDTH)
+                .width(IntrinsicSize.Max)
                 .background(ChinoSurface)
                 .border(1.dp, ChinoBorder, RectangleShape)
-                // Swallow scrim clicks that land on the card itself.
-                .clickable(enabled = false) {}
+                // Swallow scrim taps that land on the menu itself.
+                .pointerInput(Unit) { detectTapGestures { } }
                 .padding(vertical = 4.dp),
         ) {
             // Title row — the item being acted on, muted like the player menu
@@ -1540,7 +1619,7 @@ internal fun CardActionsMenu(
                 color = ChinoMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
-                maxLines = 1,
+                maxLines = 2,
                 overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
                 modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
             )
@@ -1606,8 +1685,9 @@ private fun CardActionRow(
             fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
-            maxLines = 1,
-            overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
+            // Never cut: the menu is as wide as its longest label, and one
+            // past the menu's widest wraps.
+            modifier = Modifier.weight(1f, fill = false),
         )
     }
 }

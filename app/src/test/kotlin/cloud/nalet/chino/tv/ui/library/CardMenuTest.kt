@@ -10,11 +10,14 @@ import cloud.nalet.chino.tv.ui.theme.ChinoTvTheme
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
+import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * A card's menu, as chino-web's (docs/chino, title actions): "play", or
@@ -24,6 +27,7 @@ import org.robolectric.annotation.Config
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w960dp-h540dp-xhdpi")
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 class CardMenuTest {
     @get:Rule val compose = createComposeRule()
 
@@ -77,5 +81,38 @@ class CardMenuTest {
             compose.onNode(hasText(label)).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
             assertEquals(label, ChinoMonoFamily, results.single().layoutInput.style.fontFamily)
         }
+    }
+
+    @Test
+    fun `no label is cut - the menu is as wide as its longest, a long title wraps`() {
+        compose.setContent {
+            ChinoTvTheme {
+                CardActionsMenu(
+                    title = "The Lighthouse Keeper's Very Long Winter Journey Home Across the Northern Sea and Back Again",
+                    actions = listOf(
+                        playCardAction(resumes = true) {},
+                        watchedCardAction(watched = false) {},
+                        CardAction(icon = Lucide.X, label = REMOVE_FROM_CONTINUE_WATCHING, destructive = true) {},
+                    ),
+                    onDismiss = {},
+                )
+            }
+        }
+        compose.waitForIdle()
+        for (label in listOf("resume", "mark as watched", REMOVE_FROM_CONTINUE_WATCHING)) {
+            val results = mutableListOf<TextLayoutResult>()
+            compose.onNode(hasText(label)).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(results)
+            val text = results.single()
+            assertEquals("$label on one line", 1, text.lineCount)
+            assertFalse("$label cut", text.hasVisualOverflow)
+            assertFalse("$label cut", text.isLineEllipsized(0))
+        }
+        // The longest label is wider than the old fixed 320 dp left it.
+        val row = compose.onNode(hasText(REMOVE_FROM_CONTINUE_WATCHING)).fetchSemanticsNode().boundsInRoot
+        assertTrue("its row is ${row.width / 2f} dp", row.width / 2f > 300f && row.width / 2f <= CARD_MENU_MAX_WIDTH.value)
+        val title = mutableListOf<TextLayoutResult>()
+        compose.onNode(hasText("Lighthouse", substring = true)).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(title)
+        assertEquals("the title wraps", 2, title.single().lineCount)
+        assertFalse("the title cut", title.single().isLineEllipsized(1))
     }
 }
