@@ -118,6 +118,19 @@ class LibraryViewModel(
     fun refresh() {
         _state.value = LibraryUiState.Loading
         viewModelScope.launch {
+            // Continue watching, read beside the rails once the player's saves
+            // are answered ([ProgressSaves.settled]): the player's Home button
+            // builds this page anew while the player goes, before its last save
+            // has left, and read at once the shelf would show the position
+            // before it - the card's bar and its resume where the viewer was
+            // before, a movie just finished still on the shelf. Only the shelf
+            // waits, the rails are fetched meanwhile; with no player up it reads
+            // at once. Best-effort - empty list on failure (chino-api can return
+            // an empty body if the table has no rows for this user).
+            val cwDef = async {
+                progressSaves.settled()
+                runCatching { api.continueWatching().items }.getOrDefault(emptyList())
+            }
             _state.value = try {
                 // Fan out: fetch movies + series pages in parallel when the user
                 // hasn't narrowed by type. When they have, the off-axis row goes
@@ -158,9 +171,6 @@ class LibraryViewModel(
                     }
                     mDef.await() to sDef.await()
                 }
-                // continue-watching is best-effort — empty list on failure (chino-api
-                // can return an empty body if the table has no rows for this user).
-                val cw = runCatching { api.continueWatching().items }.getOrDefault(emptyList())
                 if (cachedGenres.isEmpty()) {
                     cachedGenres = runCatching { api.listGenres().genres }.getOrDefault(emptyList())
                 }
@@ -218,6 +228,7 @@ class LibraryViewModel(
                 // Stream-token mint is a blocking helper that does an OkHttp call;
                 // run on IO so we don't block the main thread.
                 val token = withContext(Dispatchers.IO) { streamTokens.valid() }
+                val cw = cwDef.await()
                 LibraryUiState.Ready(
                     movies = moviesPage.items,
                     series = seriesPage.items,

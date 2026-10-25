@@ -13,7 +13,11 @@ import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.ItemsPage
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
+import kotlinx.coroutines.CompletableDeferred
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
@@ -23,7 +27,7 @@ import org.robolectric.Shadows.shadowOf
  * Home back from the player reads continue watching once the player's last
  * progress save is answered, as the title page does: the shelf shows the
  * position just saved - a movie finished off it - never the one the server
- * held a moment before.
+ * held a moment before. So does Home built anew by the player's Home button.
  */
 @RunWith(RobolectricTestRunner::class)
 class ContinueWatchingRefreshTest {
@@ -33,6 +37,9 @@ class ContinueWatchingRefreshTest {
     /** How many times the shelf was read. */
     @Volatile private var reads = 0
 
+    /** How many times a rail or the hero was read. */
+    @Volatile private var itemReads = 0
+
     private fun row(positionSec: Int) =
         ContinueWatchingItem(id = "m1", title = "Quiet Orchard", positionSec = positionSec, durationSec = 5400, type = "movie")
 
@@ -40,7 +47,7 @@ class ContinueWatchingRefreshTest {
         ChinoApi::class.java.classLoader, arrayOf(ChinoApi::class.java),
     ) { _, method, _ ->
         when (method.name) {
-            "listItems" -> ItemsPage(listOf(Item(id = "m2", title = "Paper Station", kind = "movie", year = 2019)))
+            "listItems" -> { itemReads++; ItemsPage(listOf(Item(id = "m2", title = "Paper Station", kind = "movie", year = 2019))) }
             "listGenres" -> GenresResponse()
             "getItem" -> Item(id = "m2", title = "Paper Station", kind = "movie", year = 2019)
             "continueWatching" -> { reads++; ContinueWatchingResponse(feed) }
@@ -52,9 +59,10 @@ class ContinueWatchingRefreshTest {
         }
     } as ChinoApi
 
-    private fun home(saves: ProgressSaves): LibraryViewModel {
+    /** Home built anew, its first load on its way. */
+    private fun built(saves: ProgressSaves): LibraryViewModel {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
-        val vm = LibraryViewModel(
+        return LibraryViewModel(
             api = api,
             streamTokens = StreamTokenManager(api),
             telemetry = Telemetry(ctx) { null },
@@ -62,6 +70,10 @@ class ContinueWatchingRefreshTest {
             userFlags = UserFlagsRepository(api),
             progressSaves = saves,
         )
+    }
+
+    private fun home(saves: ProgressSaves): LibraryViewModel {
+        val vm = built(saves)
         waitUntil { vm.state.value is LibraryUiState.Ready }
         // The screen's first resume, which the first load covers.
         vm.onScreenResumed()
@@ -132,5 +144,45 @@ class ContinueWatchingRefreshTest {
         vm.onScreenResumed()
         waitUntil { shelf(vm).single().positionSec == 900 }
         assertEquals(readsBefore + 1, reads)
+    }
+
+    @Test
+    fun `Home built anew as the player goes shows the player's last save, not the position before it`() {
+        val saves = ProgressSaves()
+        // The player is up; its Home button builds Home anew before the
+        // player's last save has left.
+        val player = saves.hold()
+        val vm = built(saves)
+        runFor(200)
+        assertEquals("no shelf read while the player's last save is on its way", 0, reads)
+        assertTrue("the rails are fetched meanwhile", itemReads > 0)
+        assertTrue(vm.state.value is LibraryUiState.Loading)
+        // The player goes: its last save, at 0:51 after rewinding, leaves,
+        // and Home reads once it is answered.
+        val answered = CompletableDeferred<Unit>()
+        val last = saves.send(CoroutineScope(Dispatchers.Default)) {
+            answered.await()
+            feed = listOf(row(51))
+        }
+        player.closeAfter(last)
+        runFor(100)
+        assertEquals("no shelf read until the last save is answered", 0, reads)
+        answered.complete(Unit)
+        waitUntil { vm.state.value is LibraryUiState.Ready }
+        assertEquals(51, shelf(vm).single().positionSec)
+        assertEquals(1, reads)
+    }
+
+    @Test
+    fun `a movie finished and left with the player's Home button is off the shelf`() {
+        val saves = ProgressSaves()
+        val player = saves.hold()
+        val vm = built(saves)
+        runFor(100)
+        // Finished: once the last save is answered the server drops it.
+        val last = saves.send(CoroutineScope(Dispatchers.Default)) { feed = emptyList() }
+        player.closeAfter(last)
+        waitUntil { vm.state.value is LibraryUiState.Ready }
+        assertTrue(shelf(vm).isEmpty())
     }
 }
