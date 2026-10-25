@@ -5,6 +5,7 @@ import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -13,7 +14,13 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.test.SemanticsNodeInteraction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
-import androidx.compose.ui.test.junit4.createComposeRule
+import androidx.compose.ui.test.junit4.createAndroidComposeRule
+import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.toArgb
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.ui.unit.dp
+import org.junit.Assert.assertEquals
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.player.PlayerBottomChrome
@@ -25,6 +32,7 @@ import org.junit.Test
 import org.junit.runner.RunWith
 import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
+import org.robolectric.annotation.GraphicsMode
 
 /**
  * The TV's safe area (the design system's tv focus): everything that takes
@@ -33,9 +41,10 @@ import org.robolectric.annotation.Config
  * and the player's controls - on the TV's 960 × 540 dp (1920 × 1080 px).
  */
 @RunWith(RobolectricTestRunner::class)
+@GraphicsMode(GraphicsMode.Mode.NATIVE)
 @Config(qualifiers = "w960dp-h540dp-xhdpi")
 class SafeAreaTest {
-    @get:Rule val compose = createComposeRule()
+    @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     /** The screen in the TV's dp: 2 px each on the 1920 × 1080 screen. */
     private val safe = Rect(48f, 27f, 960f - 48f, 540f - 27f)
@@ -85,6 +94,41 @@ class SafeAreaTest {
         for (name in listOf("Home", "Movies", "Series", "Watchlist", "Zap", "Settings", "Account")) control(name)
         // The search field, a row: its ring inside its edge, 2 % growth.
         assertInside("search", reach(compose.onNode(hasText("Search movies, shows…")), 1.02f, ringOutside = false))
+    }
+
+    @Test
+    fun `a page's scrim and its backdrop reach past the safe area to the screen's edges`() {
+        show {
+            SafeAreaScreen {
+                ChinoPage {
+                    Box(Modifier.fillMaxWidth().height(100.dp).bleedToScreenEdges(bottom = false).background(Color.Red))
+                    Box(Modifier.fillMaxSize().padding(top = 200.dp).scrim())
+                }
+            }
+        }
+        // The window as drawn (the screenshot tests' way under Robolectric).
+        val view = compose.activity.window.decorView
+        val shot = android.graphics.Bitmap.createBitmap(view.width, view.height, android.graphics.Bitmap.Config.ARGB_8888)
+        compose.runOnIdle { view.draw(android.graphics.Canvas(shot)) }
+        // The backdrop at the screen's top-left corner, past the safe area.
+        assertEquals(Color.Red.toArgb(), shot.getPixel(2, 2))
+        assertEquals(Color.Red.toArgb(), shot.getPixel(shot.width - 3, 2))
+        // The scrim at the bottom corners: the canvas dimmed, not the canvas.
+        val canvas = ChinoBg.toArgb()
+        val corner = shot.getPixel(2, shot.height - 3)
+        assertTrue("the scrim reaches the corner", corner != canvas)
+        assertEquals(ScrimColor.compositeOverBg().toArgb(), corner, 0x030303)
+        assertTrue(shot.getPixel(shot.width - 3, shot.height - 3) != canvas)
+    }
+
+    private fun Color.compositeOverBg(): Color = compositeOver(ChinoBg)
+
+    private fun assertEquals(expected: Int, actual: Int, tolerance: Int) {
+        fun ch(c: Int, s: Int) = (c shr s) and 0xFF
+        for (s in listOf(16, 8, 0)) {
+            assertTrue("channel ${s / 8}: ${Integer.toHexString(actual)} vs ${Integer.toHexString(expected)}",
+                kotlin.math.abs(ch(expected, s) - ch(actual, s)) <= (tolerance and 0xFF))
+        }
     }
 
     @Test

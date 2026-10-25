@@ -1,7 +1,7 @@
 package cloud.nalet.chino.tv.ui.person
 
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
@@ -61,7 +61,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.ui.browse.PosterGridCard
@@ -102,7 +101,7 @@ fun PersonScreen(
     // True while the whole biography is up over the page; BACK closes it.
     var readingBiography by remember { mutableStateOf(false) }
     val readMoreFocus = remember { FocusRequester() }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSideRail(

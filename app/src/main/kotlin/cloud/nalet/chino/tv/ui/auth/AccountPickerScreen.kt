@@ -3,7 +3,7 @@ package cloud.nalet.chino.tv.ui.auth
 import androidx.tv.material3.MaterialTheme
 import cloud.nalet.chino.tv.ui.theme.ChinoDangerButton
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoError
@@ -80,7 +80,7 @@ fun AccountPickerScreen(
     val accounts by accountStore.accounts.collectAsState(initial = seedAccounts)
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<Account?>(null) }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Column(
             // Inside the safe area the shell lays it out in.
             modifier = Modifier.fillMaxSize().padding(24.dp),

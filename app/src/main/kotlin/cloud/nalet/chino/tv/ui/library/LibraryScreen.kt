@@ -4,7 +4,7 @@ import androidx.compose.ui.semantics.selected
 import androidx.compose.ui.semantics.semantics
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -61,7 +61,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.R
 import cloud.nalet.chino.tv.data.model.Item
@@ -146,7 +145,7 @@ fun LibraryScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         when (val s = state) {
             LibraryUiState.Loading -> CenterText(stringResource(R.string.library_loading))
             // The screen's way on: try again, focused first.

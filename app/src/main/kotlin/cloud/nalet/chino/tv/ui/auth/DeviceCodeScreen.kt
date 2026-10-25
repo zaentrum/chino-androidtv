@@ -1,6 +1,6 @@
 package cloud.nalet.chino.tv.ui.auth
 
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -54,7 +54,7 @@ fun DeviceCodeScreen(
         if (state is AuthUiState.Authenticated) onAuthenticated()
     }
 
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         // Inside the safe area the shell lays it out in.
         Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Column(

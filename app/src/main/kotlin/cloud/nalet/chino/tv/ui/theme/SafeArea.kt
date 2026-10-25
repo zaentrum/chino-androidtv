@@ -16,7 +16,9 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.layout
 import androidx.compose.ui.unit.Dp
-import androidx.tv.material3.SurfaceDefaults
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.tv.material3.LocalContentColor
+import androidx.tv.material3.MaterialTheme
 
 /**
  * The TV's safe area (the design system's tv focus): the part of the picture
@@ -44,8 +46,18 @@ object SafeArea {
     val Insets: PaddingValues = PaddingValues(horizontal = Horizontal, vertical = Vertical)
 }
 
-/** A page's own background: the canvas, --bg, out to the screen's edges. */
-val PageColors @Composable get() = SurfaceDefaults.colors(containerColor = ChinoBg)
+/**
+ * A page of the shell, in [SafeAreaScreen]: its text in fg-2 on the canvas
+ * the shell paints out to the screen's edges. Not clipped - as a tv-material
+ * Surface would be - so a backdrop or a scrim on it reaches past the safe
+ * area to the screen's edges.
+ */
+@Composable
+fun ChinoPage(content: @Composable BoxScope.() -> Unit) {
+    CompositionLocalProvider(LocalContentColor provides MaterialTheme.colorScheme.onSurface) {
+        Box(modifier = Modifier.fillMaxSize(), content = content)
+    }
+}
 
 /** A screen of the shell, inside the safe area, on the canvas out to the
  *  screen's edges. */

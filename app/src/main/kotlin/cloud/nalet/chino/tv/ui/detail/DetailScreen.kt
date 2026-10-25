@@ -1,7 +1,7 @@
 package cloud.nalet.chino.tv.ui.detail
 
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
@@ -64,7 +64,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.api.Episode
 import cloud.nalet.chino.tv.data.api.Season
@@ -175,7 +174,7 @@ fun DetailScreen(
     val play: (Boolean) -> Unit = { resume ->
         onPlay(viewModel.playTarget(), if (resume) viewModel.resumeSecond() else 0)
     }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
             // The screen's way on: try again, focused first; back where the

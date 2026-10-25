@@ -1,7 +1,7 @@
 package cloud.nalet.chino.tv.ui.watchlist
 
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -57,7 +57,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.auth.Account
@@ -114,7 +113,7 @@ fun WatchlistScreen(
     val openItemsLoading by viewModel.openItemsLoading.collectAsState()
     // Modal overlay: the create / rename name field. BACK dismisses.
     var overlay by remember { mutableStateOf<ListOverlay?>(null) }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSideRail(

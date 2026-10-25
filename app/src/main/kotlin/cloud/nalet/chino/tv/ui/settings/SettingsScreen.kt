@@ -1,7 +1,7 @@
 package cloud.nalet.chino.tv.ui.settings
 
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -50,7 +50,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.compose.foundation.clickable
@@ -102,7 +101,7 @@ fun SettingsScreen(
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
     // Integrated into the same shell as the rest of the app — rail (Settings
     // active) + top bar — instead of a standalone full-screen page.
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Row(modifier = Modifier.fillMaxSize()) {
             cloud.nalet.chino.tv.ui.library.TvSideRail(
                 activeType = null,

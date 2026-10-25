@@ -1,7 +1,7 @@
 package cloud.nalet.chino.tv.ui.profile
 
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -41,7 +41,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.MaterialTheme
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.model.Item
@@ -86,7 +85,7 @@ fun ProfileScreen(
     activeAccount: Account? = null,
 ) {
     val state by viewModel.state.collectAsState()
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Row(modifier = Modifier.fillMaxSize()) {
             TvSideRail(
                 activeType = null,

@@ -4,7 +4,7 @@ import androidx.tv.material3.MaterialTheme
 import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.ChinoDangerButton
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -33,7 +33,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.isFinal
 import cloud.nalet.chino.tv.data.text
@@ -90,7 +89,7 @@ fun DeleteAccountScreen(
     LaunchedEffect(final) { runCatching { cancelFocus.requestFocus() } }
 
     val who = viewModel.account?.let { a -> a.email.ifBlank { a.displayName } }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         // Inside the safe area the shell lays it out in.
         Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Column(

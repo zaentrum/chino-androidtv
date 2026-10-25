@@ -2,7 +2,7 @@ package cloud.nalet.chino.tv.ui.notices
 
 import androidx.tv.material3.MaterialTheme
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
-import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -49,7 +49,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.tv.material3.Icon
-import androidx.tv.material3.Surface
 import androidx.tv.material3.Text
 import cloud.nalet.chino.tv.data.Notice
 import cloud.nalet.chino.tv.data.NoticeList
@@ -112,7 +111,7 @@ fun NoticesScreen(
             value = System.currentTimeMillis()
         }
     }
-    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+    ChinoPage {
         Row(modifier = Modifier.fillMaxSize()) {
             TvSideRail(
                 activeType = "notices", // non-matching → no rail item highlighted
