@@ -99,6 +99,21 @@ fun SettingsScreen(
     val audioChoices = remember(s.preferredAudioLang) { audioLanguageChoices(s.preferredAudioLang) }
     // The language menu open, if one is.
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
+    // A menu or the report dialog that closes - a pick, BACK, close - takes
+    // its focused row with it: the focus goes back to the row or the button
+    // that opened it, never to the first item on the screen (the rail's
+    // Home, where the next OK would leave Settings).
+    val audioRow = remember { FocusRequester() }
+    val subtitleRow = remember { FocusRequester() }
+    val reportButton = remember { FocusRequester() }
+    var opener by remember { mutableStateOf<FocusRequester?>(null) }
+    val overlayOpen = languageMenu != null || showReportPanel
+    LaunchedEffect(overlayOpen) {
+        if (!overlayOpen) {
+            opener?.let { runCatching { it.requestFocus() } }
+            opener = null
+        }
+    }
     // Integrated into the same shell as the rest of the app — rail (Settings
     // active) + top bar — instead of a standalone full-screen page.
     ChinoPage {
@@ -177,7 +192,8 @@ fun SettingsScreen(
                 LanguageSettingRow(
                     choices = audioChoices,
                     value = s.preferredAudioLang,
-                    onOpen = { languageMenu = LanguageMenuFor.Audio },
+                    onOpen = { opener = audioRow; languageMenu = LanguageMenuFor.Audio },
+                    focusRequester = audioRow,
                 )
             }
             Section(
@@ -190,7 +206,8 @@ fun SettingsScreen(
                 LanguageSettingRow(
                     choices = subtitleChoices,
                     value = s.preferredSubLang,
-                    onOpen = { languageMenu = LanguageMenuFor.Subtitles },
+                    onOpen = { opener = subtitleRow; languageMenu = LanguageMenuFor.Subtitles },
+                    focusRequester = subtitleRow,
                 )
             }
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
@@ -258,8 +275,10 @@ fun SettingsScreen(
                             // Reset BEFORE showing so a stale Filed/Failed body
                             // from the previous report doesn't flash.
                             viewModel.resetBugReport()
+                            opener = reportButton
                             showReportPanel = true
                         },
+                        modifier = Modifier.focusRequester(reportButton),
                     ) {
                         Text("report a problem")
                     }
@@ -444,6 +463,8 @@ internal fun LanguageSettingRow(
     value: String,
     onOpen: () -> Unit,
     focus: cloud.nalet.chino.tv.ui.theme.ItemFocus = rememberItemFocus(),
+    /** Takes the focus back when the row's menu closes. */
+    focusRequester: FocusRequester? = null,
 ) {
     val name = chosenLanguage(choices, value)?.name ?: choices.first().name
     Row(
@@ -452,6 +473,7 @@ internal fun LanguageSettingRow(
             // grows (1 % each side), its text where the other rows' is.
             .padding(horizontal = 8.dp)
             .fillMaxWidth()
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
             .semantics(mergeDescendants = true) {}
             .focusable()
