@@ -40,7 +40,14 @@ import androidx.compose.ui.graphics.drawscope.DrawScope
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.luminance
+import androidx.compose.ui.input.key.Key
+import androidx.compose.ui.input.key.KeyEventType
+import androidx.compose.ui.input.key.key
+import androidx.compose.ui.input.key.onPreviewKeyEvent
+import androidx.compose.ui.input.key.type
+import androidx.compose.ui.layout.LayoutCoordinates
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.layout.onPlaced
 import androidx.compose.ui.layout.onSizeChanged
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
@@ -220,6 +227,10 @@ val LocalFocusScrollMargin = staticCompositionLocalOf { 0.dp }
  * edge, just inside the ring - so a ring drawn inside a filled part (the
  * parts of add to list, blue in the Watchlist) has the dark colour on both
  * sides and stands out on the fill.
+ *
+ * Inside a [LocalFocusAlong], a focused item also asks for what it shows
+ * along with itself - a page's top, a setting's text - the scroll taking
+ * the larger where both fit, the item alone where they do not.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -244,15 +255,32 @@ fun Modifier.focusStyle(
     val bringIntoView = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
     var measured by remember { mutableStateOf(IntSize.Zero) }
+    val along = LocalFocusAlong.current
+    val placed = remember { Placed() }
     val fill = surface?.let { if (focus.focused && kind.lightsUp && !filled) ChinoFocus.Surface else it }
-    // Scroll the grown item and its ring into view, not only the item: a
-    // scrolling list would stop with the ring past its edge.
-    fun showRoom(size: IntSize) {
+    // The grown item and its ring, not only the item: a scrolling list
+    // would stop with the ring past its edge.
+    fun clearOf(size: IntSize): Rect {
         val room = focusRoom(size, kind, ringPx, gapPx)
-        val clear = Rect(room.left, room.top - marginPx, room.right, room.bottom + marginPx)
+        return Rect(room.left, room.top - marginPx, room.right, room.bottom + marginPx)
+    }
+    // With it, as wide as it, what it shows along - a page's top, a
+    // setting's text: a second request, which holds the first, so the
+    // scroll shows it where both fit and the item alone where they do not.
+    fun showAlong(clear: Rect) {
+        val item = placed.at?.takeIf { it.isAttached } ?: return
+        val span = along?.span(item) ?: return
+        val wide = Rect(clear.left, minOf(clear.top, span.top), clear.right, maxOf(clear.bottom, span.bottom))
+        if (wide != clear) scope.launch { bringIntoView.bringIntoView(wide) }
+    }
+    // Scroll the grown item and its ring into view, and what it shows along.
+    fun showRoom(size: IntSize) {
+        val clear = clearOf(size)
         scope.launch { bringIntoView.bringIntoView(clear) }
+        showAlong(clear)
     }
     return this
+        .onPlaced { placed.at = it }
         .bringIntoViewRequester(bringIntoView)
         .onSizeChanged {
             measured = it
@@ -264,6 +292,18 @@ fun Modifier.focusStyle(
             focus.report(state.isFocused)
             if (state.isFocused) showRoom(measured)
         }
+        // UP from a page's first control shows the page's top, wherever the
+        // focus goes: past the page's head there is nothing to scroll to.
+        .then(
+            if (along?.onUp == true) {
+                Modifier.onPreviewKeyEvent { e ->
+                    if (e.type == KeyEventType.KeyDown && e.key == Key.DirectionUp && focus.focused) showAlong(clearOf(measured))
+                    false
+                }
+            } else {
+                Modifier
+            },
+        )
         // A focused item draws over its neighbours, its ring included.
         .zIndex(if (focus.focused || progress > 0f) 1f else 0f)
         .graphicsLayer {
@@ -300,6 +340,11 @@ fun Modifier.focusStyle(
             }
             if (progress > 0f) drawFocusRing(kind.ringOutside, ringPx / grown, gapPx / grown, progress)
         }
+}
+
+/** Where an item is, for what it shows along with itself. */
+private class Placed {
+    var at: LayoutCoordinates? = null
 }
 
 /** The ring: its stroke inside the edge, or outside it past [gap]. */

@@ -101,6 +101,9 @@ import cloud.nalet.chino.tv.ui.theme.WatchedMark
 import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 import cloud.nalet.chino.tv.ui.theme.bleedToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
+import cloud.nalet.chino.tv.ui.theme.LocalFocusAlong
+import cloud.nalet.chino.tv.ui.theme.PageTop
+import cloud.nalet.chino.tv.ui.theme.pageTop
 import cloud.nalet.chino.tv.ui.theme.runToScreenEnd
 import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
@@ -284,6 +287,10 @@ private fun DetailContent(
     // first of what follows them: the episodes, else more like this.
     val afterCredits = remember { FocusRequester() }
     val followsCredits = s.seasons.isNotEmpty() || s.similar.isNotEmpty()
+    // The page's top - the title, its year and meta, the poster's top -
+    // comes back into view with the focus on its first row, play and the
+    // others: back UP from the credits or the episodes, and UP there.
+    val head = remember { PageTop() }
     Box(
         modifier = Modifier
             .fillMaxSize()
@@ -336,6 +343,7 @@ private fun DetailContent(
                 .fillMaxSize()
                 .scrollsToScreenEdges()
                 .verticalScroll(rememberScrollState())
+                .pageTop(head)
                 // 24dp horizontal = the mobile detail content inset, so the
                 // poster + title + episodes line up with the browse grid you
                 // came from (was 64dp — far more indented than the rest).
@@ -390,6 +398,7 @@ private fun DetailContent(
                 }
                 // Action row sits ABOVE the overview — web order is
                 // title → meta → genres → actions → overview → cast.
+                androidx.compose.runtime.CompositionLocalProvider(LocalFocusAlong provides head) {
                 DetailActions(
                     item = s.item,
                     primaryLabel = primaryLabel,
@@ -404,6 +413,7 @@ private fun DetailContent(
                     onTrailerLaunch = onTrailerLaunch,
                     onPlayTrailer = onPlayTrailer,
                 )
+                }
                 s.item.overview?.let { o ->
                     Text(
                         text = o,

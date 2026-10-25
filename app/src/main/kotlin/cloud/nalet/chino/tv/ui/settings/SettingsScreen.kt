@@ -58,6 +58,13 @@ import cloud.nalet.chino.tv.ui.theme.requestSoon
 import cloud.nalet.chino.tv.ui.theme.SafeArea
 import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
 import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
+import cloud.nalet.chino.tv.ui.theme.LocalFocusAlong
+import cloud.nalet.chino.tv.ui.theme.PageTop
+import cloud.nalet.chino.tv.ui.theme.PartBottom
+import cloud.nalet.chino.tv.ui.theme.and
+import cloud.nalet.chino.tv.ui.theme.pageTop
+import cloud.nalet.chino.tv.ui.theme.partBottom
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.compose.foundation.clickable
@@ -141,6 +148,10 @@ fun SettingsScreen(
     val subtitleRow = order["subtitles"]
     var opener by remember { mutableStateOf<FocusRequester?>(null) }
     val overlayOpen = languageMenu != null || showReportPanel
+    // The page's top, its "settings" heading, comes back into view with the
+    // focus on its first control: back UP from the sections below, and UP
+    // there.
+    val pageTop = remember { PageTop() }
     LaunchedEffect(overlayOpen) {
         if (!overlayOpen) {
             opener?.let { runCatching { it.requestFocus() } }
@@ -181,6 +192,7 @@ fun SettingsScreen(
                         .readingOrderGroup(order)
                         .scrollsToScreenEdges()
                         .verticalScroll(rememberScrollState())
+                        .pageTop(pageTop)
                         .padding(
                             start = 24.dp,
                             end = 24.dp + SafeArea.Horizontal,
@@ -200,13 +212,17 @@ fun SettingsScreen(
                 subtitle = "Skip recurring parts back-to-back without leaving the player. " +
                     "A short countdown gives you a chance to cancel before each skip fires.",
             ) {
-                ToggleRow(
-                    label = "Auto-skip intros & recaps",
-                    help = "Skips the title sequence and any \"Previously on…\" recap at the top of an episode.",
-                    value = s.autoSkipIntro,
-                    onChange = viewModel::setAutoSkipIntro,
-                    modifier = Modifier.inReadingOrder(order, "intro"),
-                )
+                // The page's first control: its top along with it, and the
+                // section's text.
+                CompositionLocalProvider(LocalFocusAlong provides (pageTop and LocalFocusAlong.current)) {
+                    ToggleRow(
+                        label = "Auto-skip intros & recaps",
+                        help = "Skips the title sequence and any \"Previously on…\" recap at the top of an episode.",
+                        value = s.autoSkipIntro,
+                        onChange = viewModel::setAutoSkipIntro,
+                        modifier = Modifier.inReadingOrder(order, "intro"),
+                    )
+                }
                 ToggleRow(
                     label = "Auto-skip credits",
                     help = "Skips the closing credits at the end of an episode.",
@@ -627,14 +643,20 @@ internal fun SettingButtons(content: @Composable androidx.compose.foundation.lay
     )
 }
 
+/** A setting: its [title], its controls, and [subtitle], the text that
+ *  explains them, under them. A focused control brings that text into view
+ *  along with itself where both fit - "Connected to …" under change server,
+ *  the page's last line, never cut at the screen's bottom. */
 @Composable
 internal fun Section(
     title: String,
     subtitle: String,
     content: @Composable () -> Unit,
 ) {
+    val bottom = remember { PartBottom() }
+    val outer = LocalFocusAlong.current
     Column(
-        modifier = Modifier.fillMaxWidth(0.7f),
+        modifier = Modifier.fillMaxWidth(0.7f).partBottom(bottom),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
@@ -649,7 +671,7 @@ internal fun Section(
                 .fillMaxWidth()
                 .background(MaterialTheme.colorScheme.surface)
                 .padding(vertical = 8.dp),
-        ) { content() }
+        ) { CompositionLocalProvider(LocalFocusAlong provides (outer and bottom)) { content() } }
         // What the setting does, under it: read after the choice it explains.
         Text(
             text = subtitle,

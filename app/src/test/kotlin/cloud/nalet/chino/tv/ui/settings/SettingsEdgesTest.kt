@@ -110,7 +110,9 @@ class SettingsEdgesTest {
         assertTrue("the page ends at ${page.right}, ${page.bottom} dp", page.right >= 959.5f && page.bottom >= 539.5f)
         // Down the page with the remote, to its last control: every focused
         // one inside the safe area, and what scrolls by below it shown past
-        // the safe line, down to the bottom edge.
+        // the safe line, down to the bottom edge - where a focused control
+        // brings its setting's text into view, that text rests at the safe
+        // line and the next setting's start shows below it.
         compose.onAllNodes(hasText("Language", substring = true) and SemanticsMatcher.keyIsDefined(SemanticsActions.RequestFocus))[0]
             .performSemanticsAction(SemanticsActions.RequestFocus)
         compose.waitForIdle()
@@ -119,10 +121,10 @@ class SettingsEdgesTest {
             val r = focusedReach()
             assertTrue("focused control reaches $r", r.bottom <= 513.5f && r.top >= 26.5f && r.right <= 912.5f)
             val shown = compose.onAllNodes(hasText("", substring = true)).fetchSemanticsNodes().map { dp(it.boundsInRoot) }
-            if (shown.any { it.top < 513f && it.bottom > 514f && it.bottom <= 540.5f }) crossed = true
+            if (shown.any { it.top < 539.5f && it.bottom > 514f && it.bottom <= 540.5f }) crossed = true
             press(Key.DirectionDown)
         }
-        assertTrue("nothing shown across the safe line while scrolled", crossed)
+        assertTrue("nothing shown past the safe line while scrolled", crossed)
         compose.onNode(isFocused()).assert(hasText("report a problem") and hasClickAction())
     }
 
