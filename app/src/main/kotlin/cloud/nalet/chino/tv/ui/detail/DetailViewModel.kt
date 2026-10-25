@@ -56,8 +56,8 @@ sealed interface DetailUiState {
          *  opened as a series, the episode the viewer is in the middle of,
          *  else the next one; opened on one of its episodes - a
          *  continue-watching card's - that episode, from its own position
-         *  ([entryTarget]). Null for movies and when no episode could be
-         *  found (see SeriesPlay.kt). */
+         *  ([entryTarget]), until the viewer plays on. Null for movies and
+         *  when no episode could be found (see SeriesPlay.kt). */
         val seriesPlay: SeriesPlayTarget? = null,
     ) : DetailUiState
     /** What failed, for the error screen: what it says, and the reason. */
@@ -98,8 +98,15 @@ class DetailViewModel(
         get() = (_state.value as? DetailUiState.Ready)?.item?.id ?: itemId
 
     /** The episode this page was opened on, where it shows the episode's
-     *  series: what its first button plays. */
+     *  series: what its first button plays - until the viewer plays on
+     *  ([entrySeen]); from then null, and the series' state picks the
+     *  episode, as on a series opened as a series. */
     private var entryEpisode: Item? = null
+
+    /** What the page last read of what playing changes, while it plays
+     *  [entryEpisode]: a resume that reads otherwise means the viewer played
+     *  since. */
+    private var entrySeen: SeriesSeen? = null
 
     init {
         telemetry.event("screen_view", itemId = itemId, extra = mapOf("screen" to "detail"))
@@ -117,7 +124,7 @@ class DetailViewModel(
                 // an episodes endpoint server-side.
                 val itemDef = async { api.getItem(itemId) }
                 val progressDef = async {
-                    runCatching { api.getProgress(itemId).positionSec }.getOrElse { 0 }
+                    runCatching { api.getProgress(itemId).positionSec }.getOrNull()
                 }
                 // "More like this" — independent of the item fetch, so kick it
                 // off in parallel. Empty on failure (the shelf just hides).
@@ -125,7 +132,8 @@ class DetailViewModel(
                     runCatching { api.similar(itemId).items }.getOrDefault(emptyList())
                 }
                 val requested = itemDef.await()
-                val resumeSec = progressDef.await()
+                val savedSec = progressDef.await()
+                val resumeSec = savedSec ?: 0
                 // Episode entry: an episode has no season overview of its own, so
                 // transparently load its PARENT SERIES (item + season list) and
                 // remember the originating episode id — DetailScreen then expands
@@ -163,8 +171,10 @@ class DetailViewModel(
                 val continueWatching = continueWatchingDef.await()
                 val episodeResume = continueWatching?.let(::episodeResumeOf).orEmpty()
                 // Opened on an episode, the series' first button names that
-                // episode: "resume S01E03", as from the series' own card.
+                // episode: "resume S01E03", as from the series' own card -
+                // until the viewer plays on (onScreenResumed).
                 entryEpisode = requested.takeIf { focusEpisodeId != null && isSeries }
+                entrySeen = entryEpisode?.let { SeriesSeen.of(seasonsId, savedSec, continueWatching, seasons) }
                 val seriesPlay = when {
                     wantsSeriesPlay -> seriesPlayFor(seasonsId, seasons, continueWatching.orEmpty(), nextEpisodeDef.await())
                     else -> entryEpisode?.let { entryTarget(it, seasons, resumeSec) }
@@ -244,10 +254,15 @@ class DetailViewModel(
      *  movie's "resume 3:10", an episode entry's - and a movie's watched
      *  mark; on a series the continue-watching feed and the episode list, so
      *  the episode progress bars, the watched checks and the episode its
-     *  first button plays are the new ones. It reads once the player's saves
-     *  are answered ([ProgressSaves.settled]): the page resumes as the
-     *  player goes, a frame before the player's last save leaves, and read
-     *  at once it would say the position before it.
+     *  first button plays are the new ones. Opened on an episode, the first
+     *  button names that episode until the viewer plays on - finishes it,
+     *  plays another, here or on another device ([SeriesSeen.playedSince]):
+     *  from then on it goes by the series' state, "play S01E04" after
+     *  S01E03 was finished, as from the series' own card.
+     *  It reads once the player's saves are answered
+     *  ([ProgressSaves.settled]): the page resumes as the player goes, a
+     *  frame before the player's last save leaves, and read at once it would
+     *  say the position before it.
      *  Best-effort: on failure we keep whatever's already on screen. */
     fun onScreenResumed() {
         if (!firstResumeConsumed) {
@@ -257,10 +272,10 @@ class DetailViewModel(
         val ready = _state.value as? DetailUiState.Ready ?: return
         val isSeries = ready.item.kind == "series"
         val seriesId = ready.item.id
-        val entry = entryEpisode
-        val wantsSeriesPlay = isSeries && entry == null
         viewModelScope.launch {
             progressSaves.settled()
+            val entry = entryEpisode
+            val wantsSeriesPlay = isSeries && entry == null
             val fresh = coroutineScope {
                 // The entry's own position: the movie's, the episode's the
                 // page was opened on.
@@ -281,7 +296,7 @@ class DetailViewModel(
             val seriesPlay = when {
                 wantsSeriesPlay && fresh.continueWatching != null ->
                     seriesPlayFor(seriesId, seasons, fresh.continueWatching, fresh.next)
-                entry != null && fresh.positionSec != null -> entryTarget(entry, seasons, resumeSec)
+                entry != null -> entryPlayOn(entry, seriesId, seasons, fresh)
                 else -> null
             }
             val current = _state.value as? DetailUiState.Ready ?: return@launch
@@ -293,6 +308,31 @@ class DetailViewModel(
                 seriesPlay = seriesPlay ?: current.seriesPlay,
             )
         }
+    }
+
+    /** What the first button of a page opened on [entry] plays after a
+     *  resume read [fresh]: the entry from its position now while the
+     *  viewer has not played since; else - the feed read, so the series'
+     *  state is known - the series' episode, as on a series opened as a
+     *  series ([seriesPlayFor]), and from then on ([entryEpisode] null).
+     *  Null where nothing could be read: the button stays as it is. */
+    private suspend fun entryPlayOn(entry: Item, seriesId: String, seasons: List<Season>, fresh: Fresh): SeriesPlayTarget? {
+        val now = SeriesSeen.of(seriesId, fresh.positionSec, fresh.continueWatching, fresh.seasons)
+        val seen = entrySeen ?: now
+        val playedSince = seen.playedSince(now)
+        if (playedSince && fresh.continueWatching != null) {
+            entryEpisode = null
+            entrySeen = null
+            // next-episode only where the feed has no row of the series.
+            val next = if (continueWatchingTarget(seriesId, fresh.continueWatching) == null) {
+                runCatching { api.nextEpisode(seriesId) }.getOrNull()
+            } else null
+            return seriesPlayFor(seriesId, seasons, fresh.continueWatching, next)
+        }
+        // Without the feed a play since waits for the next resume that
+        // reads it: compared with what was seen before it.
+        if (!playedSince) entrySeen = seen.with(now)
+        return fresh.positionSec?.let { entryTarget(entry, seasons, it) }
     }
 
     /** What a resume re-read: each null where its read failed or was not
@@ -317,11 +357,13 @@ class DetailViewModel(
      * The catalogue id the player opens on.
      *
      *  - Movies → the item itself (chino-stream has playable HLS for the id).
-     *  - An episode entry → that episode.
-     *  - Series → [DetailUiState.Ready.seriesPlay], worked out on load: the
-     *    episode the viewer is in the middle of, else the next one. Without
-     *    one, the series id — it 404s in chino-stream, which surfaces the
-     *    "no playable content" problem cleanly instead of doing nothing.
+     *  - Series → [DetailUiState.Ready.seriesPlay], the episode the first
+     *    button names: the episode the viewer is in the middle of, else the
+     *    next one - on a page opened on an episode, that episode until the
+     *    viewer plays on. Without one, the entry episode, else the series id
+     *    — it 404s in chino-stream, which surfaces the "no playable content"
+     *    problem cleanly instead of doing nothing.
+     *  - An episode whose series could not be loaded → that episode.
      *
      * Reason: series root ids don't have a master.m3u8; only episode ids do.
      * Calling Play on a series id used to 404 chino-stream and stall the
@@ -329,11 +371,8 @@ class DetailViewModel(
      */
     fun playTarget(): String {
         val ready = _state.value as? DetailUiState.Ready ?: return itemId
-        // Episode entry (we redirected to the parent series): Play the episode
-        // the user navigated to, not the series' next-up.
-        ready.focusEpisodeId?.let { return it }
         if (ready.item.kind != "series") return itemId
-        return ready.seriesPlay?.episodeId ?: itemId
+        return ready.seriesPlay?.episodeId ?: ready.focusEpisodeId ?: itemId
     }
 
     /** The second Resume goes on at in [playTarget]: a series' episode's, as

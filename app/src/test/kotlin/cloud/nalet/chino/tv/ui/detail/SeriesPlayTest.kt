@@ -186,6 +186,31 @@ class SeriesPlayTest {
         assertEquals("S03E07", entryTarget(item("x", 3, 7), list, 120).code)
     }
 
+    @Test
+    fun `opened on an episode, the viewer has played since where a read differs, never where one failed`() {
+        val list = seasons(ep(1, 1, watched = true), ep(1, 2), ep(1, 3))
+        val feed = listOf(row("s1e2", position = 603), row("x", parent = "other"))
+        val seen = SeriesSeen.of(series, 603, feed, list)
+        assertEquals(NewestRow("s1e2", 603, upNext = false), seen.newest)
+        assertEquals(setOf("s1e1"), seen.watched)
+        // Read again as it was: not played.
+        assertFalse(seen.playedSince(SeriesSeen.of(series, 603, feed, list)))
+        // Its position, the series' newest row, a watched mark: played.
+        assertTrue(seen.playedSince(SeriesSeen.of(series, 1203, feed, list)))
+        assertTrue(seen.playedSince(SeriesSeen.of(series, 603, listOf(row("s1e3", upNext = true)), list)))
+        assertTrue(seen.playedSince(SeriesSeen.of(series, 603, emptyList(), list)))
+        assertTrue(seen.playedSince(SeriesSeen.of(series, 603, feed, seasons(ep(1, 1, true), ep(1, 2, true), ep(1, 3)))))
+        // A read that failed tells nothing: the position, the feed, an empty
+        // episode list.
+        assertFalse(seen.playedSince(SeriesSeen.of(series, null, null, emptyList())))
+        // Read later where it failed first: kept from then.
+        val partly = SeriesSeen.of(series, 603, null, list)
+        assertFalse(partly.playedSince(SeriesSeen.of(series, 603, feed, list)))
+        val filled = partly.with(SeriesSeen.of(series, 603, feed, list))
+        assertEquals(seen, filled)
+        assertTrue(filled.playedSince(SeriesSeen.of(series, 603, emptyList(), list)))
+    }
+
     private fun item(id: String, season: Int, number: Int) =
         Item(id = id, title = id, kind = "episode", seasonNumber = season, episodeNumber = number)
 }

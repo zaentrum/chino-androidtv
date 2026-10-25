@@ -45,7 +45,8 @@ import org.robolectric.annotation.Config
  * mark once the server counts it finished; a series opened on an episode -
  * its continue-watching card - names that episode by its code, "resume
  * S01E03", as from the series' own card, and start over plays S01E03 from
- * its beginning.
+ * its beginning - until the viewer plays on: S01E03 finished, it says "play
+ * S01E04", the series' next one, and another episode played, that one.
  */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w960dp-h540dp-xhdpi")
@@ -55,19 +56,35 @@ class TitleResumeTest {
 
     private val movie = Item(id = "m1", title = "Quiet Orchard", kind = "movie", year = 2021, durationMs = 5_400_000L)
     private val series = Item(id = "s1", title = "Paper Station", kind = "series")
-    private val episode = Item(id = "e3", title = "Part 3", kind = "episode", parentId = "s1", seasonNumber = 1, episodeNumber = 3, durationMs = 1_500_000L)
 
-    // S01E01 and S01E02 finished, S01E03 part way, S01E04 not begun.
-    private val episodes = (1..4).map { n ->
+    /** S01E0[n] as its own page asks for it: a continue-watching card's, a
+     *  search hit's. */
+    private fun episode(n: Int) = Item(
+        id = "e$n", title = "Part $n", kind = "episode", parentId = "s1", seasonNumber = 1, episodeNumber = n,
+        durationMs = 1_500_000L,
+    )
+
+    /** The episode list as the server marks it now. */
+    private fun episodes() = (1..4).map { n ->
         Episode(
             id = "e$n", title = "Part $n", seasonNumber = 1, episodeNumber = n, parentId = "s1",
-            durationMs = 1_500_000L, watchedAt = if (n < 3) "2026-10-01T20:00:00Z" else null,
+            durationMs = 1_500_000L, watchedAt = if ("e$n" in watched) "2026-10-01T20:00:00Z" else null,
         )
     }
 
-    /** What the server says now: the saved positions, a movie's watched mark. */
+    /** A continue-watching row of S01E0[n]. */
+    private fun row(n: Int, positionSec: Int, upNext: Boolean = false) = ContinueWatchingItem(
+        id = "e$n", title = "Part $n", positionSec = positionSec, durationSec = 1500, upNext = upNext,
+        seriesTitle = "Paper Station", seasonNumber = 1, episodeNumber = n, parentId = "s1", type = "episode",
+    )
+
+    /** What the server says now: the saved positions, a movie's watched
+     *  mark; S01E01 and S01E02 finished, S01E03 part way, S01E04 not begun,
+     *  and the feed's row of the series, newest first. */
     private val position = mutableMapOf("m1" to 600, "e3" to 603)
     private var movieWatched: String? = null
+    private val watched = mutableSetOf("e1", "e2")
+    private var feed: () -> List<ContinueWatchingItem> = { listOf(row(3, position.getValue("e3"))) }
 
     private val api = java.lang.reflect.Proxy.newProxyInstance(
         ChinoApi::class.java.classLoader, arrayOf(ChinoApi::class.java),
@@ -75,20 +92,13 @@ class TitleResumeTest {
         when (method.name) {
             "getItem" -> when (args[0]) {
                 "m1" -> movie.copy(watchedAt = movieWatched)
-                "e3" -> episode
-                else -> series
+                "s1" -> series
+                else -> episode((args[0] as String).removePrefix("e").toInt())
             }
             "getProgress" -> ProgressResponse(positionSec = position[args[0]] ?: 0)
             "similar" -> ItemsPage()
-            "seriesEpisodes" -> SeriesEpisodes(listOf(Season(1, episodes)))
-            "continueWatching" -> ContinueWatchingResponse(
-                listOf(
-                    ContinueWatchingItem(
-                        id = "e3", title = "Part 3", positionSec = position.getValue("e3"), durationSec = 1500,
-                        seriesTitle = "Paper Station", seasonNumber = 1, episodeNumber = 3, parentId = "s1", type = "episode",
-                    ),
-                ),
-            )
+            "seriesEpisodes" -> SeriesEpisodes(listOf(Season(1, episodes())))
+            "continueWatching" -> ContinueWatchingResponse(feed())
             "nextEpisode" -> NextEpisodeResponse()
             "mintStreamToken" -> StreamTokenResponse(token = "t")
             "hashCode" -> 0
@@ -191,6 +201,59 @@ class TitleResumeTest {
         backFromPlayer(vm)
         compose.onNode(hasText("resume S01E03")).assertExists()
         assertEquals(1203, vm.resumeSecond())
+    }
+
+    @Test
+    fun `back from finishing the episode it was opened on, the series' next one`() {
+        val vm = show("e3")
+        compose.onNode(hasText("resume S01E03")).assertExists()
+        press("resume S01E03")
+        // S01E03 watched to its end, the player on into S01E04 and BACK
+        // before it saved any: S01E03 finished - no position, watched - and
+        // the feed has S01E04 up next.
+        position["e3"] = 0
+        watched += "e3"
+        feed = { listOf(row(4, 0, upNext = true)) }
+        backFromPlayer(vm)
+        compose.onNode(hasText("play S01E04")).assertExists()
+        compose.onNode(hasText("play S01E03")).assertDoesNotExist()
+        compose.onNode(hasText("resume S01E03")).assertDoesNotExist()
+        assertEquals("e4", vm.playTarget())
+        assertEquals(0, vm.resumeSecond())
+        press("play S01E04")
+        assertEquals(listOf("e3" to 603, "e4" to 0), played)
+        // From then on the series' state: S01E04 stopped at 5:00.
+        position["e4"] = 300
+        feed = { listOf(row(4, 300)) }
+        backFromPlayer(vm)
+        compose.onNode(hasText("resume S01E04")).assertExists()
+        assertEquals(300, vm.resumeSecond())
+    }
+
+    @Test
+    fun `back from another episode, played from its row, that episode`() {
+        val vm = show("e3")
+        compose.onNode(hasText("resume S01E03")).assertExists()
+        // S01E04 played from its row, stopped at 5:00; S01E03 as it was.
+        position["e4"] = 300
+        feed = { listOf(row(4, 300), row(3, 603)) }
+        backFromPlayer(vm)
+        compose.onNode(hasText("resume S01E04")).assertExists()
+        compose.onNode(hasText("resume S01E03")).assertDoesNotExist()
+        assertEquals("e4", vm.playTarget())
+        assertEquals(300, vm.resumeSecond())
+    }
+
+    @Test
+    fun `a page opened on an episode names it as long as nothing was played`() {
+        // A search hit: S01E01, finished long ago, while S01E03 is part way.
+        val vm = show("e1")
+        compose.onNode(hasText("play S01E01")).assertExists()
+        // Back from a page of its cast: the page resumes, nothing played.
+        backFromPlayer(vm)
+        compose.onNode(hasText("play S01E01")).assertExists()
+        compose.onNode(hasText("resume S01E03")).assertDoesNotExist()
+        assertEquals("e1", vm.playTarget())
     }
 
     @Test

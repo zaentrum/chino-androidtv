@@ -111,7 +111,9 @@ fun nextTarget(seasons: List<Season>, lastTouched: LastTouched?, serverNext: Ite
  * code as on a series opened as a series ("resume S01E03"), from its own
  * saved position ([positionSec]) where that is mid-watch, else from its
  * beginning ("play S01E03"). Its code from the series' episode list where
- * the episode is in it, else from the episode itself.
+ * the episode is in it, else from the episode itself. Only until the viewer
+ * plays on ([SeriesSeen.playedSince]): from then the series' state picks the
+ * episode, "play S01E04" once S01E03 is finished.
  */
 fun entryTarget(episode: Item, seasons: List<Season>, positionSec: Int): SeriesPlayTarget {
     val listed = seasons.firstNotNullOfOrNull { season ->
@@ -122,6 +124,57 @@ fun entryTarget(episode: Item, seasons: List<Season>, positionSec: Int): SeriesP
     val durationSec = ((listed?.second?.durationMs ?: episode.durationMs ?: 0L) / 1000L).toInt()
     val resumeAt = positionSec.takeIf { isMidWatch(it, durationSec) } ?: 0
     return SeriesPlayTarget(episode.id, seasonNumber, episodeNumber, resumeAt)
+}
+
+/** A series' newest continue-watching row, as far as Play reads it. */
+data class NewestRow(val episodeId: String, val positionSec: Int, val upNext: Boolean)
+
+/**
+ * What a series' page opened on one of its episodes last read of what
+ * playing changes: that episode's saved position, the series' newest
+ * continue-watching row ([newest], null where the feed has none of the
+ * series), the episodes marked watched. Each unknown where its read failed:
+ * a null position or watched set, [feedRead] false.
+ */
+data class SeriesSeen(
+    val entryPositionSec: Int?,
+    val feedRead: Boolean,
+    val newest: NewestRow?,
+    val watched: Set<String>?,
+) {
+    /** True where [now] differs from this in something both read: the
+     *  viewer played since - on this TV or on another device. The page
+     *  then goes by the series' state, as a series opened as a series. */
+    fun playedSince(now: SeriesSeen): Boolean =
+        (entryPositionSec != null && now.entryPositionSec != null && entryPositionSec != now.entryPositionSec) ||
+            (feedRead && now.feedRead && newest != now.newest) ||
+            (watched != null && now.watched != null && watched != now.watched)
+
+    /** This, with what [now] read where its read went through. */
+    fun with(now: SeriesSeen) = SeriesSeen(
+        entryPositionSec = now.entryPositionSec ?: entryPositionSec,
+        feedRead = feedRead || now.feedRead,
+        newest = if (now.feedRead) now.newest else newest,
+        watched = now.watched ?: watched,
+    )
+
+    companion object {
+        /** What the reads say of series [seriesId]: null for a read that
+         *  failed - an empty episode list among them. */
+        fun of(
+            seriesId: String,
+            entryPositionSec: Int?,
+            continueWatching: List<ContinueWatchingItem>?,
+            seasons: List<Season>?,
+        ) = SeriesSeen(
+            entryPositionSec = entryPositionSec,
+            feedRead = continueWatching != null,
+            newest = continueWatching?.firstOrNull { it.parentId == seriesId }
+                ?.let { NewestRow(it.id, it.positionSec, it.upNext) },
+            watched = seasons?.takeIf { it.isNotEmpty() }
+                ?.flatMap { it.episodes }?.filter { it.watchedAt != null }?.map { it.id }?.toSet(),
+        )
+    }
 }
 
 private fun target(season: Int, ep: Episode, positionSec: Int = 0) =
