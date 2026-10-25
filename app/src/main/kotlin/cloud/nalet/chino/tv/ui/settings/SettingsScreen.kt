@@ -201,10 +201,7 @@ fun SettingsScreen(
                     subtitle = "See your account and its watch history, sign in to another " +
                         "account or add one, or delete your account.",
                 ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp),
-                    ) {
+                    SettingButtons {
                         // Profile first (mirrors chino-mobile's Settings Account
                         // ordering): identity + watch history.
                         if (onProfile != null) {
@@ -238,8 +235,10 @@ fun SettingsScreen(
                     subtitle = serverHost?.let { "Connected to $it." }
                         ?: "Connect to a different Chino server.",
                 ) {
-                    ChinoButton(onClick = onChangeServer) {
-                        Text("change server")
+                    SettingButtons {
+                        ChinoButton(onClick = onChangeServer) {
+                            Text("change server")
+                        }
                     }
                 }
             }
@@ -254,15 +253,17 @@ fun SettingsScreen(
                 title = "feedback",
                 subtitle = "Tell the people who run this server. The app's and the device's details go with your report.",
             ) {
-                ChinoButton(
-                    onClick = {
-                        // Reset BEFORE showing so a stale Filed/Failed body from
-                        // the previous report doesn't flash.
-                        viewModel.resetBugReport()
-                        showReportPanel = true
-                    },
-                ) {
-                    Text("report a problem")
+                SettingButtons {
+                    ChinoButton(
+                        onClick = {
+                            // Reset BEFORE showing so a stale Filed/Failed body
+                            // from the previous report doesn't flash.
+                            viewModel.resetBugReport()
+                            showReportPanel = true
+                        },
+                    ) {
+                        Text("report a problem")
+                    }
                 }
             }
                 }
@@ -517,6 +518,18 @@ internal fun LanguageMenu(
     }
 }
 
+/** A section's buttons, in a row: at the left edge every control of a
+ *  section has, the row's padding, and 12 dp apart, room for a focused
+ *  one's ring. */
+@Composable
+internal fun SettingButtons(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
+    Row(
+        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        content = content,
+    )
+}
+
 @Composable
 internal fun Section(
     title: String,
@@ -611,7 +624,8 @@ private fun StepperRow(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            // Room for a focused button's ring beside the value.
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
         ) {
             ChinoButton(onClick = { if (value > min) onChange(value - 1) }) { Text("−") }
             Box(
