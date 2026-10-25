@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -212,7 +213,7 @@ private fun NotAvailableScreen(link: Trailer?, onOpenLink: (Trailer) -> Unit) {
             text = "Trailer not available",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = ChinoFg,
         )
         if (link != null) {
             ChinoButton(
@@ -268,7 +269,7 @@ private fun TerminalErrorScreen(
                     Text(
                         text = if (report.duplicate) "Added to existing bug #${report.id}"
                         else "Filed bug #${report.id}",
-                        color = Color.White,
+                        color = ChinoFg,
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
@@ -1662,7 +1663,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(text = message, color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(text = message, color = ChinoFg, fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Press BACK to cancel",
                 color = ChinoMuted,
@@ -2077,7 +2078,7 @@ private fun PlaybackInfoOverlay(
         ) {
             Text(
                 text = "Playback info",
-                color = Color.White,
+                color = ChinoFg,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -2119,7 +2120,7 @@ private fun TitleOverlay(title: String) {
                 text = title,
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = ChinoFg,
             )
         }
     }
@@ -2149,7 +2150,7 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
             horizontalAlignment = Alignment.End,
             verticalArrangement = Arrangement.spacedBy(4.dp),
         ) {
-            Text(text = "Skipped intro", color = Color.White, fontWeight = FontWeight.SemiBold)
+            Text(text = "Skipped intro", color = ChinoFg, fontWeight = FontWeight.SemiBold)
             Text(
                 text = "Press BACK to watch from the start",
                 color = ChinoMuted,

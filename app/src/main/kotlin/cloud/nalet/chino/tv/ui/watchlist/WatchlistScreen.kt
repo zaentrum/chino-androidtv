@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.watchlist
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.activity.compose.BackHandler
@@ -227,7 +228,7 @@ private fun HubContent(
         ) {
             Text(
                 text = "Your lists",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
             )
@@ -298,7 +299,7 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
     ) {
         Text(
             text = list.name,
-            color = Color.White,
+            color = ChinoFg,
             fontSize = 20.sp,
             fontWeight = FontWeight.SemiBold,
         )
@@ -347,7 +348,7 @@ private fun MoreContent(
             HeaderIconButton(icon = Lucide.ArrowLeft, label = "Back", onClick = onBack)
             Text(
                 text = list.name,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold,
             )
@@ -406,7 +407,7 @@ private fun MoreContent(
 private fun HeaderIconButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    tint: Color = Color.White,
+    tint: Color = ChinoFg,
     onClick: () -> Unit,
 ) {
     val focus = rememberItemFocus()
@@ -489,7 +490,7 @@ private fun NameDialog(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(text = title, color = Color.White, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = title, color = ChinoFg, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -504,7 +505,7 @@ private fun NameDialog(
                         value = value,
                         onValueChange = { if (it.length <= 60) value = it },
                         singleLine = true,
-                        textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                        textStyle = TextStyle(color = ChinoFg, fontSize = 16.sp),
                         cursorBrush = SolidColor(ChinoAccent),
                         keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                         keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),

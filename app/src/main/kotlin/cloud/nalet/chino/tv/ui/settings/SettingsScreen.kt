@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoError
@@ -130,7 +131,7 @@ fun SettingsScreen(
                 text = "Settings",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
-                color = Color.White,
+                color = ChinoFg,
             )
             Section(
                 title = "Binge watching",
@@ -349,7 +350,7 @@ private fun ReportProblemDialog(
                 Text(
                     text = if (filed.duplicate) "Added to existing bug #${filed.id}"
                     else "Filed bug #${filed.id}",
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 16.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(horizontal = 20.dp),
@@ -424,7 +425,7 @@ private fun ReportDialogRow(
             .padding(horizontal = 20.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, color = Color.White, fontSize = 15.sp)
+        Text(text = label, color = ChinoFg, fontSize = 15.sp)
     }
 }
 
@@ -529,7 +530,7 @@ internal fun Section(
             text = title,
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = ChinoFg,
         )
         // Not clipped: a focused row grows past the section's edge.
         Column(

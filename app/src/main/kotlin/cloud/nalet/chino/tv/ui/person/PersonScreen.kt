@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.person
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
@@ -181,7 +182,7 @@ private fun Filmography(
                 text = "Filmography",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = ChinoFg,
                 modifier = Modifier.padding(top = 8.dp),
             )
         }
@@ -241,7 +242,7 @@ private fun PersonHeader(
             Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
                 Text(
                     text = s.name,
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -339,7 +340,7 @@ private fun BiographyPanel(name: String, text: String, onDismiss: () -> Unit) {
                 .padding(horizontal = 32.dp, vertical = 24.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            Text(text = name, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.Bold)
+            Text(text = name, color = ChinoFg, fontSize = 24.sp, fontWeight = FontWeight.Bold)
             Box(
                 modifier = Modifier
                     .weight(1f, fill = false)

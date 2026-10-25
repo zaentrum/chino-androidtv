@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.search
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
@@ -272,7 +273,7 @@ private fun SearchInput(query: String, onChange: (String) -> Unit, downTarget: F
                     if (it.text != query) onChange(it.text)
                 },
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                textStyle = TextStyle(color = ChinoFg, fontSize = 16.sp),
                 cursorBrush = SolidColor(ChinoAccent),
                 // The IME's "search" key jumps straight to the first result
                 // (closes the keyboard). On a remote the soft keyboard captures
@@ -352,7 +353,7 @@ private fun ResultsGrid(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 text = if (count == 1) "1 result for “$query”" else "$count results for “$query”",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 22.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 4.dp),
@@ -400,7 +401,7 @@ private fun PeopleSection(
     ) {
         Text(
             text = "Cast & crew",
-            color = Color.White,
+            color = ChinoFg,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
         )
@@ -463,7 +464,7 @@ private fun PersonChip(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = person.name,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -551,7 +552,7 @@ private fun SearchMessage(
         ) {
             Text(
                 text = headline,
-                color = if (isError) MaterialTheme.colorScheme.error else Color.White,
+                color = if (isError) MaterialTheme.colorScheme.error else ChinoFg,
                 fontSize = 24.sp,
                 fontWeight = FontWeight.SemiBold,
             )

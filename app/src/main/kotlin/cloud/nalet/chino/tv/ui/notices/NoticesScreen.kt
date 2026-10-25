@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.notices
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
@@ -203,7 +204,7 @@ private fun NoticesList(
             ) {
                 Text(
                     text = "Notices",
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
                 )
@@ -327,7 +328,7 @@ private fun NoticeRow(
             }
             Text(
                 text = title,
-                color = if (unread) Color.White else ChinoFocus.title(ChinoText, focused),
+                color = if (unread) ChinoFg else ChinoFocus.title(ChinoText, focused),
                 fontSize = 17.sp,
                 fontWeight = if (unread) FontWeight.SemiBold else FontWeight.Medium,
                 maxLines = 2,

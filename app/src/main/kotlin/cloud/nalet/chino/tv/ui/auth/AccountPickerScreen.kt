@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
@@ -86,7 +87,7 @@ fun AccountPickerScreen(
         ) {
             Text(
                 text = "Who's watching?",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.SemiBold,
             )
@@ -222,7 +223,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                 Avatar(displayName = account.displayName, email = account.email, size = 72.dp)
                 Text(
                     text = "Remove ${account.displayName}?",
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 20.sp,
                     fontWeight = FontWeight.SemiBold,
                     textAlign = TextAlign.Center,
@@ -269,7 +270,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
             Icon(
                 imageVector = Lucide.Plus,
                 contentDescription = "Add account",
-                tint = Color.White,
+                tint = ChinoFg,
                 modifier = Modifier.size(56.dp),
             )
         }

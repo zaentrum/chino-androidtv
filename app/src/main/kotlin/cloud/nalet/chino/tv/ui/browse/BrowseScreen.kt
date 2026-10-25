@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.browse
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
@@ -170,7 +171,7 @@ private fun BrowseGrid(
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
                 text = pageTitle,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp),

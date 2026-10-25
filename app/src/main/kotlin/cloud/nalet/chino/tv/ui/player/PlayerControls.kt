@@ -277,7 +277,7 @@ internal fun PlayerTopChrome(
         }
         Text(
             text = title,
-            color = Color.White,
+            color = ChinoFg,
             fontWeight = FontWeight.SemiBold,
             fontSize = 22.sp,
             maxLines = 1,
@@ -553,7 +553,7 @@ private fun TrickplayPreview(
         ) {
             Text(
                 text = if (segmentLabel.isNullOrBlank()) timeLabel else "$segmentLabel · $timeLabel",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 11.sp,
             )
         }
@@ -620,7 +620,7 @@ private fun VolumeControl(
         Icon(
             imageVector = if (muted || level == 0f) Lucide.VolumeX else Lucide.Volume2,
             contentDescription = "Volume",
-            tint = Color.White,
+            tint = ChinoFocus.title(ChinoText, focus.focused),
             modifier = Modifier.size(20.dp),
         )
         // The seek bar's look: its track, the level in cloud-blue.
@@ -664,10 +664,11 @@ internal fun ControlIconButton(
         accent -> ChinoAccent
         else -> ChinoSurfaceHi
     }
+    // A plain control's icon fg-2, fg on focus.
     val fg = when {
         !enabled -> ChinoDim
         accent -> ChinoBg
-        else -> Color.White
+        else -> ChinoFocus.title(ChinoText, focus.focused)
     }
     Box(
         modifier = modifier

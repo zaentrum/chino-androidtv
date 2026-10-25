@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.profile
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
@@ -134,7 +135,7 @@ private fun ReadyContent(
         item {
             Text(
                 text = "Account",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
                 modifier = Modifier.padding(bottom = 16.dp),
@@ -145,7 +146,7 @@ private fun ReadyContent(
             )
             Text(
                 text = "Watch history",
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(top = 28.dp, bottom = 12.dp),
@@ -192,7 +193,7 @@ private fun IdentityCard(displayName: String, email: String) {
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = displayName,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
@@ -272,7 +273,7 @@ private fun HistoryRow(
                 // Episodes lead with the series title; the episode itself moves
                 // to the SxxExx meta line below (web/mobile CW-card parity).
                 text = if (isEpisode) (seriesTitle ?: item.title) else item.title,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 16.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,

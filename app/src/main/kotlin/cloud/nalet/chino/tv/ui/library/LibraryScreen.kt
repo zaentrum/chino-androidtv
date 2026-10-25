@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.library
 
+import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.compose.foundation.background
@@ -761,7 +763,7 @@ internal fun TvIconCell(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     contentDescription: String,
     onClick: () -> Unit,
-    tint: Color = Color.White,
+    tint: Color = ChinoFg,
 ) {
     // Web/mobile header icon button: 36×36, square, transparent at rest (just
     // the white glyph); a plain button in the focus style. (CDP-verified via
@@ -884,8 +886,9 @@ private fun FilterChipsRow(
 internal fun FilterChip(label: String, active: Boolean, focus: ItemFocus = rememberItemFocus(), onClick: () -> Unit) {
     ChinoButton(
         onClick = onClick,
-        container = if (active) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surface,
-        content = if (active) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
+        // Off, a plain chip: surface-2, its label fg-2.
+        container = if (active) MaterialTheme.colorScheme.primary else ChinoSurfaceHi,
+        content = if (active) MaterialTheme.colorScheme.onPrimary else ChinoText,
         filled = active,
         focus = focus,
     ) {
@@ -1205,16 +1208,16 @@ private fun HeroBanner(
                 fontSize = 40.sp,
                 lineHeight = 44.sp,
                 fontWeight = FontWeight.ExtraBold,
-                color = Color.White,
+                color = ChinoFg,
                 maxLines = 2,
             )
             androidx.compose.foundation.layout.Row(
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                item.year?.let { y -> Text(y.toString(), color = Color.White, fontSize = 16.sp) }
+                item.year?.let { y -> Text(y.toString(), color = ChinoFg, fontSize = 16.sp) }
                 item.rating?.let { r ->
-                    if (item.year != null) Text("•", color = Color.White)
+                    if (item.year != null) Text("•", color = ChinoFg)
                     RatingBadge(r)
                 }
             }
@@ -1263,11 +1266,10 @@ private fun HeroBanner(
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
                 Text(text = "Play", fontSize = 16.sp)
             }
+            // A plain button: surface-2, its label fg-2.
             ChinoButton(
                 onClick = onMoreInfo,
                 modifier = if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier,
-                container = Color.White.copy(alpha = 0.2f),
-                content = Color.White,
             ) {
                 Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
@@ -1579,7 +1581,7 @@ private fun CardActionRow(
     val focus = rememberItemFocus()
     val fg = when {
         action.destructive -> ChinoError
-        else -> Color.White
+        else -> ChinoText
     }
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
@@ -1608,8 +1610,9 @@ private fun CardActionRow(
         )
         Text(
             text = action.label,
-            // A destructive one's red label is fg while focused, its icon red.
-            color = ChinoFocus.text(fg, focus.focused),
+            // At rest fg-2, fg on focus; a destructive one's red label is fg
+            // while focused, its icon red.
+            color = if (action.destructive) ChinoFocus.text(fg, focus.focused) else ChinoFocus.title(fg, focus.focused),
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,

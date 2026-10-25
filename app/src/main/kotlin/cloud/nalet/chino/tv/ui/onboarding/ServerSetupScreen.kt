@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.onboarding
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -85,7 +86,7 @@ fun ServerSetupScreen(
                 LogoMark(sizeDp = 56)
                 Text(
                     text = if (viewModel.changeServer) "Change server" else "Connect to your server",
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
                 )
@@ -197,7 +198,7 @@ private fun UrlField(
                 onValueChange = onChange,
                 singleLine = true,
                 enabled = enabled,
-                textStyle = TextStyle(color = Color.White, fontSize = 16.sp),
+                textStyle = TextStyle(color = ChinoFg, fontSize = 16.sp),
                 cursorBrush = SolidColor(ChinoAccent),
                 keyboardOptions = KeyboardOptions(
                     keyboardType = KeyboardType.Uri,

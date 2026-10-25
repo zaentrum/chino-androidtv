@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -95,7 +96,7 @@ fun DeleteAccountScreen(
             ) {
                 Text(
                     text = "Delete Account",
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.semantics { heading() },

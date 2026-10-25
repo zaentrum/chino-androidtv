@@ -148,9 +148,10 @@ object ChinoFocus {
         else -> rest
     }
 
-    /** A plain tv-material button's colours at rest: the platform's. */
-    val PlainContainer: Color @Composable get() = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.8f)
-    val PlainContent: Color @Composable get() = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+    /** A plain button's colours at rest, on every screen: surface-2, its
+     *  label fg-2 - never the platform's defaults. */
+    val PlainContainer: Color = ChinoSurfaceHi
+    val PlainContent: Color = ChinoText
 }
 
 /** Whether an item has the focus: what its focus style and its text follow. */

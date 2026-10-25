@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.zap
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.StateIcons
@@ -325,7 +326,7 @@ private fun ChannelInfoOverlay(
             ) {
                 Text(
                     text = item.title,
-                    color = Color.White,
+                    color = ChinoFg,
                     fontSize = 40.sp,
                     fontWeight = FontWeight.Bold,
                     maxLines = 1,
@@ -402,6 +403,6 @@ private fun SaveChip(saved: Boolean) {
 @Composable
 private fun ZapMessage(text: String) {
     Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text(text = text, color = Color.White, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
+        Text(text = text, color = ChinoFg, fontSize = 24.sp, fontWeight = FontWeight.SemiBold)
     }
 }

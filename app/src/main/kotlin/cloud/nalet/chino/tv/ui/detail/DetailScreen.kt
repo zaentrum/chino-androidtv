@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.detail
 
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.activity.compose.BackHandler
@@ -345,7 +346,7 @@ private fun DetailContent(
                     text = s.item.title,
                     style = MaterialTheme.typography.displayMedium,
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = ChinoFg,
                 )
                 s.item.tagline?.takeIf { it.isNotBlank() }?.let { tagline ->
                     Text(
@@ -648,7 +649,7 @@ private fun AddToListRow(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = label,
-                color = Color.White,
+                color = ChinoFg,
                 fontSize = 15.sp,
                 fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,
@@ -710,7 +711,7 @@ private fun NewListField(
                 value = value,
                 onValueChange = { if (it.length <= 60) value = it },
                 singleLine = true,
-                textStyle = TextStyle(color = Color.White, fontSize = 15.sp),
+                textStyle = TextStyle(color = ChinoFg, fontSize = 15.sp),
                 cursorBrush = SolidColor(ChinoAccent),
                 keyboardOptions = KeyboardOptions(imeAction = ImeAction.Done),
                 keyboardActions = KeyboardActions(onDone = { onSubmit(value.trim()) }),
@@ -759,7 +760,7 @@ private fun EpisodesBlock(
             text = "Episodes",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = ChinoFg,
         )
         seasons.forEachIndexed { index, season ->
             SeasonSection(
@@ -821,7 +822,7 @@ private fun SeasonSection(
         ) {
             Text(
                 text = "Season ${season.season}",
-                color = Color.White,
+                color = ChinoFg,
                 fontWeight = FontWeight.SemiBold,
                 modifier = Modifier.padding(end = 16.dp),
             )
@@ -1017,7 +1018,7 @@ internal fun EpisodeRow(
                         text = if (several) "${held.size} episodes · one file" else episode.title,
                         style = if (several) MaterialTheme.typography.bodySmall else MaterialTheme.typography.bodyMedium,
                         fontWeight = if (several) FontWeight.Normal else FontWeight.Medium,
-                        color = if (several) ChinoFocus.text(ChinoMuted, focused) else Color.White,
+                        color = if (several) ChinoFocus.text(ChinoMuted, focused) else ChinoFg,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         modifier = Modifier.weight(1f, fill = false),
@@ -1057,7 +1058,7 @@ internal fun EpisodeRow(
                                 text = e.title,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.Medium,
-                                color = if (watched) ChinoFocus.text(ChinoMuted, focused) else Color.White,
+                                color = if (watched) ChinoFocus.text(ChinoMuted, focused) else ChinoFg,
                                 maxLines = 1,
                                 overflow = TextOverflow.Ellipsis,
                                 modifier = Modifier.weight(1f).alignByBaseline(),
@@ -1217,7 +1218,7 @@ private fun MoreLikeThisSection(
             text = "More like this",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
-            color = Color.White,
+            color = ChinoFg,
         )
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
@@ -1319,7 +1320,7 @@ private fun CreditsSection(
                 text = "Starring",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
-                color = Color.White,
+                color = ChinoFg,
             )
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
@@ -1378,7 +1379,7 @@ private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
         }
         Text(
             text = actor.name,
-            color = Color.White,
+            color = ChinoFg,
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 2,
@@ -1432,7 +1433,8 @@ private fun CrewName(name: String, onClick: (() -> Unit)?) {
     val focus = rememberItemFocus()
     Box(
         modifier = Modifier
-            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
+            // A plain chip: surface-2.
+            .focusStyle(focus, FocusKind.Control, surface = ChinoSurfaceHi)
             .border(1.dp, ChinoBorder, RectangleShape)
             .creditTarget(onClick)
             .padding(horizontal = 12.dp, vertical = 6.dp),
