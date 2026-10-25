@@ -46,7 +46,9 @@ import androidx.media3.ui.SubtitleView
  * player's menus is open beside it - subtitles, audio, quality, speed, at
  * the bottom-right above the controls - the line moves out of its way: it is
  * centred in the part of the picture left of the menu, within 80 % of that,
- * so the menu never hides the line it changes. Where the viewer
+ * or, where that part is too narrow for a line (a narrow picture, a wide
+ * menu), it goes above the menu - so the menu never hides the line it
+ * changes. Where the viewer
  * has switched Android's caption settings on (accessibility), their style and
  * their text size win, box included.
  *
@@ -90,12 +92,14 @@ object SubtitleLook {
     /** How far above the player's controls the last line ends while they show. */
     const val ABOVE_CONTROLS_DP = 12f
 
-    /** How far left of an open menu the line's box ends. */
+    /** How far left of an open menu the line's box ends, and how far above
+     *  it the line ends where it goes above it. */
     const val BESIDE_MENU_DP = 12f
 
-    /** At most this share of the picture's width goes to a menu: the line
-     *  keeps the rest. */
-    const val MAX_MENU_SHARE = 0.5f
+    /** Beside an open menu the line's box is at least this many times the
+     *  text's size wide - a line of some 16 letters; where the menu leaves
+     *  less of the picture, the line goes above the menu instead. */
+    const val MIN_BESIDE_EMS = 10f
 
     /** A ruby reading's size, as a share of the text's. */
     const val RUBY_SIZE = 0.5f
@@ -143,15 +147,41 @@ fun subtitleBottomFraction(
  * pixels, so its line clears an open menu of the player: the menu's left
  * edge [menuLeft] (window pixels; null while none is open) and [gap] before
  * it, from the picture that starts at [pictureLeft] and is [pictureWidth]
- * wide - never more than [SubtitleLook.MAX_MENU_SHARE] of it - by [aside] of
- * the way, 0 with no menu, 1 with one open, as it comes and goes. 0 where the
- * menu lies past the picture.
+ * wide and [pictureHeight] high, by [aside] of the way, 0 with no menu, 1
+ * with one open, as it comes and goes. The whole clearance, however wide the
+ * menu. 0 where the menu lies past the picture, and where the line goes
+ * above the menu instead ([subtitleAboveMenu]).
  */
-fun subtitleEndInset(pictureLeft: Int, pictureWidth: Int, menuLeft: Float?, gap: Float, aside: Float = 1f): Int {
+fun subtitleEndInset(
+    pictureLeft: Int,
+    pictureWidth: Int,
+    pictureHeight: Int,
+    menuLeft: Float?,
+    gap: Float,
+    aside: Float = 1f,
+): Int {
     if (menuLeft == null || pictureWidth <= 0 || aside <= 0f) return 0
-    val inset = (pictureLeft + pictureWidth - menuLeft + gap).coerceIn(0f, pictureWidth * SubtitleLook.MAX_MENU_SHARE)
+    if (!roomBesideMenu(pictureLeft, pictureHeight, menuLeft, gap)) return 0
+    val inset = (pictureLeft + pictureWidth - menuLeft + gap).coerceIn(0f, pictureWidth.toFloat())
     return kotlin.math.round(inset * aside.coerceAtMost(1f)).toInt()
 }
+
+/**
+ * True where the line goes above an open menu of the player rather than
+ * beside it: the picture reaches the menu's left edge [menuLeft] (window
+ * pixels, [gap] before it), and left of it is less than
+ * [SubtitleLook.MIN_BESIDE_EMS] times the text's size, a share of the
+ * picture's height - a narrow picture, a wide menu. Its last line then ends
+ * [gap] above the menu's top ([subtitleBottomFraction], with the menu's top
+ * for the controls').
+ */
+fun subtitleAboveMenu(pictureLeft: Int, pictureWidth: Int, pictureHeight: Int, menuLeft: Float, gap: Float): Boolean =
+    pictureWidth > 0 && pictureLeft + pictureWidth - menuLeft + gap > 0f &&
+        !roomBesideMenu(pictureLeft, pictureHeight, menuLeft, gap)
+
+/** Whether the picture left of a menu holds a line beside it. */
+private fun roomBesideMenu(pictureLeft: Int, pictureHeight: Int, menuLeft: Float, gap: Float): Boolean =
+    menuLeft - gap - pictureLeft >= SubtitleLook.MIN_BESIDE_EMS * SubtitleLook.TEXT_SIZE_FRACTION * pictureHeight
 
 /**
  * The cues as the look draws them. The text ones become one subtitle,
@@ -295,17 +325,30 @@ private fun viewerCaptions(context: Context): CaptioningManager? =
 /**
  * Where a subtitle sits: above the bottom of the picture and the safe area,
  * and above the player's controls while they show ([subtitleBottomFraction]);
- * left of a menu of the player while one is open ([subtitleEndInset]). The
- * player tells it where the controls' top edge is and how far they have come
- * in, and where an open menu's left edge is.
+ * left of a menu of the player while one is open ([subtitleEndInset]), or
+ * above it where left of it is too narrow for a line ([subtitleAboveMenu]).
+ * The player tells it where the controls' top edge is and how far they have
+ * come in, and where an open menu's left and top edges are.
  */
 class SubtitlePlacement internal constructor(private val view: SubtitleView) {
     private var bottom = SubtitleLook.BOTTOM_FRACTION
     private var end = 0
 
+    /** Where the last line ends now, as a share of the picture's height
+     *  above its bottom edge. */
+    internal val bottomFraction: Float get() = bottom
+
     /** The left edge of the player's open menu, in window pixels; null while
      *  none is open. */
     var menuLeft: Float? = null
+        set(value) {
+            field = value
+            update()
+        }
+
+    /** The top edge of the player's open menu, in window pixels; null while
+     *  none is open. */
+    var menuTop: Float? = null
         set(value) {
             field = value
             update()
@@ -338,14 +381,26 @@ class SubtitlePlacement internal constructor(private val view: SubtitleView) {
         val at = IntArray(2)
         view.getLocationInWindow(at)
         val density = view.resources.displayMetrics.density
-        val fraction = subtitleBottomFraction(
+        val gap = SubtitleLook.BESIDE_MENU_DP * density
+        // The line's end, clear above edge, by share of the way.
+        fun above(edge: Float?, clear: Float, share: Float) = subtitleBottomFraction(
             pictureHeight = view.height,
             pictureBottom = at[1] + view.height,
             screenHeight = view.rootView.height,
             safeBottom = SubtitleLook.SAFE_BOTTOM_DP * density,
-            controlsTop = controlsTop,
-            aboveControls = SubtitleLook.ABOVE_CONTROLS_DP * density,
-            lift = lift,
+            controlsTop = edge,
+            aboveControls = clear,
+            lift = share,
+        )
+        val left = menuLeft
+        val top = menuTop
+        // Above an open menu where left of it is too narrow for a line: its
+        // last line ends above the menu's top as above the controls' -
+        // whichever is higher.
+        val aboveMenu = left != null && top != null && subtitleAboveMenu(at[0], view.width, view.height, left, gap)
+        val fraction = maxOf(
+            above(controlsTop, SubtitleLook.ABOVE_CONTROLS_DP * density, lift),
+            if (aboveMenu) above(top, gap, aside) else 0f,
         )
         // Set only when it changed: each set asks for a new drawing.
         if (fraction != bottom) {
@@ -355,7 +410,7 @@ class SubtitlePlacement internal constructor(private val view: SubtitleView) {
         // Beside an open menu: the box the line is centred in ends left of
         // it - a padding of the view at its right, which leaves the text's
         // size, a share of the picture's height, as it is.
-        val inset = subtitleEndInset(at[0], view.width, menuLeft, SubtitleLook.BESIDE_MENU_DP * density, aside)
+        val inset = subtitleEndInset(at[0], view.width, view.height, left, gap, aside)
         if (inset != end) {
             end = inset
             view.setPadding(view.paddingLeft, view.paddingTop, inset, view.paddingBottom)

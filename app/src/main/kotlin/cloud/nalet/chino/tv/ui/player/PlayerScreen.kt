@@ -1153,26 +1153,28 @@ private fun ExoPlayback(
         }
     }
     // While a menu is open - subtitles, audio, quality, speed - the line
-    // moves out of its way, left of it, at the controls' pace, and back when
-    // it closes (SubtitlePlacement): the menu never hides the line it
-    // changes. The menu's left edge stays known while the line goes back.
-    var menuEdge by remember { mutableStateOf<Float?>(null) }
-    var lastMenuEdge by remember { mutableStateOf<Float?>(null) }
+    // moves out of its way, left of it or above it, at the controls' pace,
+    // and back when it closes (SubtitlePlacement): the menu never hides the
+    // line it changes. The menu's corner stays known while the line goes
+    // back.
+    var menuCorner by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
+    var lastMenuCorner by remember { mutableStateOf<androidx.compose.ui.geometry.Offset?>(null) }
     val subtitleAside by animateFloatAsState(
-        targetValue = if (menuEdge != null) 1f else 0f,
+        targetValue = if (menuCorner != null) 1f else 0f,
         animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
         label = "subtitleAside",
     )
-    LaunchedEffect(subtitlePlacement.value, lastMenuEdge, subtitleAside) {
+    LaunchedEffect(subtitlePlacement.value, lastMenuCorner, subtitleAside) {
         subtitlePlacement.value?.let { placement ->
-            placement.menuLeft = lastMenuEdge
+            placement.menuLeft = lastMenuCorner?.x
+            placement.menuTop = lastMenuCorner?.y
             placement.aside = subtitleAside
         }
     }
-    val onMenuEdge: (Float?) -> Unit = remember {
-        { edge ->
-            menuEdge = edge
-            if (edge != null) lastMenuEdge = edge
+    val onMenuCorner: (androidx.compose.ui.geometry.Offset?) -> Unit = remember {
+        { corner ->
+            menuCorner = corner
+            if (corner != null) lastMenuCorner = corner
         }
     }
     Box(
@@ -1243,7 +1245,7 @@ private fun ExoPlayback(
         // Everything over the picture, inside the TV's safe area: the one
         // inset the player lays its controls, menus and messages out in; the
         // bands behind the controls paint out to the screen's edges.
-        androidx.compose.runtime.CompositionLocalProvider(LocalMenuEdge provides onMenuEdge) {
+        androidx.compose.runtime.CompositionLocalProvider(LocalMenuCorner provides onMenuCorner) {
         PlayerSafeArea(
             controlsVisible = controllerVisible,
             onBarTop = { controlsTop = it },
@@ -1583,17 +1585,18 @@ private fun CornerPill(content: @Composable () -> Unit) {
     ) { content() }
 }
 
-/** Hears where an open menu of the player has its left edge, in window
- *  pixels, and null as it closes: the subtitle moves out of its way. */
-internal val LocalMenuEdge = androidx.compose.runtime.staticCompositionLocalOf<(Float?) -> Unit> { {} }
+/** Hears where an open menu of the player has its top-left corner, in
+ *  window pixels, and null as it closes: the subtitle moves out of its way. */
+internal val LocalMenuCorner =
+    androidx.compose.runtime.staticCompositionLocalOf<(androidx.compose.ui.geometry.Offset?) -> Unit> { {} }
 
 /** A player's menu at the bottom-right of the safe area, above the control
  *  bar: as wide as its widest row, [minWidth] at least (ChoiceMenu). It says
- *  where its left edge is while it is open ([LocalMenuEdge]). */
+ *  where its top-left corner is while it is open ([LocalMenuCorner]). */
 @Composable
 private fun MenuPopover(header: String, minWidth: Dp, content: @Composable ColumnScope.() -> Unit) {
-    val edge = LocalMenuEdge.current
-    androidx.compose.runtime.DisposableEffect(edge) { onDispose { edge(null) } }
+    val corner = LocalMenuCorner.current
+    androidx.compose.runtime.DisposableEffect(corner) { onDispose { corner(null) } }
     Box(
         modifier = Modifier.fillMaxSize().padding(bottom = LocalMenuBottom.current),
         contentAlignment = Alignment.BottomEnd,
@@ -1601,7 +1604,7 @@ private fun MenuPopover(header: String, minWidth: Dp, content: @Composable Colum
         cloud.nalet.chino.tv.ui.theme.ChoiceMenu(
             header = header,
             minWidth = minWidth,
-            modifier = Modifier.onGloballyPositioned { edge(it.boundsInWindow().left) },
+            modifier = Modifier.onGloballyPositioned { corner(it.boundsInWindow().topLeft) },
             content = content,
         )
     }
