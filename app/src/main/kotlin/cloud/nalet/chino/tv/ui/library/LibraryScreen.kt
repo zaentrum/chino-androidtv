@@ -1105,7 +1105,8 @@ private fun HeroBanner(
             modifier = Modifier
                 .align(Alignment.BottomStart)
                 .padding(start = 48.dp, bottom = 64.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp),
+            // 12 dp between a focused button's grown ring and the other.
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
             ChinoButton(
                 onClick = onPlay,

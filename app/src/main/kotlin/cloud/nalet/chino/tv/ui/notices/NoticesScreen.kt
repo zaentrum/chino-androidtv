@@ -282,8 +282,9 @@ private fun NoticeRow(
     Row(
         modifier = Modifier.fillMaxWidth(ROW_WIDTH),
         verticalAlignment = Alignment.CenterVertically,
-        // Room for the row's growth beside its Delete, and for the Delete's.
-        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        // Room for the row's growth beside its Delete, and for the Delete's
+        // grown ring.
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
     ) {
         Column(
             modifier = Modifier

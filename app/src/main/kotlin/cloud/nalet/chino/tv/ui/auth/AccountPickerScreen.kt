@@ -245,7 +245,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+                Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap)) {
                     ChinoButton(onClick = onDismiss) { Text("cancel") }
                     ChinoDangerButton(onClick = onConfirm) { Text("remove account") }
                 }

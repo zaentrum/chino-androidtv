@@ -409,8 +409,9 @@ private fun PeopleSection(
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,
         )
+        // Person chips: 12 dp between a focused one's grown ring and the next.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(end = 32.dp, top = 2.dp, bottom = 2.dp),
             modifier = Modifier.shelfRoom().fillMaxWidth(),
         ) {

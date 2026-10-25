@@ -153,7 +153,7 @@ fun DeleteAccountScreen(
 
                 Row(
                     modifier = Modifier.padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+                    horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
                 ) {
                     ChinoButton(
                         // Never disabled: a disabled button would drop focus

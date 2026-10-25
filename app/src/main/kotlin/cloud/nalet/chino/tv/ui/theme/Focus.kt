@@ -128,6 +128,17 @@ object ChinoFocus {
      *  growing row is never cut off. */
     val Room: Dp = tvDp(12f)
 
+    /** The widest button or chip [ControlGap] makes room for. */
+    private val WidestControl: Dp = tvDp(200f)
+
+    /** Between two buttons or chips side by side: [Room] past a focused
+     *  one's grown ring - its growth, at most a 200 dp wide control's, and
+     *  the ring outside its gap - so a focused control comes no nearer its
+     *  neighbour than two cards come to each other. */
+    val ControlGap: Dp = Room +
+        WidestControl * ((FocusKind.Control.growth - 1f) / 2f) +
+        (RingGap + RingWidth) * FocusKind.Control.growth
+
     /** The ring and the growth settle in this long, easing out (CSS ease-out). */
     const val SettleMillis: Int = 150
     val SettleEasing: Easing = CubicBezierEasing(0f, 0f, 0.58f, 1f)

@@ -18,14 +18,15 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 /** Settings' controls share one left edge, and a section's buttons stand
- *  12 dp apart (the TV's dp), room for a focused one's ring. */
+ *  the control gap apart (the TV's dp): 12 dp past a focused one's grown
+ *  ring (RingRoomTest). */
 @RunWith(RobolectricTestRunner::class)
 @Config(qualifiers = "w960dp-h540dp-xhdpi")
 class SettingsLayoutTest {
     @get:Rule val compose = createComposeRule()
 
     @Test
-    fun `a section's buttons start where its rows' names do, 12 dp apart`() {
+    fun `a section's buttons start where its rows' names do, the control gap apart`() {
         compose.setContent {
             ChinoTvTheme {
                 Column(Modifier.width(1000.dp)) {
@@ -49,6 +50,6 @@ class SettingsLayoutTest {
         val second = left("switch account", button = true)
         // One left edge: px are 2 a TV dp.
         assertEquals(name.left, first.left, 1f)
-        assertEquals(12f, (second.left - first.right) / 2f, 0.5f)
+        assertEquals(22.25f, (second.left - first.right) / 2f, 0.5f)
     }
 }

@@ -243,7 +243,7 @@ private fun FilterBar(
         // clears it. The chips are in the mono face: their own words
         // lowercase, the server's genre names in their case.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(),
             modifier = Modifier.shelfRoom(),
         ) {
@@ -258,7 +258,7 @@ private fun FilterBar(
         }
         // Decade + rating row.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(),
             modifier = Modifier.shelfRoom(),
         ) {
@@ -275,7 +275,7 @@ private fun FilterBar(
         }
         // Sort row.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(),
             modifier = Modifier.shelfRoom(),
         ) {

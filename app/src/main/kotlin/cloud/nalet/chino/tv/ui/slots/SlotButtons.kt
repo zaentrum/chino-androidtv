@@ -73,7 +73,8 @@ fun SlotButtons(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(24.dp),
     ) {
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        // 12 dp between a focused button's grown ring and the next.
+        Row(horizontalArrangement = Arrangement.spacedBy(cloud.nalet.chino.tv.ui.theme.ChinoFocus.ControlGap)) {
             buttons.forEachIndexed { idx, button ->
                 SlotButtonView(
                     button = button,

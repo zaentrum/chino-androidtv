@@ -173,7 +173,7 @@ internal fun PlayerBottomChrome(
         Row(
             modifier = Modifier.fillMaxWidth(),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
             ControlIconButton(
                 icon = if (isPlaying) Lucide.Pause else Lucide.Play,

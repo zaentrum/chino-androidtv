@@ -554,13 +554,13 @@ internal fun LanguageMenu(
 }
 
 /** A section's buttons, in a row: at the left edge every control of a
- *  section has, the row's padding, and 12 dp apart, room for a focused
- *  one's ring. */
+ *  section has, the row's padding, and 12 dp between a focused one's grown
+ *  ring and the next. */
 @Composable
 internal fun SettingButtons(content: @Composable androidx.compose.foundation.layout.RowScope.() -> Unit) {
     Row(
         modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         content = content,
     )
 }
@@ -659,8 +659,8 @@ private fun StepperRow(
         }
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            // Room for a focused button's ring beside the value.
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            // Room for a focused button's grown ring beside the value.
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
             ChinoButton(onClick = { if (value > min) onChange(value - 1) }) { Text("−") }
             Box(

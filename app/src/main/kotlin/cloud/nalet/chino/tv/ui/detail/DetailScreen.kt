@@ -449,10 +449,11 @@ internal fun DetailActions(
 ) {
     val watched = item.watchedAt != null
     Row(
-        // Room for a focused control's ring and growth: 12 dp between the
-        // controls, and 12 dp between a ring and the description under it.
+        // Room for a focused control's ring and growth: 12 dp between a
+        // grown ring and the next control, and between a ring and the
+        // description under it.
         modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
-        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+        horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         // Without a position to resume (a series' next episode included) the
@@ -1424,7 +1425,7 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
         )
         // Chips far enough apart for a focused one's growth and ring.
         LazyRow(
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
             contentPadding = shelfPadding(end = 32.dp, top = 2.dp, bottom = 2.dp),
             modifier = Modifier.weight(1f).shelfRoom(),
         ) {

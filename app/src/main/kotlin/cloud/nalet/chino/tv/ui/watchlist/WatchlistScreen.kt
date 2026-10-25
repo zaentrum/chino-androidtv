@@ -386,8 +386,8 @@ private fun MoreContent(
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            // Room between the buttons for a focused one's ring.
-            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
+            // Room between the buttons for a focused one's grown ring.
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
             HeaderButton(icon = Lucide.ArrowLeft, label = "back", onClick = onBack)
             Text(
@@ -511,7 +511,7 @@ internal fun ConfirmDeleteListDialog(
         ) {
             Text(text = "delete list", style = MaterialTheme.typography.titleLarge, color = ChinoFg)
             Text(text = deleteListBody(list), color = ChinoText, fontSize = 15.sp)
-            Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+            Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap)) {
                 ChinoButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancel)) { Text("cancel") }
                 ChinoDangerButton(onClick = onConfirm) { Text("delete list") }
             }
