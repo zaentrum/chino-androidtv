@@ -51,10 +51,12 @@ sealed interface DetailUiState {
          *  instead of a standalone episode page (chino-web parity). Null for a
          *  plain series / movie / person entry. */
         val focusEpisodeId: String? = null,
-        /** What Play starts on a series opened as a series: the episode the
-         *  viewer is in the middle of, else the next one (see SeriesPlay.kt).
-         *  Null for movies, for an episode entry (Play plays that episode)
-         *  and when no episode could be found. */
+        /** What Play starts on a series, the episode its first button names:
+         *  opened as a series, the episode the viewer is in the middle of,
+         *  else the next one; opened on one of its episodes - a
+         *  continue-watching card's - that episode, from its own position
+         *  ([entryTarget]). Null for movies and when no episode could be
+         *  found (see SeriesPlay.kt). */
         val seriesPlay: SeriesPlayTarget? = null,
     ) : DetailUiState
     /** What failed, for the error screen: what it says, and the reason. */
@@ -90,6 +92,10 @@ class DetailViewModel(
      *  episode. Per-EPISODE controls (toggleEpisodeWatched) keep their own ids. */
     val displayItemId: String
         get() = (_state.value as? DetailUiState.Ready)?.item?.id ?: itemId
+
+    /** The episode this page was opened on, where it shows the episode's
+     *  series: what its first button plays. */
+    private var entryEpisode: Item? = null
 
     init {
         telemetry.event("screen_view", itemId = itemId, extra = mapOf("screen" to "detail"))
@@ -152,9 +158,13 @@ class DetailViewModel(
                 val seasons = seasonsDef.await()
                 val continueWatching = continueWatchingDef.await()
                 val episodeResume = continueWatching?.let(::episodeResumeOf).orEmpty()
-                val seriesPlay = if (wantsSeriesPlay) {
-                    seriesPlayFor(seasonsId, seasons, continueWatching.orEmpty(), nextEpisodeDef.await())
-                } else null
+                // Opened on an episode, the series' first button names that
+                // episode: "resume S01E03", as from the series' own card.
+                entryEpisode = requested.takeIf { focusEpisodeId != null && isSeries }
+                val seriesPlay = when {
+                    wantsSeriesPlay -> seriesPlayFor(seasonsId, seasons, continueWatching.orEmpty(), nextEpisodeDef.await())
+                    else -> entryEpisode?.let { entryTarget(it, seasons, resumeSec) }
+                }
                 _state.value = DetailUiState.Ready(
                     item = item,
                     resumeSec = resumeSec,
@@ -223,11 +233,14 @@ class DetailViewModel(
     private var firstResumeConsumed = false
 
     /** Screen-level ON_RESUME hook (NavBackStackEntry lifecycle). Skips the
-     *  very first resume after construction (init's load covers it), then
-     *  re-fetches the continue-watching feed and the episode list on every
-     *  later resume so the episode progress bars, the watched checks and the
-     *  series' Play episode aren't stale after play → BACK (web self-heals
-     *  via its query gen; TV mirrors its own Library shelf pattern).
+     *  very first resume after construction (init's load covers it), then on
+     *  every later resume re-reads what playing changes, so nothing is stale
+     *  after play → BACK (web self-heals via its query gen; TV mirrors its
+     *  own Library shelf pattern): the title's own saved position - a
+     *  movie's "resume 3:10", an episode entry's - and a movie's watched
+     *  mark; on a series the continue-watching feed and the episode list, so
+     *  the episode progress bars, the watched checks and the episode its
+     *  first button plays are the new ones.
      *  Best-effort: on failure we keep whatever's already on screen. */
     fun onScreenResumed() {
         if (!firstResumeConsumed) {
@@ -235,30 +248,54 @@ class DetailViewModel(
             return
         }
         val ready = _state.value as? DetailUiState.Ready ?: return
-        if (ready.item.kind != "series") return
+        val isSeries = ready.item.kind == "series"
         val seriesId = ready.item.id
-        val wantsSeriesPlay = ready.focusEpisodeId == null
+        val entry = entryEpisode
+        val wantsSeriesPlay = isSeries && entry == null
         viewModelScope.launch {
-            val (continueWatching, seasons, next) = coroutineScope {
-                val cw = async { runCatching { api.continueWatching().items }.getOrNull() }
-                val eps = async { runCatching { api.seriesEpisodes(seriesId).seasons }.getOrNull() }
+            val fresh = coroutineScope {
+                // The entry's own position: the movie's, the episode's the
+                // page was opened on.
+                val progress = async { runCatching { api.getProgress(itemId).positionSec }.getOrNull() }
+                // A movie's watched mark: chino-api marks one finished in
+                // the player watched.
+                val item = async { if (!isSeries) runCatching { api.getItem(itemId) }.getOrNull() else null }
+                val cw = async { if (isSeries) runCatching { api.continueWatching().items }.getOrNull() else null }
+                val eps = async { if (isSeries) runCatching { api.seriesEpisodes(seriesId).seasons }.getOrNull() else null }
                 val nx = async {
                     if (wantsSeriesPlay) runCatching { api.nextEpisode(seriesId) }.getOrNull() else null
                 }
-                Triple(cw.await(), eps.await(), nx.await())
+                Fresh(progress.await(), item.await(), cw.await(), eps.await(), nx.await())
             }
-            val freshSeasons = seasons?.takeIf { it.isNotEmpty() }
-            val seriesPlay = if (wantsSeriesPlay && continueWatching != null) {
-                seriesPlayFor(seriesId, freshSeasons ?: ready.seasons, continueWatching, next)
-            } else null
+            val freshSeasons = fresh.seasons?.takeIf { it.isNotEmpty() }
+            val seasons = freshSeasons ?: ready.seasons
+            val resumeSec = fresh.positionSec ?: ready.resumeSec
+            val seriesPlay = when {
+                wantsSeriesPlay && fresh.continueWatching != null ->
+                    seriesPlayFor(seriesId, seasons, fresh.continueWatching, fresh.next)
+                entry != null && fresh.positionSec != null -> entryTarget(entry, seasons, resumeSec)
+                else -> null
+            }
             val current = _state.value as? DetailUiState.Ready ?: return@launch
             _state.value = current.copy(
+                item = fresh.item?.takeIf { it.id == current.item.id } ?: current.item,
+                resumeSec = resumeSec,
                 seasons = freshSeasons ?: current.seasons,
-                episodeResume = continueWatching?.let(::episodeResumeOf) ?: current.episodeResume,
+                episodeResume = fresh.continueWatching?.let(::episodeResumeOf) ?: current.episodeResume,
                 seriesPlay = seriesPlay ?: current.seriesPlay,
             )
         }
     }
+
+    /** What a resume re-read: each null where its read failed or was not
+     *  asked. */
+    private class Fresh(
+        val positionSec: Int?,
+        val item: Item?,
+        val continueWatching: List<ContinueWatchingItem>?,
+        val seasons: List<Season>?,
+        val next: NextEpisodeResponse?,
+    )
 
     private suspend fun prewarmPipeline() {
         runCatching {
@@ -292,10 +329,11 @@ class DetailViewModel(
     }
 
     /** The second Resume goes on at in [playTarget]: a series' episode's, as
-     *  Play picked it, else the title's own saved position. */
+     *  Play picked it - the entry episode's own where the page was opened on
+     *  one - else the title's own saved position. */
     fun resumeSecond(): Int {
         val ready = _state.value as? DetailUiState.Ready ?: return 0
-        if (ready.focusEpisodeId == null && ready.item.kind == "series") return ready.seriesPlay?.positionSec ?: 0
+        if (ready.item.kind == "series") return ready.seriesPlay?.positionSec ?: 0
         return ready.resumeSec
     }
 

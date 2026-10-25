@@ -105,5 +105,24 @@ fun nextTarget(seasons: List<Season>, lastTouched: LastTouched?, serverNext: Ite
     return serverNext?.let { SeriesPlayTarget(it.id, it.seasonNumber, it.episodeNumber) }
 }
 
+/**
+ * What the first button of a series opened on one of its episodes plays - a
+ * continue-watching card's, a search hit's: that [episode], named by its
+ * code as on a series opened as a series ("resume S01E03"), from its own
+ * saved position ([positionSec]) where that is mid-watch, else from its
+ * beginning ("play S01E03"). Its code from the series' episode list where
+ * the episode is in it, else from the episode itself.
+ */
+fun entryTarget(episode: Item, seasons: List<Season>, positionSec: Int): SeriesPlayTarget {
+    val listed = seasons.firstNotNullOfOrNull { season ->
+        season.episodes.firstOrNull { it.id == episode.id }?.let { season.season to it }
+    }
+    val seasonNumber = listed?.let { (season, ep) -> ep.seasonNumber ?: season } ?: episode.seasonNumber
+    val episodeNumber = listed?.second?.episodeNumber ?: episode.episodeNumber
+    val durationSec = ((listed?.second?.durationMs ?: episode.durationMs ?: 0L) / 1000L).toInt()
+    val resumeAt = positionSec.takeIf { isMidWatch(it, durationSec) } ?: 0
+    return SeriesPlayTarget(episode.id, seasonNumber, episodeNumber, resumeAt)
+}
+
 private fun target(season: Int, ep: Episode, positionSec: Int = 0) =
     SeriesPlayTarget(ep.id, ep.seasonNumber ?: season, ep.episodeNumber, positionSec)

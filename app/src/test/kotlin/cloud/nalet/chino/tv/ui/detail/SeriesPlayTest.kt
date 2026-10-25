@@ -172,6 +172,20 @@ class SeriesPlayTest {
         assertTrue(isMidWatch(5000, 0)) // unknown duration: never finished by position
     }
 
+    @Test
+    fun `opened on an episode, its first button plays that episode by its code, from its own position where mid-watch`() {
+        val list = seasons(ep(1, 1, watched = true), ep(1, 2), ep(2, 1))
+        val opened = item("s1e2", 1, 2)
+        assertEquals(SeriesPlayTarget("s1e2", 1, 2, 603), entryTarget(opened, list, 603))
+        assertEquals("S01E02", entryTarget(opened, list, 603).code)
+        assertTrue(entryTarget(opened, list, 603).resumes)
+        // Nothing saved, or its last minute: from its beginning.
+        assertEquals(0, entryTarget(opened, list, 0).positionSec)
+        assertEquals(0, entryTarget(opened, list, 2690).positionSec)
+        // Not in the episode list: its own numbers.
+        assertEquals("S03E07", entryTarget(item("x", 3, 7), list, 120).code)
+    }
+
     private fun item(id: String, season: Int, number: Int) =
         Item(id = id, title = id, kind = "episode", seasonNumber = season, episodeNumber = number)
 }

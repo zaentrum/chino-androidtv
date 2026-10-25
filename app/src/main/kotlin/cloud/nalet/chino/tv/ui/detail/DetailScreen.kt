@@ -251,10 +251,10 @@ private fun DetailContent(
     onPersonSelected: (String) -> Unit,
 ) {
     val backdropUrl = "${s.baseUrl}/v1/items/${s.item.id}/backdrop?stream=${s.streamToken}"
-    // A series opened as a series plays the episode the viewer is in (Resume
-    // S02E03) or the next one (Play S02E04); a movie or an episode entry
-    // resumes its own saved position.
-    val seriesPlay = s.seriesPlay?.takeIf { s.item.kind == "series" && s.focusEpisodeId == null }
+    // A series plays the episode the viewer is in (resume S02E03) or the next
+    // one (play S02E04) - opened on one of its episodes, that one, by its
+    // code all the same; a movie resumes its own saved position.
+    val seriesPlay = s.seriesPlay?.takeIf { s.item.kind == "series" }
     val canResume = seriesPlay?.resumes ?: (s.resumeSec > 30)
     val primaryLabel = when {
         seriesPlay != null ->
