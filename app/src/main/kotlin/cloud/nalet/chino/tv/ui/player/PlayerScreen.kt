@@ -12,6 +12,8 @@ import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChoiceNote
+import cloud.nalet.chino.tv.ui.theme.ChoiceRow
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
@@ -1162,7 +1164,18 @@ private fun ExoPlayback(
             placement.lift = subtitleLift
         }
     }
-    Box(modifier = Modifier.fillMaxSize().background(Color.Black)) {
+    // The menus stand above the control bar, 12 dp clear of it.
+    var rootHeight by remember { mutableStateOf(0) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    val menuBottom = controlsTop?.let { top ->
+        with(density) { (rootHeight - top).coerceAtLeast(0f).toDp() } + 12.dp
+    } ?: 0.dp
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .background(Color.Black)
+            .onGloballyPositioned { rootHeight = it.size.height },
+    ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
             factory = { ctx ->
@@ -1327,6 +1340,7 @@ private fun ExoPlayback(
                 notice?.let { SubtitleBanner(label = it, durationMs = 6_000, onDismiss = viewModel::qualityNoticeShown) }
             }
         }
+        androidx.compose.runtime.CompositionLocalProvider(LocalMenuBottom provides menuBottom) {
         if (showSubtitlePanel) {
             SubtitlePanel(
                 menu = subtitleMenu,
@@ -1398,6 +1412,7 @@ private fun ExoPlayback(
                 },
                 onDismiss = { showSpeedPanel = false },
             )
+        }
         }
         pendingSkip?.let { p ->
             SkipCountdownPill(prompt = p)
@@ -1497,120 +1512,27 @@ private fun isPostCreditsPreview(seg: Segment, all: List<Segment>): Boolean {
     }
 }
 
-/* ─────────────────────────  web-style menu popovers  ─────────────────────
- * Subtitle / Audio / Speed / Quality pickers render as compact popovers
- * anchored bottom-right above the control bar — chino-web CaptionsMenuCard /
- * SpeedMenuCard, chino-mobile parity — NOT full-height drawers. They float
- * over the video (no scrim, like web); the first row auto-focuses, CENTER
- * selects, BACK closes (BackHandler at the call site). #161B22 / 8dp radius /
- * 1dp white@10% border; selected row = blue. The focus stays inside while
- * the menu is open: DOWN on its last row, UP on its first, stay there. */
-@OptIn(ExperimentalComposeUiApi::class)
+/* ─────────────────────────  the player's menus  ─────────────────────────
+ * Subtitles, audio, quality and speed: menus of one choice each (ChoiceMenu,
+ * one look with Settings' pickers), anchored bottom-right above the control
+ * bar, never on it - its time labels stay whole - and inside the safe area.
+ * They float over the video with no scrim; the first row (or the one picked)
+ * takes the focus, CENTER picks, BACK closes (BackHandler at the call site).
+ */
+
+/** How far above the bottom of the player's safe area its menus stand: over
+ *  the control bar while it shows (PlayerScreen measures it). */
+internal val LocalMenuBottom = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
 @Composable
-private fun MenuPopover(width: Dp, content: @Composable ColumnScope.() -> Unit) {
+private fun MenuPopover(header: String, width: Dp, content: @Composable ColumnScope.() -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().padding(end = 24.dp, bottom = 92.dp),
+        modifier = Modifier.fillMaxSize().padding(end = 24.dp, bottom = LocalMenuBottom.current),
         contentAlignment = Alignment.BottomEnd,
     ) {
-        // Not clipped: a focused row grows past the menu's edge.
-        Column(
-            modifier = Modifier
-                .focusProperties { exit = { FocusRequester.Cancel } }
-                .focusGroup()
-                .width(width)
-                .heightIn(max = 460.dp)
-                .background(ChinoSurface)
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
-                .verticalScroll(rememberScrollState())
-                .padding(vertical = 4.dp),
-            content = content,
-        )
+        cloud.nalet.chino.tv.ui.theme.ChoiceMenu(header = header, width = width, content = content)
     }
 }
-
-@Composable
-private fun PlayerMenuHeader(title: String, trailing: String? = null) {
-    Row(
-        modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 8.dp),
-        verticalAlignment = Alignment.CenterVertically,
-    ) {
-        Text(title, color = ChinoMuted, fontSize = 12.sp, fontWeight = FontWeight.Medium, modifier = Modifier.weight(1f))
-        if (trailing != null) Text(trailing, color = ChinoMuted.copy(alpha = 0.7f), fontSize = 11.sp)
-    }
-}
-
-/**
- * A row of a player menu. The menus - subtitles, audio, quality, speed - are
- * of one choice each (docs/chino, playback): the picked row in the accent
- * blue with a small filled square before it, square like every shape in the
- * design system, no checkboxes and no check marks; every row keeps the
- * square's column, picked or not ("off" and "more languages" too), so the
- * names line up. OK picks, once per press.
- */
-@Composable
-private fun PlayerMenuRow(
-    label: String,
-    selected: Boolean,
-    focusRequester: FocusRequester? = null,
-    secondary: String? = null,
-    trailing: (@Composable () -> Unit)? = null,
-    maxLines: Int = 1,
-    onClick: () -> Unit,
-) {
-    val focus = rememberItemFocus()
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
-            .focusable()
-            .onKeyEvent { e ->
-                val ok = e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                    e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER
-                // A held OK repeats its key-down: one pick per press.
-                if (ok && e.type == KeyEventType.KeyDown && e.nativeKeyEvent.repeatCount == 0) {
-                    onClick(); true
-                } else ok
-            }
-            .padding(horizontal = 16.dp, vertical = 10.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp),
-    ) {
-        PickedMark(selected)
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                text = label,
-                color = if (selected) ChinoAccent else Color.White,
-                fontSize = 15.sp,
-                fontWeight = if (selected) FontWeight.SemiBold else FontWeight.Normal,
-                maxLines = maxLines,
-                overflow = TextOverflow.Ellipsis,
-            )
-            if (secondary != null) {
-                Text(
-                    text = secondary,
-                    color = ChinoFocus.text(ChinoMuted, focus.focused),
-                    fontSize = 12.sp,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis,
-                )
-            }
-        }
-        trailing?.invoke()
-    }
-}
-
-/** The picked row's small filled square, in the accent blue; its column
- *  kept, empty, on every other row. */
-@Composable
-private fun PickedMark(selected: Boolean) {
-    Box(modifier = Modifier.size(PICKED_MARK), contentAlignment = Alignment.Center) {
-        if (selected) Box(Modifier.size(PICKED_MARK).background(ChinoAccent, RectangleShape))
-    }
-}
-
-/** The picked mark's side: small, beside a 15 sp name. */
-private val PICKED_MARK = 8.dp
 
 /** Splits the TV audio label "primary • channels • codec" into
  *  (primary, "channels · codec") to match web/mobile's two-line row. */
@@ -1634,10 +1556,9 @@ private fun QualityPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    MenuPopover(width = 200.dp) {
-        PlayerMenuHeader("quality")
+    MenuPopover(header = "quality", width = 200.dp) {
         rungs.forEachIndexed { idx, rung ->
-            PlayerMenuRow(
+            ChoiceRow(
                 label = if (rung.name == AUTO && active == AUTO) autoLabel(rung.label, playing) else rung.label,
                 selected = rung.name == active,
                 focusRequester = focusRequester.takeIf { idx == 0 },
@@ -1647,10 +1568,8 @@ private fun QualityPanel(
     }
 }
 
-/** Playback-speed picker — structural clone of [QualityPanel], reusing
- *  [QualityRow] so it inherits the same DPAD focus model (CENTER/ENTER select,
- *  2dp blue focus border, first-row auto-focus). Mirrors mobile's SpeedMenuCard
- *  rates; 1.0x renders as "Normal". */
+/** The playback-speed menu: the web's rates, 1x by its name, "normal"
+ *  (every app's word for it), the others by their factor ("1.25x"). */
 @Composable
 internal fun SpeedPanel(
     current: Float,
@@ -1659,23 +1578,27 @@ internal fun SpeedPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    // Web rate ladder (7 steps incl. 1.75x); 1.0x renders "Normal (1x)".
-    val rates = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
-    MenuPopover(width = 180.dp) {
-        PlayerMenuHeader("speed")
-        rates.forEachIndexed { idx, rate ->
-            PlayerMenuRow(
-                label = when {
-                    rate == 1.0f -> "Normal (1x)"
-                    rate == rate.toInt().toFloat() -> "${rate.toInt()}x"
-                    else -> "${rate}x"
-                },
+    MenuPopover(header = "speed", width = 180.dp) {
+        SPEEDS.forEachIndexed { idx, rate ->
+            ChoiceRow(
+                label = speedLabel(rate),
                 selected = rate == current,
                 focusRequester = focusRequester.takeIf { idx == 0 },
                 onClick = { onPick(rate) },
             )
         }
     }
+}
+
+/** The speeds the menu offers, the web's: seven steps, 1.75x among them. */
+internal val SPEEDS = listOf(0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
+
+/** A speed as the menu names it: "normal" for 1x, else its factor, "0.5x",
+ *  "2x". */
+internal fun speedLabel(rate: Float): String = when {
+    rate == 1.0f -> "normal"
+    rate == rate.toInt().toFloat() -> "${rate.toInt()}x"
+    else -> "${rate}x"
 }
 
 sealed class PendingSkip {
@@ -1864,27 +1787,19 @@ internal fun SubtitlePanel(
     val focusOn = selected?.takeIf { id -> menu.all.any { it.id == id } }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    MenuPopover(width = 380.dp) {
-        PlayerMenuHeader("subtitles")
-        PlayerMenuRow(
+    MenuPopover(header = "subtitles", width = 380.dp) {
+        ChoiceRow(
             label = "off",
             selected = selected == null,
             focusRequester = focusRequester.takeIf { focusOn == null },
             onClick = { onSelect(null) },
         )
-        if (menu.all.isEmpty()) {
-            Text(
-                text = "No subtitles available",
-                color = ChinoMuted,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
-        }
+        if (menu.all.isEmpty()) ChoiceNote("No subtitles available")
         menu.top.forEach { entry ->
             SubtitleRow(entry, entry.id == selected, focusRequester.takeIf { entry.id == focusOn }, onSelect)
         }
         if (menu.more.isNotEmpty()) {
-            PlayerMenuRow(
+            ChoiceRow(
                 label = "more languages",
                 selected = false,
                 trailing = { DisclosureArrow(open = moreOpen) },
@@ -1906,7 +1821,7 @@ private fun SubtitleRow(
     focusRequester: FocusRequester?,
     onSelect: (SubtitleEntry?) -> Unit,
 ) {
-    PlayerMenuRow(
+    ChoiceRow(
         label = entry.label,
         selected = selected,
         focusRequester = focusRequester,
@@ -2083,19 +1998,13 @@ private fun AudioPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    MenuPopover(width = 300.dp) {
-        PlayerMenuHeader("audio")
+    MenuPopover(header = "audio", width = 300.dp) {
         if (tracks.isEmpty()) {
-            Text(
-                text = "No audio tracks",
-                color = ChinoMuted,
-                fontSize = 13.sp,
-                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
-            )
+            ChoiceNote("No audio tracks")
         } else {
             tracks.forEachIndexed { idx, track ->
                 val (primary, suffix) = splitAudioLabel(track.label)
-                PlayerMenuRow(
+                ChoiceRow(
                     label = primary,
                     secondary = suffix,
                     selected = track.selected,

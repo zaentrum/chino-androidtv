@@ -17,6 +17,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.staticCompositionLocalOf
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
@@ -177,6 +178,11 @@ class ItemFocus(
 @Composable
 fun rememberItemFocus(preFocused: Boolean = false): ItemFocus = remember { ItemFocus(preFocused) }
 
+/** Room a scrolling list keeps clear above and below its focused item, as it
+ *  scrolls it into view: where the list fades out at its edges
+ *  ([ChoiceMenu]), the focused row stays out of the fade. */
+val LocalFocusScrollMargin = staticCompositionLocalOf { 0.dp }
+
 /**
  * The focus style on an item. Put it before the item's focus target
  * (clickable, focusable, a tv-material component's own), so it follows that
@@ -209,6 +215,7 @@ fun Modifier.focusStyle(
     val ringPx = with(density) { ChinoFocus.RingWidth.toPx() }
     val gapPx = with(density) { ChinoFocus.RingGap.toPx() }
     val barPx = with(density) { ChinoFocus.CameFromWidth.toPx() }
+    val marginPx = with(density) { LocalFocusScrollMargin.current.toPx() }
     val bringIntoView = remember { BringIntoViewRequester() }
     val scope = rememberCoroutineScope()
     var measured by remember { mutableStateOf(IntSize.Zero) }
@@ -222,7 +229,8 @@ fun Modifier.focusStyle(
             // item: a scrolling list would stop with the ring past its edge.
             if (state.isFocused) {
                 val room = focusRoom(measured, kind, ringPx, gapPx)
-                scope.launch { bringIntoView.bringIntoView(room) }
+                val clear = Rect(room.left, room.top - marginPx, room.right, room.bottom + marginPx)
+                scope.launch { bringIntoView.bringIntoView(clear) }
             }
         }
         // A focused item draws over its neighbours, its ring included.
