@@ -94,6 +94,9 @@ import cloud.nalet.chino.tv.ui.theme.LoadError
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
 import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 import cloud.nalet.chino.tv.ui.theme.bleedToScreenEdges
+import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
+import cloud.nalet.chino.tv.ui.theme.runToScreenEnd
+import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 import cloud.nalet.chino.tv.ui.theme.SafeArea
 import androidx.compose.runtime.mutableFloatStateOf
@@ -307,15 +310,24 @@ private fun DetailContent(
         // Content overlays the bottom half of the backdrop so the title + CTAs
         // sit on top of the gradient. For series, the page is taller (episodes
         // strip below the fold) so we let it scroll instead of fixing to the
-        // viewport.
+        // viewport - out to the screen's end and bottom edges, its rows
+        // running to the screen's edge; what rests stays inside the safe
+        // area, and a focused item is brought into view inside it.
+        ScrollsInSafeArea(trailing = SafeArea.Vertical) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .scrollsToScreenEdges()
                 .verticalScroll(rememberScrollState())
                 // 24dp horizontal = the mobile detail content inset, so the
                 // poster + title + episodes line up with the browse grid you
                 // came from (was 64dp — far more indented than the rest).
-                .padding(horizontal = 24.dp, vertical = 48.dp),
+                .padding(
+                    start = 24.dp,
+                    end = 24.dp + SafeArea.Horizontal,
+                    top = 48.dp,
+                    bottom = 48.dp + SafeArea.Vertical,
+                ),
             verticalArrangement = Arrangement.Bottom,
         ) {
             // Poster (left) + content (right), overlapping the backdrop —
@@ -421,8 +433,20 @@ private fun DetailContent(
                 )
             }
         }
+        }
     }
 }
+
+/** How far the title page's rows run past its column's end to the screen's
+ *  edge: the column's own padding there and the safe area's. */
+private val RowRun = 24.dp + SafeArea.Horizontal
+
+/** A row of the title page brings a focused card or chip into view inside
+ *  the safe area - clear of its end by the safe area's side and the room a
+ *  ring needs. */
+@Composable
+private fun RowToScreenEdge(content: @Composable () -> Unit) =
+    ScrollsInSafeArea(trailing = SafeArea.Horizontal + ChinoFocus.Room, content = content)
 
 /** Detail action row, the order and states every app has (docs/chino, title
  *  actions): Play (or Resume) · Start over · Trailer, then add to list - the
@@ -1229,10 +1253,11 @@ private fun MoreLikeThisSection(
             fontWeight = FontWeight.SemiBold,
             color = ChinoFg,
         )
+        RowToScreenEdge {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-            contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
-            modifier = Modifier.shelfRoom().fillMaxWidth(),
+            contentPadding = shelfPadding(end = 32.dp + RowRun, top = 12.dp, bottom = 12.dp),
+            modifier = Modifier.runToScreenEnd(RowRun).shelfRoom().fillMaxWidth(),
         ) {
             items(items, key = { it.id }) { entry ->
                 SimilarCard(
@@ -1242,6 +1267,7 @@ private fun MoreLikeThisSection(
                     onClick = { onSelect(entry.id) },
                 )
             }
+        }
         }
     }
 }
@@ -1331,10 +1357,11 @@ private fun CreditsSection(
                 fontWeight = FontWeight.SemiBold,
                 color = ChinoFg,
             )
+            RowToScreenEdge {
             LazyRow(
                 horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-                contentPadding = shelfPadding(end = 32.dp, top = 4.dp, bottom = 4.dp),
-                modifier = Modifier.shelfRoom().fillMaxWidth(),
+                contentPadding = shelfPadding(end = 32.dp + RowRun, top = 4.dp, bottom = 4.dp),
+                modifier = Modifier.runToScreenEnd(RowRun).shelfRoom().fillMaxWidth(),
             ) {
                 // groupCredits lists a person once per role, so role + person
                 // id (else name) keys a card uniquely; a name alone does not
@@ -1345,6 +1372,7 @@ private fun CreditsSection(
                         onClick = actor.personId?.let { id -> { onPersonSelected(id) } },
                     )
                 }
+            }
             }
         }
         if (credits.crew.isNotEmpty()) {
@@ -1424,10 +1452,11 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
             modifier = Modifier.width(160.dp),
         )
         // Chips far enough apart for a focused one's growth and ring.
+        RowToScreenEdge {
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
-            contentPadding = shelfPadding(end = 32.dp, top = 2.dp, bottom = 2.dp),
-            modifier = Modifier.weight(1f).shelfRoom(),
+            contentPadding = shelfPadding(end = 32.dp + RowRun, top = 2.dp, bottom = 2.dp),
+            modifier = Modifier.weight(1f).runToScreenEnd(RowRun).shelfRoom(),
         ) {
             items(group.people, key = ::creditKey) { person ->
                 CrewName(
@@ -1435,6 +1464,7 @@ private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
                     onClick = person.personId?.let { id -> { onPersonSelected(id) } },
                 )
             }
+        }
         }
     }
 }

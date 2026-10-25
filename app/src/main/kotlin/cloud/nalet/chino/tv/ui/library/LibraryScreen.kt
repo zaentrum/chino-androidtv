@@ -83,6 +83,10 @@ import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
+import cloud.nalet.chino.tv.ui.theme.SafeArea
+import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
+import cloud.nalet.chino.tv.ui.theme.runToScreenEnd
+import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.LoadError
 import coil.compose.AsyncImage
 import coil.request.ImageRequest
@@ -306,11 +310,17 @@ internal fun LibraryContent(
             )
             // Outer column scrolls so DPAD_DOWN can walk past the visible
             // portion. The rail + TopBar stay fixed; only the
-            // hero / chips / shelves move under the camera.
+            // hero / chips / shelves move under the camera - out to the
+            // screen's end and bottom edges, the shelves running to the
+            // screen's edge; what rests stays inside the safe area, and a
+            // focused card is brought into view inside it.
+            ScrollsInSafeArea(trailing = SafeArea.Vertical) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .verticalScroll(pageScroll),
+                    .scrollsToScreenEdges()
+                    .verticalScroll(pageScroll)
+                    .padding(end = SafeArea.Horizontal, bottom = SafeArea.Vertical),
             ) {
         // Crossfade so hero swaps every 20s glide between backdrops instead of
         // hard-cutting — feels much less jarring when you're not actively
@@ -441,6 +451,7 @@ internal fun LibraryContent(
                 }
             }
         }
+            }
             }
         }
         }
@@ -777,10 +788,11 @@ private fun ContinueWatchingRow(
     /** The card's play: from its position on the in-progress shelf. */
     onPlay: (itemId: String, resumeSec: Int) -> Unit = { _, _ -> },
 ) {
+    ShelfToScreenEdge {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-        contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
-        modifier = Modifier.shelfRoom().fillMaxWidth(),
+        contentPadding = shelfPadding(end = 32.dp + ShelfRun, top = 12.dp, bottom = 12.dp),
+        modifier = Modifier.runToScreenEnd(ShelfRun).shelfRoom().fillMaxWidth(),
     ) {
         tvRowItems(
             items = items,
@@ -822,6 +834,7 @@ private fun ContinueWatchingRow(
                 onLongPress = openMenu,
             )
         }
+    }
     }
 }
 
@@ -1187,10 +1200,11 @@ internal fun ItemGrid(
     // fixed-width PosterCards, capped, with a See All escape hatch. DPAD_DOWN
     // lands cleanly on the next row and the outer page glides up via
     // bringIntoView.
+    ShelfToScreenEdge {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
-        contentPadding = shelfPadding(end = 32.dp, top = 12.dp, bottom = 12.dp),
-        modifier = Modifier.shelfRoom().fillMaxWidth(),
+        contentPadding = shelfPadding(end = 32.dp + ShelfRun, top = 12.dp, bottom = 12.dp),
+        modifier = Modifier.runToScreenEnd(ShelfRun).shelfRoom().fillMaxWidth(),
     ) {
         tvRowItems(items, key = { it.id }) { item ->
             PosterCard(
@@ -1220,7 +1234,18 @@ internal fun ItemGrid(
             }
         }
     }
+    }
 }
+
+/** How far Home's shelves run past their column's end to the screen's
+ *  edge: the column's own padding there and the safe area's. */
+private val ShelfRun = 16.dp + SafeArea.Horizontal
+
+/** A Home shelf brings a focused card into view inside the safe area -
+ *  [ShelfRun]'s safe part and the room a ring needs clear of its end. */
+@Composable
+private fun ShelfToScreenEdge(content: @Composable () -> Unit) =
+    ScrollsInSafeArea(trailing = SafeArea.Horizontal + ChinoFocus.Room, content = content)
 
 @Composable
 internal fun SeeAllCard(onClick: () -> Unit) {

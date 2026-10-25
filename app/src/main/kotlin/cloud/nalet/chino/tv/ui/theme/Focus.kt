@@ -236,18 +236,24 @@ fun Modifier.focusStyle(
     val scope = rememberCoroutineScope()
     var measured by remember { mutableStateOf(IntSize.Zero) }
     val fill = surface?.let { if (focus.focused && kind.lightsUp && !filled) ChinoFocus.Surface else it }
+    // Scroll the grown item and its ring into view, not only the item: a
+    // scrolling list would stop with the ring past its edge.
+    fun showRoom(size: IntSize) {
+        val room = focusRoom(size, kind, ringPx, gapPx)
+        val clear = Rect(room.left, room.top - marginPx, room.right, room.bottom + marginPx)
+        scope.launch { bringIntoView.bringIntoView(clear) }
+    }
     return this
         .bringIntoViewRequester(bringIntoView)
-        .onSizeChanged { measured = it }
+        .onSizeChanged {
+            measured = it
+            // A focused item that grows - a card's hint line under its title
+            // - keeps all of itself in view.
+            if (focus.focused) showRoom(it)
+        }
         .onFocusChanged { state ->
             focus.report(state.isFocused)
-            // Scroll the grown item and its ring into view, not only the
-            // item: a scrolling list would stop with the ring past its edge.
-            if (state.isFocused) {
-                val room = focusRoom(measured, kind, ringPx, gapPx)
-                val clear = Rect(room.left, room.top - marginPx, room.right, room.bottom + marginPx)
-                scope.launch { bringIntoView.bringIntoView(clear) }
-            }
+            if (state.isFocused) showRoom(measured)
         }
         // A focused item draws over its neighbours, its ring included.
         .zIndex(if (focus.focused || progress > 0f) 1f else 0f)

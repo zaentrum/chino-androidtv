@@ -1,12 +1,16 @@
 package cloud.nalet.chino.tv.ui.theme
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
+import androidx.compose.foundation.gestures.BringIntoViewSpec
+import androidx.compose.foundation.gestures.LocalBringIntoViewSpec
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.BoxScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.geometry.Offset
@@ -15,7 +19,9 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.layout.layout
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Dp
+import androidx.compose.ui.unit.dp
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.tv.material3.LocalContentColor
 import androidx.tv.material3.MaterialTheme
@@ -33,7 +39,11 @@ import androidx.tv.material3.MaterialTheme
  * growth need inside that: the rail's and the top bar's padding, a shelf's
  * room ([shelfRoom]). What only paints - a backdrop, the band behind the
  * player's controls, a scrim - reaches the screen's edges
- * ([bleedToScreenEdges], [paintToScreenEdges], [scrim]).
+ * ([bleedToScreenEdges], [paintToScreenEdges], [scrim]). The safe area sets
+ * where resting content starts, not a clip: a page that scrolls - Home, a
+ * title's page - scrolls out to the screen's end and bottom edges, its rows
+ * run to the screen's edge ([runToScreenEnd]), and a focused item is
+ * brought into view inside the safe area ([ScrollsInSafeArea]).
  */
 object SafeArea {
     /** From the left and from the right edge. */
@@ -140,4 +150,79 @@ fun Modifier.paintToScreenEdges(
         topLeft = Offset(-left, -above),
         size = Size(size.width + left + (if (end) h else 0f), size.height + above + (if (bottom) v else 0f)),
     )
+}
+
+/**
+ * A page that scrolls, laid out past the safe area to the screen's end and
+ * bottom edges: what scrolls by shows out to them, never cut at the safe
+ * line. Put it before the scroll; give the scrolled content [SafeArea]'s
+ * end and bottom as padding, so it rests where it did, inside the safe
+ * area, and [ScrollsInSafeArea] around it, so a focused item is brought into
+ * view inside it.
+ */
+fun Modifier.scrollsToScreenEdges(): Modifier = bleedToScreenEdges(start = false, top = false)
+
+/**
+ * A scrolling row on a page that scrolls to the screen's edges: laid out
+ * [by] past its parent's end - the page's padding there and the safe
+ * area's - so its cards run to the screen's edge. Its content padding keeps
+ * [by] after its last card, so that one rests where it did ([shelfPadding]).
+ */
+fun Modifier.runToScreenEnd(by: Dp): Modifier = layout { measurable, constraints ->
+    if (!constraints.hasBoundedWidth) {
+        val placeable = measurable.measure(constraints)
+        return@layout layout(placeable.width, placeable.height) { placeable.place(0, 0) }
+    }
+    val extra = by.roundToPx()
+    val placeable = measurable.measure(
+        constraints.copy(minWidth = constraints.minWidth + extra, maxWidth = constraints.maxWidth + extra),
+    )
+    layout((placeable.width - extra).coerceIn(constraints.minWidth, constraints.maxWidth), placeable.height) {
+        placeable.place(0, 0)
+    }
+}
+
+/**
+ * Brings a focused item into view inside the safe area of a list that runs
+ * past it: no nearer the container's end than [trailing] px nor its start
+ * than [leading] px, scrolling as little as that takes. The item a remote
+ * moves to, its ring and its growth stay inside the safe area; one that is
+ * there already stays where it is. One rule for the item and for its ring's
+ * room around it (the focus style asks for both), so the two never pull the
+ * list two ways.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+internal class SafeAreaBringIntoView(
+    private val leading: Float,
+    private val trailing: Float,
+) : BringIntoViewSpec {
+    override fun calculateScrollDistance(offset: Float, size: Float, containerSize: Float): Float {
+        val start = leading
+        val end = containerSize - trailing
+        return when {
+            // Bigger than the room: its start at the start.
+            size > end - start -> offset - start
+            offset < start -> offset - start
+            offset + size > end -> offset + size - end
+            else -> 0f
+        }
+    }
+}
+
+/**
+ * What scrolls in [content] - the page's own scroll, or a row of it -
+ * brings a focused item into view [trailing] clear of its end and
+ * [leading] clear of its start ([SafeAreaBringIntoView]): for a page that
+ * scrolls to the screen's bottom edge the safe area's bottom, for a row
+ * that runs to the screen's edge the safe area's side and the room a ring
+ * needs.
+ */
+@OptIn(ExperimentalFoundationApi::class)
+@Composable
+fun ScrollsInSafeArea(trailing: Dp, leading: Dp = 0.dp, content: @Composable () -> Unit) {
+    val density = LocalDensity.current
+    val spec = remember(density, trailing, leading) {
+        with(density) { SafeAreaBringIntoView(leading.toPx(), trailing.toPx()) }
+    }
+    CompositionLocalProvider(LocalBringIntoViewSpec provides spec, content = content)
 }
