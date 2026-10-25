@@ -80,9 +80,11 @@ real values always come from the connected server at runtime.
   (`/api/v1/subtitles/languages`), then "more languages" with the rest of the
   title's tracks - a package's other renditions, its sidecars and, for a
   title played from its original file, the file's own text streams, each
-  fetched only once it is switched on. On a server that names no subtitle
-  languages, all of the tracks are listed directly: your language first, then
-  the file's order, a language's tracks together. A track is named by
+  fetched only once it is switched on. The menu never lists every track a
+  file brings: on a server that names no subtitle languages, the languages on
+  top are your own - the subtitle setting's, the audio setting's unless it is
+  Original, and the TV's - each whole, its regions and scripts in their runs,
+  and the rest is under "more languages". A track is named by
   chino-web's rule, so the TV, the phone and the web call it the same: its
   language, its script or region in brackets, and its kind in words
   ("Chinese (Simplified)", "English · for deaf and hard of hearing", "German
