@@ -109,6 +109,9 @@ fun LibraryScreen(
     viewModel: LibraryViewModel,
     onItemSelected: (String) -> Unit = {},
     onHeroPlay: (String) -> Unit = onItemSelected,
+    /** A card menu's play: the title, from [resumeSec] where it is above 0,
+     *  else where the player picks it up. */
+    onPlayCard: (itemId: String, resumeSec: Int) -> Unit = { id, _ -> onHeroPlay(id) },
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
@@ -189,6 +192,7 @@ fun LibraryScreen(
                     onZap = onZap,
                     onRemoveFromContinueWatching = viewModel::removeFromContinueWatching,
                     onToggleWatched = viewModel::toggleWatched,
+                    onPlayCard = onPlayCard,
                 )
             }
         }
@@ -228,6 +232,8 @@ internal fun LibraryContent(
     onRemoveFromContinueWatching: (String) -> Unit = {},
     // Card-action watched toggle. `markWatched` is the NEXT desired state.
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
+    /** A card menu's play or resume ([playCardAction]). */
+    onPlayCard: (itemId: String, resumeSec: Int) -> Unit = { id, _ -> onHeroPlay(id) },
 ) {
     val featured = heroItem
     // Hold-OK on any card opens a single shared actions menu hosted here at the
@@ -353,6 +359,7 @@ internal fun LibraryContent(
                     onRemove = onRemoveFromContinueWatching,
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
+                    onPlay = onPlayCard,
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -369,6 +376,7 @@ internal fun LibraryContent(
                     // toggle so the menu is present on every card surface.
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
+                    onPlay = onPlayCard,
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -391,6 +399,7 @@ internal fun LibraryContent(
                     onSeeAll = onMoviesNav,
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
+                    onPlay = { id -> onPlayCard(id, 0) },
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -420,6 +429,7 @@ internal fun LibraryContent(
                     onSeeAll = onMoviesNav,
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
+                    onPlay = { id -> onPlayCard(id, 0) },
                 )
             }
             if (movies.isEmpty() && series.isEmpty()) {
@@ -764,6 +774,8 @@ private fun ContinueWatchingRow(
     onRemove: ((String) -> Unit)? = null,
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
     onShowMenu: (CardMenuRequest) -> Unit = {},
+    /** The card's play: from its position on the in-progress shelf. */
+    onPlay: (itemId: String, resumeSec: Int) -> Unit = { _, _ -> },
 ) {
     LazyRow(
         horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
@@ -777,17 +789,21 @@ private fun ContinueWatchingRow(
             val isEpisode = item.type == "episode"
             val cardTitle =
                 if (isEpisode && item.seriesTitle != null) item.seriesTitle!! else item.title
-            // Hold-OK opens the shared menu: watched toggle on every CW card,
-            // plus "Remove from Continue Watching" on the in-progress shelf.
+            // Hold-OK opens the shared menu, chino-web's card menu: resume
+            // where the card's bar shows a position, else play; the watched
+            // toggle; and remove from continue watching on the in-progress
+            // shelf.
             val openMenu: () -> Unit = {
                 val watched = item.watchedAt != null
+                val resumeAt = item.positionSec.takeIf { showProgress && it > 0 } ?: 0
                 val actions = buildList {
+                    add(playCardAction(resumes = resumeAt > 0) { onPlay(item.id, resumeAt) })
                     add(watchedCardAction(watched) { next -> onToggleWatched(item.id, next) })
                     if (onRemove != null) {
                         add(
                             CardAction(
                                 icon = Lucide.X,
-                                label = "Remove from Continue Watching",
+                                label = REMOVE_FROM_CONTINUE_WATCHING,
                                 destructive = true,
                                 onClick = { onRemove(item.id) },
                             ),
@@ -804,10 +820,6 @@ private fun ContinueWatchingRow(
                 showProgress = showProgress,
                 onClick = { onItemSelected(item.id) },
                 onLongPress = openMenu,
-                // The hint reads "remove" only on the in-progress shelf; the
-                // Next Up shelf still has the menu but no remove, so it gets a
-                // generic "options" hint.
-                hasRemove = onRemove != null,
             )
         }
     }
@@ -838,7 +850,6 @@ private fun ContinueWatchingCard(
     showProgress: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
-    hasRemove: Boolean,
 ) {
     // Portrait poster matching the mobile MediaCard: the SERIES title (for
     // episodes), an "SxxExx · episode-title" badge, and a #58A6FF progress
@@ -965,7 +976,8 @@ private fun ContinueWatchingCard(
                 // shelves expose the watched toggle.
                 if (focused) {
                     Text(
-                        text = if (hasRemove) "Hold OK for options" else "Hold OK to mark watched",
+                        // Its menu holds play and the watched toggle at least.
+                        text = CARD_OPTIONS_HINT,
                         style = MaterialTheme.typography.bodySmall,
                         color = ChinoFocus.text(ChinoMuted, focused),
                         maxLines = 1,
@@ -1166,6 +1178,9 @@ internal fun ItemGrid(
     onSeeAll: (() -> Unit)? = null,
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
     onShowMenu: (CardMenuRequest) -> Unit = {},
+    /** A movie card's play. A show's card has none: what it plays is worked
+     *  out on its page. */
+    onPlay: ((String) -> Unit)? = null,
 ) {
     // Web's home uses finite MediaRow shelves — a single horizontal scroll of
     // fixed-width PosterCards, capped, with a See All escape hatch. DPAD_DOWN
@@ -1182,16 +1197,15 @@ internal fun ItemGrid(
                 posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
                 onItemSelected = onItemSelected,
                 saved = item.id in saved,
-                // Hold-OK opens the shared menu with the watched toggle. Marking
-                // watched drops the card from this rail (rails are unwatched=true).
+                // Hold-OK opens the shared menu: a movie's play, the watched
+                // toggle. Marking watched drops the card from this rail
+                // (rails are unwatched=true).
                 onLongPress = {
                     val watched = item.watchedAt != null
                     onShowMenu(
                         CardMenuRequest(
                             title = item.title,
-                            actions = listOf(
-                                watchedCardAction(watched) { next -> onToggleWatched(item.id, next) },
-                            ),
+                            actions = cardActions(item, onPlay, watched) { next -> onToggleWatched(item.id, next) },
                         ),
                     )
                 },
@@ -1329,7 +1343,7 @@ internal fun PosterCard(
                 // surfaces a hover overflow button).
                 if (focused) {
                     Text(
-                        text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
+                        text = cardMenuHint(item),
                         style = MaterialTheme.typography.bodySmall,
                         color = ChinoFocus.text(ChinoMuted, focused),
                         maxLines = 1,
@@ -1359,17 +1373,44 @@ internal data class CardAction(
     val onClick: () -> Unit,
 )
 
-/** Builds the "Mark as watched" / "Mark as unwatched" action — exact web
- *  wording, with watched's one icon, the check (docs/chino, title actions).
- *  `watched` is the item's CURRENT state (watchedAt != null); `onToggle`
- *  receives the NEXT desired state (true = mark watched). Reused on every
- *  card surface so wording/behaviour stay identical. */
+/** What a focused card says of its menu: its options where it holds more
+ *  than the watched toggle (a movie's play), else that toggle. */
+internal const val CARD_OPTIONS_HINT = "Hold OK for options"
+
+internal fun cardMenuHint(item: Item): String = when {
+    item.kind == "movie" -> CARD_OPTIONS_HINT
+    item.watchedAt != null -> "Hold OK to mark unwatched"
+    else -> "Hold OK to mark watched"
+}
+
+/** A card menu's way off Continue watching (chino-web's card menu). */
+internal const val REMOVE_FROM_CONTINUE_WATCHING = "remove from continue watching"
+
+/** A card menu's play: "resume" where the card has a position to go on
+ *  from - its bar shows it, so the label names none - else "play". */
+internal fun playCardAction(resumes: Boolean, onPlay: () -> Unit): CardAction =
+    CardAction(icon = Lucide.Play, label = if (resumes) "resume" else "play", onClick = onPlay)
+
+/** The watched toggle of a card's menu, in the title page's words: "mark as
+ *  watched", and "watched" while it is (docs/chino, title actions:
+ *  [watchedName]), with watched's one icon, the check. `watched` is the
+ *  item's CURRENT state (watchedAt != null); `onToggle` receives the NEXT
+ *  desired state (true = mark watched). Reused on every card surface so
+ *  wording/behaviour stay identical. */
 internal fun watchedCardAction(watched: Boolean, onToggle: (Boolean) -> Unit): CardAction =
     CardAction(
         icon = Lucide.Check,
-        label = if (watched) "Mark as unwatched" else "Mark as watched",
+        label = cloud.nalet.chino.tv.ui.detail.watchedName(watched),
         onClick = { onToggle(!watched) },
     )
+
+/** A poster card's menu: play where [onPlay] is given and the card is a
+ *  movie's - a show's page works out its episode - then the watched toggle. */
+internal fun cardActions(item: Item, onPlay: ((String) -> Unit)?, watched: Boolean, onToggleWatched: (Boolean) -> Unit): List<CardAction> =
+    buildList {
+        if (onPlay != null && item.kind == "movie") add(playCardAction(resumes = false) { onPlay(item.id) })
+        add(watchedCardAction(watched, onToggleWatched))
+    }
 
 @Composable
 internal fun CardActionsMenu(
@@ -1468,8 +1509,10 @@ private fun CardActionRow(
         Text(
             text = action.label,
             // At rest fg-2, fg on focus; a destructive one's red label is fg
-            // while focused, its icon red.
+            // while focused, its icon red. A menu item: the mono face,
+            // lowercase, as every menu's.
             color = if (action.destructive) ChinoFocus.text(fg, focus.focused) else ChinoFocus.title(fg, focus.focused),
+            fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily,
             fontSize = 15.sp,
             fontWeight = FontWeight.Medium,
             maxLines = 1,

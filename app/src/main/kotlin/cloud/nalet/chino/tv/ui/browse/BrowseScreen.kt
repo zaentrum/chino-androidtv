@@ -61,7 +61,7 @@ import cloud.nalet.chino.tv.ui.library.CardActionsMenu
 import cloud.nalet.chino.tv.ui.library.FilterChip
 import cloud.nalet.chino.tv.ui.library.TvSideRail
 import cloud.nalet.chino.tv.ui.library.TvTopBar
-import cloud.nalet.chino.tv.ui.library.watchedCardAction
+import cloud.nalet.chino.tv.ui.library.cardActions
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
 import cloud.nalet.chino.tv.ui.theme.WatchlistMark
 
@@ -71,6 +71,8 @@ fun BrowseScreen(
     pageTitle: String,
     type: String,
     onItemSelected: (String) -> Unit,
+    /** A movie card menu's play. */
+    onPlay: (String) -> Unit = {},
     onHomeNav: () -> Unit,
     onMoviesNav: () -> Unit,
     onSeriesNav: () -> Unit,
@@ -124,6 +126,7 @@ fun BrowseScreen(
                             onLoadMore = viewModel::loadMore,
                             onShowMenu = { activeCardMenu = it },
                             onToggleWatched = viewModel::toggleWatched,
+                            onPlay = onPlay,
                         )
                     }
                 }
@@ -153,6 +156,7 @@ private fun BrowseGrid(
     onLoadMore: () -> Unit,
     onShowMenu: (CardMenuRequest) -> Unit = {},
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
+    onPlay: (String) -> Unit = {},
 ) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(s.hasMore, s.items.size) {
@@ -199,17 +203,16 @@ private fun BrowseGrid(
                 posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
                 onClick = { onItemSelected(item.id) },
                 saved = item.id in savedItems,
-                // Hold-OK opens the shared actions menu with the watched toggle.
-                // Browse is not unwatched-filtered, so marking watched flips the
-                // card's green ✓ badge in place (handled in the VM).
+                // Hold-OK opens the shared actions menu: a movie's play, the
+                // watched toggle. Browse is not unwatched-filtered, so marking
+                // watched flips the card's green ✓ badge in place (handled in
+                // the VM).
                 onLongPress = {
                     val watched = item.watchedAt != null
                     onShowMenu(
                         CardMenuRequest(
                             title = item.title,
-                            actions = listOf(
-                                watchedCardAction(watched) { next -> onToggleWatched(item.id, next) },
-                            ),
+                            actions = cardActions(item, onPlay, watched) { next -> onToggleWatched(item.id, next) },
                         ),
                     )
                 },
@@ -398,7 +401,7 @@ internal fun PosterGridCard(
                 // menu is findable at 10ft (web MediaCard hover overflow).
                 if (focused && onLongPress != null) {
                     Text(
-                        text = if (item.watchedAt != null) "Hold OK to mark unwatched" else "Hold OK to mark watched",
+                        text = cloud.nalet.chino.tv.ui.library.cardMenuHint(item),
                         color = meta,
                         fontSize = 12.sp,
                         maxLines = 1,

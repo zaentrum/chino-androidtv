@@ -377,6 +377,9 @@ fun ChinoTvNavHost(container: AppContainer) {
                     viewModel = vm,
                     onItemSelected = { itemId -> navController.navigate(Routes.detail(itemId)) },
                     onHeroPlay = { itemId -> navController.navigate(Routes.player(itemId)) { launchSingleTop = true } },
+                    onPlayCard = { itemId, resumeSec ->
+                        navController.navigate(Routes.player(itemId, resumeSec = resumeSec)) { launchSingleTop = true }
+                    },
                     onSearch = { navController.navigate(Routes.SEARCH) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
                     // launchSingleTop: the rail Watchlist button routes here from
@@ -403,6 +406,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     pageTitle = "Movies",
                     type = "movie",
                     onItemSelected = { id -> navController.navigate(Routes.detail(id)) },
+                    onPlay = { id -> navController.navigate(Routes.player(id)) { launchSingleTop = true } },
                     onHomeNav = { navController.navigate(Routes.LIBRARY) { popUpTo(Routes.LIBRARY) { inclusive = true } } },
                     onMoviesNav = {},
                     onSeriesNav = { navController.navigate(Routes.SERIES) { popUpTo(Routes.MOVIES) { inclusive = true } } },
