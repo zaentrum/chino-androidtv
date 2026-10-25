@@ -34,8 +34,8 @@ class QualityMenuTest {
     @Test
     fun `the server's table of names by height`() {
         assertEquals(
-            listOf("Ultra (4320p)", "Ultra (2160p)", "High (1440p)", "High (1080p)", "Medium (900p)", "Medium (720p)", "Low (576p)", "Low (480p)", "Lowest (360p)", "Lowest (240p)"),
-            listOf(4320, 2160, 1440, 1080, 900, 720, 576, 480, 360, 240).map(::qualityName),
+            listOf("Ultra (4320p)", "Ultra (2160p)", "High (1440p)", "High (1080p)", "Medium (937p)", "Medium (720p)", "Low (576p)", "Low (480p)", "Lowest (360p)", "Lowest (240p)"),
+            listOf(4320, 2160, 1440, 1080, 937, 720, 576, 480, 360, 240).map(::qualityName),
         )
         assertEquals("Medium (720p)", shownQualityName("720p"))
         assertEquals("Medium (720p)", shownQualityName("Medium (720p)"))
@@ -171,31 +171,52 @@ class QualityMenuTest {
     }
 
     @Test
-    fun `a frame the menu lacks is named as chino-stream names a frame`() {
+    fun `a frame is named by its step, the standard heights with the server's tolerance`() {
         val menu = qualityMenu(ladder)!!
         // A 2.39:1 film's 720p rung.
         assertEquals("Medium (720p)", playingLabel(1280, 536, menu))
-        // chino-stream's qualityname_test.go, case for case.
+        // docs/chino playback, quality names: a frame's step is its height or
+        // the height its width stands for at 16:9, whichever is larger; up to
+        // 10 % above a standard height in a frame no taller than it, or up to
+        // 3 % below one, is that height; any other step is its own.
         val frames = listOf(
+            // The spec's own examples.
+            Triple(1920, 818, "High (1080p)"), Triple(1920, 1080, "High (1080p)"),
+            Triple(1916, 800, "High (1080p)"), Triple(2048, 858, "High (1080p)"),
+            Triple(1024, 576, "Low (576p)"), Triple(2560, 1072, "High (1440p)"),
+            Triple(1666, 900, "Medium (937p)"), Triple(1728, 720, "Medium (972p)"),
+            // Scope and flat frames of the standard heights.
             Triple(3840, 1606, "Ultra (2160p)"), Triple(1920, 804, "High (1080p)"), Triple(1920, 800, "High (1080p)"),
             Triple(1280, 536, "Medium (720p)"), Triple(854, 358, "Low (480p)"), Triple(640, 268, "Lowest (360p)"),
-            Triple(1920, 1038, "High (1080p)"), Triple(1998, 1080, "High (1080p)"), Triple(1280, 692, "Medium (720p)"),
-            Triple(4096, 2160, "Ultra (2160p)"), Triple(4096, 1716, "Ultra (2160p)"), Triple(2048, 1080, "High (1080p)"),
-            Triple(2048, 858, "High (1080p)"),
-            Triple(1916, 800, "High (1080p)"), Triple(1904, 800, "High (1080p)"), Triple(1912, 1036, "High (1080p)"),
-            Triple(1918, 1040, "High (1080p)"), Triple(3836, 1600, "Ultra (2160p)"), Triple(3816, 1600, "Ultra (2160p)"),
+            Triple(1920, 1038, "High (1080p)"), Triple(1280, 692, "Medium (720p)"),
+            // Up to 10 % above, in a frame no taller: DCI and its scope.
+            Triple(1998, 1080, "High (1080p)"), Triple(4096, 2160, "Ultra (2160p)"), Triple(4096, 1716, "Ultra (2160p)"),
+            Triple(2048, 1080, "High (1080p)"), Triple(8192, 4320, "Ultra (4320p)"),
+            // Up to 3 % below: a standard frame cropped at the sides.
+            Triple(1904, 800, "High (1080p)"), Triple(1912, 1036, "High (1080p)"), Triple(1918, 1040, "High (1080p)"),
+            Triple(3836, 1600, "Ultra (2160p)"), Triple(3816, 1600, "Ultra (2160p)"),
             Triple(1278, 534, "Medium (720p)"), Triple(1276, 716, "Medium (720p)"),
-            Triple(1856, 800, "Medium (1044p)"), Triple(1856, 1036, "Medium (1036p)"),
+            // Any other step: the height its width stands for at 16:9.
+            Triple(1856, 800, "Medium (1044p)"), Triple(1856, 1036, "Medium (1044p)"), Triple(1152, 480, "Low (648p)"),
+            // A frame no wider than 16:9: its own height.
             Triple(1440, 1080, "High (1080p)"), Triple(960, 720, "Medium (720p)"), Triple(720, 576, "Low (576p)"),
-            Triple(720, 480, "Low (480p)"), Triple(640, 480, "Low (480p)"),
-            Triple(2560, 1080, "High (1440p)"), Triple(1600, 900, "Medium (900p)"), Triple(1666, 900, "Medium (900p)"),
-            Triple(1728, 720, "Medium (972p)"), Triple(1152, 480, "Low (648p)"),
-            Triple(7680, 4320, "Ultra (4320p)"), Triple(8192, 4320, "Ultra (4320p)"),
+            Triple(720, 480, "Low (480p)"), Triple(640, 480, "Low (480p)"), Triple(1600, 900, "Medium (900p)"),
+            Triple(2560, 1080, "High (1440p)"), Triple(7680, 4320, "Ultra (4320p)"),
+            // A taller frame than the standard one is not that height.
+            Triple(1200, 1100, "High (1100p)"),
         )
         for ((w, h, name) in frames) assertEquals("${w}x$h", name, frameQualityName(w, h))
-        for (h in listOf(240, 359, 360, 479, 480, 576, 719, 720, 900, 1079, 1080, 1440, 2159, 2160, 4320)) {
-            assertEquals(qualityName(h), frameQualityName((h * 16 + 4) / 9, h))
-            assertEquals(qualityName(h), frameQualityName(0, h))
+        // A 16:9 frame, and a height alone: the standard height within 3 %
+        // below it, else its own.
+        val sixteenNine = listOf(
+            240 to "Lowest (240p)", 359 to "Lowest (360p)", 360 to "Lowest (360p)", 400 to "Lowest (400p)",
+            479 to "Low (480p)", 480 to "Low (480p)", 576 to "Low (576p)", 700 to "Medium (720p)", 719 to "Medium (720p)",
+            720 to "Medium (720p)", 900 to "Medium (900p)", 1050 to "High (1080p)", 1079 to "High (1080p)",
+            1080 to "High (1080p)", 1440 to "High (1440p)", 2159 to "Ultra (2160p)", 2160 to "Ultra (2160p)", 4320 to "Ultra (4320p)",
+        )
+        for ((h, name) in sixteenNine) {
+            assertEquals("16:9 of $h", name, frameQualityName(h * 16 / 9, h))
+            assertEquals("$h alone", name, frameQualityName(0, h))
         }
         assertNull(frameQualityName(0, 0))
         assertNull(frameQualityName(1920, 0))

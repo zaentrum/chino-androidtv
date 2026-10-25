@@ -151,8 +151,8 @@ fun chosenQuality(menu: List<QualityRung>, q: String, info: PlayInfo? = null): Q
 fun pickReloads(menu: List<QualityRung>, q: String, info: PlayInfo?, rung: String): Boolean =
     chosenQuality(menu, q, info)?.name?.equals(rung, ignoreCase = true) != true
 
-/** The standard picture heights: the transcoder's ladder rungs and the
- *  boxes players and sources come in, as chino-stream's sizeClasses. */
+/** The standard picture heights (docs/chino, playback: quality names): the
+ *  transcoder's ladder rungs and the boxes players and sources come in. */
 private val SIZE_CLASSES = intArrayOf(240, 360, 480, 540, 576, 720, 1080, 1440, 2160, 4320)
 
 /**
@@ -196,7 +196,7 @@ fun playQuality(requested: String?, info: PlayInfo?): String {
  * A quality's name by the server's table (docs/chino, playback): a name and
  * the height ("Medium (720p)") - 2160p and up "Ultra", 1080p "High", 720p
  * "Medium", 480p "Low", below "Lowest"; a height between two steps the
- * lower step's name with its own height ("Medium (900p)").
+ * lower step's name with its own height ("Medium (937p)").
  */
 fun qualityName(height: Int): String {
     val name = when {
@@ -210,24 +210,22 @@ fun qualityName(height: Int): String {
 }
 
 /**
- * The height a width x height frame is named by, as chino-stream's
- * namedHeight has it: that of the 16:9 frame it fills - its own height,
- * unless it is wider than 16:9: then the 16:9 frame as wide's, so a 2.39:1
- * film's 1920x800 is 1080p and 3840x1606 2160p. A frame up to 10 % wider than
- * that counts as the 16:9 frame of a standard height it is no taller than
- * (DCI 4096x2160 is 2160p), and so does one up to 3 % narrower, a standard
- * frame cropped at the sides (1916x800 is 1080p); else the 16:9 frame of its
- * own height (1666x900 is 900p). A width of 0 leaves the height; 0 without a
- * height.
+ * The height a width x height frame is named by (docs/chino, playback:
+ * quality names): its step - its own height, or the height its width stands
+ * for at 16:9, whichever is larger, so a 2.39:1 film's 1920x800 is 1080p, as
+ * full HD as 1920x1080. A step up to 10 % above a standard height
+ * ([SIZE_CLASSES]) in a frame no taller than it, or up to 3 % below one,
+ * counts as that height: 2048x858 and 1916x800 are 1080p, DCI 4096x2160 is
+ * 2160p, a 16:9 frame of 1076 lines 1080p. Any other step is its own height:
+ * 1666x900 is 937p, a scope film's 720-line encode, 1728x720, 972p, and
+ * 1600x900 900p. A width of 0 leaves the height; 0 without a height.
  */
 fun namedHeight(width: Int, height: Int): Int {
     if (height <= 0) return 0
-    val full = if (width > 0) maxOf(height, (width * 9 + 8) / 16) else height
-    if (full == height) return height
-    for (c in SIZE_CLASSES.reversed()) if (c >= height && c <= full && full * 10 <= c * 11) return c
-    for (c in SIZE_CLASSES) if (c > full && full * 100 >= c * 97) return c
-    if (full * 10 <= height * 11) return height
-    return full
+    val step = if (width > 0) maxOf(height, width * 9 / 16) else height
+    for (c in SIZE_CLASSES.reversed()) if (height <= c && step >= c && step * 10 <= c * 11) return c
+    for (c in SIZE_CLASSES) if (step < c && step * 100 >= c * 97) return c
+    return step
 }
 
 /** A frame's quality name ([qualityName] of its [namedHeight]): "High
