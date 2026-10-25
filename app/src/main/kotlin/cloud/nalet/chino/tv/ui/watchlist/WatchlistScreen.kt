@@ -555,7 +555,7 @@ private fun NameDialog(
                 .width(420.dp)
                 .clip(RectangleShape)
                 .background(ChinoSurface)
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {

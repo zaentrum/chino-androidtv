@@ -358,7 +358,8 @@ private fun ReportProblemDialog(
             .scrim(),
         contentAlignment = Alignment.Center,
     ) {
-        // Not clipped: a focused row grows past the panel's edge.
+        // Its rows set in from its sides, so a focused row's growth stays
+        // inside it, as in every menu (ChoiceMenu).
         Column(
             modifier = Modifier
                 .width(440.dp)
@@ -433,6 +434,9 @@ private fun ReportDialogRow(
     val focus = rememberItemFocus()
     Row(
         modifier = Modifier
+            // Set in from the panel's sides by more than a focused row grows
+            // (1 % each side), its text where the panel's other text is.
+            .padding(horizontal = 6.dp)
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
@@ -444,10 +448,11 @@ private fun ReportDialogRow(
                     onClick(); true
                 } else false
             }
-            .padding(horizontal = 20.dp, vertical = 10.dp),
+            .padding(horizontal = 14.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
-        Text(text = label, color = ChinoFg, fontSize = 15.sp)
+        // A row rests in fg-2 and turns fg on focus.
+        Text(text = label, color = ChinoFocus.title(ChinoText, focus.focused), fontSize = 15.sp)
     }
 }
 
@@ -491,9 +496,10 @@ internal fun LanguageSettingRow(
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {
+        // Its name and its value fg-2 at rest, fg on focus.
         Text(
             text = "Language",
-            color = MaterialTheme.colorScheme.onSurface,
+            color = ChinoFocus.title(ChinoText, focus.focused),
             fontWeight = FontWeight.Medium,
             modifier = Modifier.weight(1f),
         )

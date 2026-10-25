@@ -564,13 +564,14 @@ private fun AddToListPanel(
             .scrim(),
         contentAlignment = Alignment.Center,
     ) {
-        // Not clipped: a focused row grows past the panel's edge.
+        // Its rows set in from its sides, so a focused row's growth stays
+        // inside it, as in every menu (ChoiceMenu).
         Column(
             modifier = Modifier
                 .width(360.dp)
                 .heightIn(max = 520.dp)
                 .background(ChinoSurface)
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 .verticalScroll(rememberScrollState())
                 .padding(vertical = 6.dp),
         ) {
@@ -625,6 +626,9 @@ private fun AddToListRow(
     val focus = rememberItemFocus()
     Row(
         modifier = Modifier
+            // Set in from the panel's sides by more than a focused row grows
+            // (1 % each side), its text where the header's is.
+            .padding(horizontal = 6.dp)
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
@@ -638,7 +642,7 @@ private fun AddToListRow(
                     onClick(); true
                 } else ok
             }
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -648,9 +652,10 @@ private fun AddToListRow(
             ListCheckbox(checked = checked)
         }
         Column(modifier = Modifier.weight(1f)) {
+            // A row rests in fg-2 and turns fg on focus.
             Text(
                 text = label,
-                color = ChinoFg,
+                color = ChinoFocus.title(ChinoText, focus.focused),
                 fontSize = 15.sp,
                 fontWeight = if (checked) FontWeight.SemiBold else FontWeight.Normal,
                 maxLines = 1,

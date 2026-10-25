@@ -1402,12 +1402,13 @@ internal fun CardActionsMenu(
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {
-        // Not clipped: a focused row grows past the menu's edge.
+        // Its rows set in from its sides, so a focused row's growth stays
+        // inside it, as in every menu (ChoiceMenu).
         Column(
             modifier = Modifier
                 .width(320.dp)
                 .background(ChinoSurface)
-                .border(1.dp, Color.White.copy(alpha = 0.1f), RectangleShape)
+                .border(1.dp, ChinoBorder, RectangleShape)
                 // Swallow scrim clicks that land on the card itself.
                 .clickable(enabled = false) {}
                 .padding(vertical = 4.dp),
@@ -1450,6 +1451,9 @@ private fun CardActionRow(
     }
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
+            // Set in from the menu's sides by more than a focused row grows
+            // (1 % each side), its text where the title's is.
+            .padding(horizontal = 6.dp)
             .fillMaxWidth()
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Row, surface = Color.Transparent)
@@ -1463,7 +1467,7 @@ private fun CardActionRow(
                 } else false
             }
             .clickable(onClick = onSelected)
-            .padding(horizontal = 16.dp, vertical = 12.dp),
+            .padding(horizontal = 10.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp),
     ) {
