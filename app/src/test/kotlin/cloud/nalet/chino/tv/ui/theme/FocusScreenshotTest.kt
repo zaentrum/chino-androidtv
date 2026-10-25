@@ -360,11 +360,12 @@ class FocusScreenshotTest {
     @Composable
     private fun Languages() {
         // As Settings lays it out: the section in the column beside the rail
-        // (1280 dp less the rail's 80 and the column's 2 × 24), on the page's
-        // surface, Original chosen.
-        Box(Modifier.width(1152.dp).background(ChinoSurface)) {
+        // (1280 dp less the safe area's 2 × 64, the rail's 80 and the
+        // column's 2 × 24), on the canvas, its heading as Settings has it,
+        // Original chosen.
+        Box(Modifier.width(1024.dp)) {
             Section(
-                title = "Audio",
+                title = "audio",
                 subtitle = "Titles play with audio in the language you pick here, where they have it. " +
                     "With Original, each title plays in the language it was made in. " +
                     "A choice in the player applies only to what's playing now.",
