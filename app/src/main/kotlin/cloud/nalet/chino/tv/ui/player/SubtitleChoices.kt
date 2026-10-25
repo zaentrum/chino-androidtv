@@ -30,14 +30,18 @@ import java.util.Locale
  * viewer's own - the subtitle setting's, the audio setting's where it isn't
  * Original, the TV's - each the whole of it, its regions and scripts and its
  * AI tracks included, and the rest is under "more languages" as before.
- * Within a language each region or script has a run of its own, the bare
- * name first and the others in alphabetical order; within a run the plain
- * track comes first, then the one for the deaf and hard of hearing, then the
- * foreign-language parts only, then one the platform made ("· AI"). Tracks
- * that would read the same show once, never numbered: one inside the file
- * before one the server attached, a text one before a picture one, otherwise
- * the first in the file; an untagged one that reads as a language ("English"
- * on "und") stands for its twin, in its language.
+ * A language's tracks stay together, AI ones included, with the server's
+ * languages too: a language with its region or script counts as that
+ * language, so the setting's Traditional Chinese and the server's Simplified
+ * are one block where Chinese first comes, never split by the languages
+ * between. Within a language each region or script has a run of its own,
+ * the bare name first and the others in alphabetical order; within a run
+ * the plain track comes first, then the one for the deaf and hard of
+ * hearing, then the foreign-language parts only, then one the platform made
+ * ("· AI"). Tracks that would read the same show once, never numbered: one
+ * inside the file before one the server attached, a text one before a
+ * picture one, otherwise the first in the file; an untagged one that reads
+ * as a language ("English" on "und") stands for its twin, in its language.
  *
  * What comes on by itself: the viewer's preferred subtitle language, where
  * the title has it and the audio is in another language; else the
@@ -326,7 +330,12 @@ fun ownLanguages(audioSetting: String?, device: String?): List<String> = buildLi
  * - [top]: the preferred language's tracks, then each server language's; a
  *   language with a region or script takes the tracks of the language that
  *   name none ("zh-Hans" an unmarked "Chinese"), never another region or
- *   script ("zh-Hant").
+ *   script ("zh-Hant"). A language asked for again by another script or
+ *   region - the server's "zh-Hans" after a viewer's "zh-Hant", a server's
+ *   "pt-BR" after a viewer's "pt-PT" - adds its tracks to that language's
+ *   block, where the language first comes: "Chinese", "Chinese (Simplified)
+ *   · AI", "Chinese (Traditional)", then the others, never Chinese split by
+ *   English and German.
  * - Where the server names no language, the languages on [top] are the
  *   viewer's own: [preferred], then [own] - the audio setting's language
  *   unless it is Original, the device's ([ownLanguages]) - each the whole
@@ -380,16 +389,20 @@ fun subtitleMenu(
     }.distinct()
     val placed = HashSet<Item>()
     // On top, one block per language asked for: a server's language by its
-    // script and region, a viewer's own the whole language.
-    val blocks = ArrayList<List<Item>>()
+    // script and region, a viewer's own the whole language. A later one in a
+    // language already on top - the server's "zh-Hans" after the setting's
+    // "zh-Hant" - joins that language's block, so its tracks stay together,
+    // in their runs; never split by the languages between.
+    val blocks = LinkedHashMap<String, MutableList<Item>>()
     for (want in wants) {
         val base = normalizeLang(want)
         val group = unique.filter { item ->
             item !in placed &&
                 if (ownOnTop) normalizeLang(item.entry.tag) == base else languageMatch(want, item.entry.tag) != null
         }
+        if (group.isEmpty()) continue
         placed += group
-        if (group.isNotEmpty()) blocks += runs(group)
+        blocks.getOrPut(base.ifEmpty { want }) { ArrayList() } += group
     }
     // The rest by language, a track in no language on its own; in
     // alphabetical order, a language by its name, a track in no language by
@@ -402,7 +415,7 @@ fun subtitleMenu(
     val more = rest.values.map { group -> normalizeLang(group.first().entry.tag) to runs(group) }.sortedWith(
         compareBy(ALPHABETICAL) { (base, items) -> if (base.isEmpty()) items.first().entry.label else languageName(base) },
     )
-    return SubtitleMenu(top = blocks.flatten().map { it.entry }, more = more.flatMap { it.second }.map { it.entry })
+    return SubtitleMenu(top = blocks.values.flatMap(::runs).map { it.entry }, more = more.flatMap { it.second }.map { it.entry })
 }
 
 /**
