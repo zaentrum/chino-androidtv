@@ -21,7 +21,33 @@ sealed interface AuthUiState {
     data object Starting : AuthUiState
     data class WaitingForUser(val authorization: DeviceAuthorization) : AuthUiState
     data object Authenticated : AuthUiState
-    data class Error(val message: String) : AuthUiState
+    data class Error(
+        /** The reason, in the reader's words: "try again" is the button
+         *  beside it. */
+        val message: String,
+        /** The technical reason - the server's error code or status - under
+         *  details. */
+        val detail: String? = null,
+    ) : AuthUiState
+}
+
+/**
+ * Why a sign-in failed, as the design system writes a failure: the reason
+ * only - "try again" is the button beside it, and sign-in may well have
+ * started - with the server's code or status under details, never as the
+ * message.
+ */
+internal fun signInFailure(e: Throwable): AuthUiState.Error = when (e) {
+    is DeviceAuthException -> when {
+        e.errorCode == "expired_token" -> AuthUiState.Error("The code expired.")
+        e.errorCode == "access_denied" -> AuthUiState.Error("Sign-in was cancelled.")
+        e.errorCode.startsWith("HTTP 5") -> AuthUiState.Error("The server ran into a problem.", e.errorCode)
+        else -> AuthUiState.Error("The server didn't accept the sign-in.", e.errorCode)
+    }
+    is java.io.IOException -> AuthUiState.Error("Can't reach the server.", e.message ?: e::class.java.simpleName)
+    is kotlinx.serialization.SerializationException ->
+        AuthUiState.Error("The server's answer couldn't be read.", e.message ?: e::class.java.simpleName)
+    else -> AuthUiState.Error("Sign-in failed.", e.message ?: e::class.java.simpleName)
 }
 
 class AuthViewModel(
@@ -65,16 +91,12 @@ class AuthViewModel(
                 )
             } catch (e: DeviceAuthException) {
                 telemetry.event("auth_device_flow_failed", extra = mapOf("error" to e.errorCode))
-                _state.value = AuthUiState.Error(
-                    when (e.errorCode) {
-                        "expired_token" -> "The code expired. Please try again."
-                        "access_denied" -> "Sign-in was cancelled."
-                        else -> "Sign-in failed: ${e.errorCode}"
-                    },
-                )
+                _state.value = signInFailure(e)
+            } catch (e: kotlinx.coroutines.CancellationException) {
+                throw e
             } catch (e: Exception) {
                 telemetry.event("auth_device_flow_failed", extra = mapOf("error" to (e.message ?: e::class.java.simpleName)))
-                _state.value = AuthUiState.Error(e.message ?: e::class.java.simpleName)
+                _state.value = signInFailure(e)
             }
         }
     }

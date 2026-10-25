@@ -9,7 +9,6 @@ import kotlinx.serialization.json.Json
 import okhttp3.FormBody
 import okhttp3.OkHttpClient
 import okhttp3.Request
-import java.io.IOException
 import java.util.concurrent.TimeUnit
 
 /**
@@ -89,7 +88,11 @@ class OidcDeviceClient(
                 .build()
             http.newCall(req).execute().use { resp ->
                 val text = resp.body?.string().orEmpty()
-                if (!resp.isSuccessful) error("Device auth start failed: HTTP ${resp.code} — $text")
+                // The server answered no: its OAuth error, else the status.
+                if (!resp.isSuccessful) {
+                    val err = runCatching { json.decodeFromString(OauthError.serializer(), text) }.getOrNull()
+                    throw DeviceAuthException(err?.error ?: "HTTP ${resp.code}")
+                }
                 json.decodeFromString(DeviceAuthorization.serializer(), text)
             }
         }
@@ -155,7 +158,8 @@ class OidcDeviceClient(
                 "authorization_pending" -> { /* keep polling */ }
                 "slow_down" -> { interval += 5 }
                 "expired_token", "access_denied" -> throw DeviceAuthException(err.error)
-                null -> throw IOException("Token poll failed: HTTP $code — $text")
+                // An answer of another shape: the server's, by its status.
+                null -> throw DeviceAuthException("HTTP $code")
                 else -> throw DeviceAuthException(err.error)
             }
         }

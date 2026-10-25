@@ -2,6 +2,7 @@ package cloud.nalet.chino.tv.ui.auth
 
 import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -174,13 +175,33 @@ fun DeviceCodeScreen(
                             horizontalAlignment = Alignment.CenterHorizontally,
                             verticalArrangement = Arrangement.spacedBy(16.dp),
                         ) {
+                            // The reason only: try again is the button.
                             Text(
-                                text = stringResource(R.string.auth_error_prefix) + s.message,
+                                text = s.message,
                                 color = MaterialTheme.colorScheme.error,
                                 textAlign = TextAlign.Center,
                             )
                             ChinoButton(onClick = { viewModel.start() }) {
                                 Text(text = stringResource(R.string.auth_retry))
+                            }
+                            // The server's code or status under details.
+                            s.detail?.takeIf { it.isNotBlank() }?.let { detail ->
+                                Column(
+                                    horizontalAlignment = Alignment.CenterHorizontally,
+                                    verticalArrangement = Arrangement.spacedBy(4.dp),
+                                ) {
+                                    Text(
+                                        text = stringResource(R.string.load_error_details),
+                                        style = MaterialTheme.typography.titleSmall,
+                                        color = ChinoMuted,
+                                    )
+                                    Text(
+                                        text = detail,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = ChinoMuted,
+                                        textAlign = TextAlign.Center,
+                                    )
+                                }
                             }
                         }
                     }

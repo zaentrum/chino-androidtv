@@ -8,7 +8,6 @@
     <string name="auth_enter_code">and enter this code:</string>
     <string name="auth_waiting">Waiting for confirmation…</string>
     <string name="auth_retry">try again</string>
-    <string name="auth_error_prefix">Could not start sign-in: </string>
 
     <string name="library_title">Recently added — Movies</string>
     <string name="library_loading">Loading your library…</string>
