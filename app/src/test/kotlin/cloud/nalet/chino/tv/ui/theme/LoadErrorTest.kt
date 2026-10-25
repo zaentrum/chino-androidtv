@@ -34,10 +34,12 @@ class LoadErrorTest {
 
     private fun failure(kind: LoadFailure.Kind, reason: String) = LoadFailure(kind, reason)
 
-    private val connection = "Check the connection to the server, then try again."
-    private val server = "The server ran into a problem. Try again in a moment."
-    private val busy = "The server is busy. Try again in a moment."
-    private val rejected = "The server didn't accept the request. Check for an app update, then try again."
+    // The reason only: "try again" is the button (the design system's empty
+    // states, when it couldn't load: say why).
+    private val connection = "Can't reach the server."
+    private val server = "The server ran into a problem."
+    private val busy = "The server is busy."
+    private val rejected = "The server didn't accept the request. Check for an app update."
 
     /** Shows the error for [failure] beside another focusable, as a screen
      *  with the rail; [what] and [onBack] as the screen gives them. Counts
@@ -83,7 +85,7 @@ class LoadErrorTest {
     private fun saysNot(vararg texts: String) = texts.forEach { compose.onNodeWithText(it).assertDoesNotExist() }
 
     @Test
-    fun `no answer, or 408 - check the connection, try again`() {
+    fun `no answer, or 408 - can't reach the server, try again`() {
         val pressed = show(failure(LoadFailure.Kind.Connection, "timeout"))
         says("couldn't load the library", connection, "details", "timeout")
         ok("try again")
@@ -158,6 +160,23 @@ class LoadErrorTest {
         ok("sign in")
         assertEquals(1, pressed.signIns)
         assertEquals(0, pressed.tries)
+    }
+
+    @Test
+    fun `no reason asks to try again, the button does`() {
+        val context = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.content.Context>()
+        val reasons = listOf(
+            cloud.nalet.chino.tv.R.string.load_error_body, cloud.nalet.chino.tv.R.string.load_error_body_server,
+            cloud.nalet.chino.tv.R.string.load_error_body_busy, cloud.nalet.chino.tv.R.string.load_error_body_rejected,
+        ).map(context::getString)
+        assertEquals(listOf(connection, server, busy, rejected), reasons)
+        for (reason in reasons) org.junit.Assert.assertFalse(reason, reason.contains("try again", ignoreCase = true))
+    }
+
+    @Test
+    fun `a browse page names what did not load in its own word`() {
+        assertEquals("couldn't load the movies", cloud.nalet.chino.tv.ui.browse.browseLoadErrorTitle("Movies"))
+        assertEquals("couldn't load the shows", cloud.nalet.chino.tv.ui.browse.browseLoadErrorTitle("Shows"))
     }
 
     @Test

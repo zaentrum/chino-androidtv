@@ -15,11 +15,13 @@
     <string name="library_empty">No items yet.</string>
     <string name="library_error_title">couldn\'t load the library</string>
 
-    <!-- A screen whose content did not load (LoadError). -->
-    <string name="load_error_body">Check the connection to the server, then try again.</string>
-    <string name="load_error_body_server">The server ran into a problem. Try again in a moment.</string>
-    <string name="load_error_body_busy">The server is busy. Try again in a moment.</string>
-    <string name="load_error_body_rejected">The server didn\'t accept the request. Check for an app update, then try again.</string>
+    <!-- A screen whose content did not load (LoadError): the reason only, as
+         "try again" is the button; only what no button offers, an app
+         update, is said in words. -->
+    <string name="load_error_body">Can\'t reach the server.</string>
+    <string name="load_error_body_server">The server ran into a problem.</string>
+    <string name="load_error_body_busy">The server is busy.</string>
+    <string name="load_error_body_rejected">The server didn\'t accept the request. Check for an app update.</string>
     <string name="load_error_retry">try again</string>
     <string name="load_error_back">back</string>
     <string name="load_error_details">details</string>

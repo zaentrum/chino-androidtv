@@ -107,7 +107,7 @@ fun BrowseScreen(
                     when (val s = state) {
                         BrowseUiState.Loading -> Centered(pageTitle, loading = true)
                         is BrowseUiState.Error -> LoadError(
-                            title = "couldn't load ${pageTitle.lowercase()}",
+                            title = browseLoadErrorTitle(pageTitle),
                             failure = s.failure,
                             onRetry = viewModel::retry,
                         )
@@ -413,3 +413,8 @@ private fun Centered(text: String, loading: Boolean = false) {
         )
     }
 }
+
+/** What a browse page that did not load is titled, in its own word
+ *  (docs/chino, playback: when a page couldn't load): "couldn't load the
+ *  movies". */
+internal fun browseLoadErrorTitle(pageTitle: String): String = "couldn't load the ${pageTitle.lowercase()}"

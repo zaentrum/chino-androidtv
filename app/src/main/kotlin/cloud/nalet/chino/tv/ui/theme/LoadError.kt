@@ -33,9 +33,11 @@ val LocalSignIn = staticCompositionLocalOf<() -> Unit> { {} }
  * reason under details on each:
  *
  * - no answer, a timeout (408 too), an error of the server (5xx), the server
- *   busy (429), a request it did not take (another 4xx): [title]
- *   ("couldn't load …"), what to do, and "try again", which calls
- *   [onRetry];
+ *   busy (429), a request it did not take (another 4xx): [title], what
+ *   couldn't load in the screen's own word ("couldn't load the movies"),
+ *   the reason only ("Can't reach the server.") - "try again" is the
+ *   button, which calls [onRetry]; only an app update, which no button
+ *   offers, is said in words;
  * - not in the library any more (404, 410), where the screen knows [what]
  *   it shows ("this title", "this person"): it says so, and "back";
  *   elsewhere a request the server did not take;
