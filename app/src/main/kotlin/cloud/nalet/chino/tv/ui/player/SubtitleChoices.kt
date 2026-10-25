@@ -28,13 +28,15 @@ import java.util.Locale
  * menu never lists every track a file brings: where the server names no
  * subtitle languages (an older one, none set), the languages on top are the
  * viewer's own - the subtitle setting's, the audio setting's where it isn't
- * Original, the TV's - each the whole of it, its regions and scripts and its
- * AI tracks included, and the rest is under "more languages" as before.
- * A language's tracks stay together, AI ones included, with the server's
- * languages too: a language with its region or script counts as that
- * language, so the setting's Traditional Chinese and the server's Simplified
- * are one block where Chinese first comes, never split by the languages
- * between. Within a language each region or script has a run of its own,
+ * Original, the TV's - and the rest is under "more languages" as before.
+ * A language on top, the server's or the viewer's, named with its region or
+ * script or without, brings all of its tracks there, AI ones included: a
+ * language with its region or script counts as that language, so a server
+ * naming Simplified Chinese shows Traditional Chinese in the Chinese block
+ * too, never under "more languages", and the setting's Traditional Chinese
+ * and the server's Simplified are one block where Chinese first comes,
+ * never split by the languages between. Within a language each region or
+ * script has a run of its own,
  * the bare name first and the others in alphabetical order; within a run
  * the plain track comes first, then the one for the deaf and hard of
  * hearing, then the foreign-language parts only, then one the platform made
@@ -197,6 +199,10 @@ data class SubtitleMenu(val top: List<SubtitleEntry>, val more: List<SubtitleEnt
     val all: List<SubtitleEntry> get() = top + more
 }
 
+/** What the subtitle menu's first row and Settings' subtitle setting without
+ *  a language say: "off", one word in both (docs/chino, subtitles). */
+const val SUBTITLES_OFF_NAME = "off"
+
 /** Whether [pref] - Settings' subtitle language - asks for subtitles: a
  *  language, not "off" or nothing. */
 fun asksForSubtitles(pref: String?): Boolean =
@@ -327,21 +333,22 @@ fun ownLanguages(audioSetting: String?, device: String?): List<String> = buildLi
  * (docs/chino, subtitles: the menu). It never lists every track a file
  * brings:
  *
- * - [top]: the preferred language's tracks, then each server language's; a
- *   language with a region or script takes the tracks of the language that
- *   name none ("zh-Hans" an unmarked "Chinese"), never another region or
- *   script ("zh-Hant"). A language asked for again by another script or
+ * - [top]: the preferred language's tracks, then each server language's,
+ *   each the whole language - its regions and scripts and its AI tracks
+ *   with it, with or without the region or script it is named by: the
+ *   server's "zh-Hans" brings "Chinese (Traditional)" too, never leaving it
+ *   under more languages. A language asked for again by another script or
  *   region - the server's "zh-Hans" after a viewer's "zh-Hant", a server's
- *   "pt-BR" after a viewer's "pt-PT" - adds its tracks to that language's
- *   block, where the language first comes: "Chinese", "Chinese (Simplified)
- *   · AI", "Chinese (Traditional)", then the others, never Chinese split by
- *   English and German.
+ *   "pt-BR" after a viewer's "pt-PT" - is that language's one block, where
+ *   the language first comes: "Chinese", "Chinese (Simplified) · AI",
+ *   "Chinese (Traditional)", then the others, never Chinese split by English
+ *   and German.
  * - Where the server names no language, the languages on [top] are the
  *   viewer's own: [preferred], then [own] - the audio setting's language
  *   unless it is Original, the device's ([ownLanguages]) - each the whole
- *   language, its regions and scripts with it: a viewer's "zh-Hant" puts
- *   Chinese on top, "Chinese", "Chinese (Simplified)", "Chinese
- *   (Traditional)" in the order below, never only its own script.
+ *   language in the same way: a viewer's "zh-Hant" puts Chinese on top,
+ *   "Chinese", "Chinese (Simplified)", "Chinese (Traditional)" in the order
+ *   below, never only its own script.
  * - [more]: the rest, the languages in alphabetical order of their names, a
  *   track in no language by its own.
  *
@@ -388,18 +395,16 @@ fun subtitleMenu(
         addAll(if (ownOnTop) own.map(::languageTag).filter { it.isNotEmpty() } else named)
     }.distinct()
     val placed = HashSet<Item>()
-    // On top, one block per language asked for: a server's language by its
-    // script and region, a viewer's own the whole language. A later one in a
-    // language already on top - the server's "zh-Hans" after the setting's
-    // "zh-Hant" - joins that language's block, so its tracks stay together,
-    // in their runs; never split by the languages between.
+    // On top, one block per language asked for, the whole language - the
+    // server's "zh-Hans" brings the Traditional Chinese too, never leaving it
+    // under more languages. A later one in a language already on top - the
+    // server's "zh-Hans" after the setting's "zh-Hant" - is that language's
+    // block, so its tracks stay together, in their runs; never split by the
+    // languages between.
     val blocks = LinkedHashMap<String, MutableList<Item>>()
     for (want in wants) {
         val base = normalizeLang(want)
-        val group = unique.filter { item ->
-            item !in placed &&
-                if (ownOnTop) normalizeLang(item.entry.tag) == base else languageMatch(want, item.entry.tag) != null
-        }
+        val group = unique.filter { item -> item !in placed && normalizeLang(item.entry.tag) == base }
         if (group.isEmpty()) continue
         placed += group
         blocks.getOrPut(base.ifEmpty { want }) { ArrayList() } += group

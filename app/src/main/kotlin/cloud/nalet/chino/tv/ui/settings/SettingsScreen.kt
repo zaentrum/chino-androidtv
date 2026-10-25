@@ -524,7 +524,7 @@ internal fun LanguageSettingRow(
     /** Before its focus target: its place in the page's reading order. */
     modifier: Modifier = Modifier,
 ) {
-    val name = chosenLanguage(choices, value)?.name ?: choices.first().name
+    val name = settingName(choices, value)
     Row(
         modifier = modifier
             // Set in from the section's sides by more than a focused row

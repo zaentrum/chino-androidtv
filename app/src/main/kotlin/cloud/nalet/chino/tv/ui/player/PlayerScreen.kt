@@ -1817,7 +1817,7 @@ internal fun SubtitlePanel(
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     MenuPopover(header = "subtitles", width = 380.dp) {
         ChoiceRow(
-            label = "off",
+            label = SUBTITLES_OFF_NAME,
             selected = selected == null,
             focusRequester = focusRequester.takeIf { focusOn == null },
             onClick = { onSelect(null) },

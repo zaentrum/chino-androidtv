@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.player.SUBTITLES_OFF_NAME
 import cloud.nalet.chino.tv.ui.player.asksForSubtitles
 import cloud.nalet.chino.tv.ui.player.languageName
 import cloud.nalet.chino.tv.ui.player.languageTag
@@ -56,7 +57,7 @@ val EVERY_LANGUAGE: List<LanguageChoice> by lazy {
  *  server's tags, its order), or - where it names none - every language,
  *  the one set and the TV's ([device]) first. */
 fun subtitleLanguageChoices(serverLanguages: List<String>, current: String?, device: String? = null): List<LanguageChoice> =
-    listOf(LanguageChoice(SUBTITLES_OFF, SUBTITLES_OFF)) +
+    listOf(LanguageChoice(SUBTITLES_OFF, SUBTITLES_OFF_NAME)) +
         languages(serverLanguages, current?.takeIf { asksForSubtitles(it) }, device)
 
 /** The audio setting's entries: "Original", then every language, the one
@@ -83,6 +84,13 @@ private fun languages(serverLanguages: List<String>, current: String?, device: S
     val codes = own.map { it.code }.toSet()
     return own + EVERY_LANGUAGE.filter { it.code !in codes }
 }
+
+/** What a language setting says it is set to: the name of the entry of
+ *  [choices] that [value] stands for, else the first entry's - "off" for
+ *  the subtitles, as the player's menu says it, where no language is set
+ *  (nothing stored, "off" in any case, a value of no language). */
+fun settingName(choices: List<LanguageChoice>, value: String?): String =
+    chosenLanguage(choices, value)?.name ?: choices.first().name
 
 /** The entry of [choices] that [value] - a stored setting - stands for:
  *  "zh-hans" is "zh-Hans", "ger" is "de"; null for none. */

@@ -95,22 +95,24 @@ class SubtitleChoicesTest {
     @Test
     fun `the server's languages first, each the file's own before the platform's, then more languages`() {
         val menu = subtitleMenu(tracks, preferred = "off", serverLanguages = server)
+        // The server's Simplified Chinese brings the whole of Chinese on
+        // top, its Traditional too, never under more languages.
         assertEquals(
             listOf(
                 "English", "English · for deaf and hard of hearing", "English · AI",
                 "German", "German · AI",
-                "Chinese (Simplified)", "Chinese (Simplified) · AI",
+                "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)",
             ),
             labels(menu.top),
         )
-        assertEquals(listOf("emb:0", "emb:1", "side:ai-en", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans"), menu.top.map { it.id })
+        assertEquals(listOf("emb:0", "emb:1", "side:ai-en", "emb:8", "side:ai-de", "emb:4", "side:ai-zh-Hans", "emb:5"), menu.top.map { it.id })
         // The rest in alphabetical order of their languages' names, a
         // language's tracks together, the bare name before its regions.
         // chino-stream's "Spanish · Latin American" is the region, as the
         // web reads it (TrackLabelsTest).
         assertEquals(
             listOf(
-                "Arabic", "Bulgarian", "Chinese (Traditional)", "Czech", "Danish", "Dutch", "Estonian", "Finnish",
+                "Arabic", "Bulgarian", "Czech", "Danish", "Dutch", "Estonian", "Finnish",
                 "French", "French (Canada)", "Greek", "Hebrew", "Hindi", "Hungarian", "Indonesian", "Italian",
                 "Japanese", "Korean", "Latvian", "Lithuanian", "Malay", "Norwegian", "Polish", "Portuguese",
                 "Portuguese (Brazil)", "Russian", "Slovak", "Slovenian", "Spanish", "Spanish (Latin America)", "Swedish",
@@ -122,14 +124,17 @@ class SubtitleChoicesTest {
         // the file (the second Traditional Chinese), 44 entries.
         assertEquals(44, menu.all.size)
         assertEquals(menu.all.size, menu.all.map { it.label }.toSet().size)
-        assertEquals("emb:5", menu.more.single { it.label == "Chinese (Traditional)" }.id)
+        assertEquals("emb:5", menu.top.single { it.label == "Chinese (Traditional)" }.id)
     }
 
     @Test
     fun `the viewer's own language comes first, the server's after it`() {
         val german = subtitleMenu(tracks, preferred = "de", serverLanguages = server)
         assertEquals(
-            listOf("German", "German · AI", "English", "English · for deaf and hard of hearing", "English · AI", "Chinese (Simplified)", "Chinese (Simplified) · AI"),
+            listOf(
+                "German", "German · AI", "English", "English · for deaf and hard of hearing", "English · AI",
+                "Chinese (Simplified)", "Chinese (Simplified) · AI", "Chinese (Traditional)",
+            ),
             labels(german.top),
         )
         // A language the server is not set up for: first, the bare name
@@ -297,7 +302,7 @@ class SubtitleChoicesTest {
     }
 
     @Test
-    fun `Simplified and Traditional Chinese are two languages, an unmarked one counts for either`() {
+    fun `Simplified and Traditional Chinese are two scripts of one language, an unmarked one counts for either`() {
         assertEquals(0, languageMatch("zh-Hans", "zh-Hans"))
         assertNull(languageMatch("zh-Hans", "zh-Hant"))
         assertEquals(1, languageMatch("zh-Hans", "zh"))
@@ -318,10 +323,14 @@ class SubtitleChoicesTest {
             SubtitleTrackInfo("emb:9", "chi", "Chinese"),
             SubtitleTrackInfo("emb:4", "chi", "Chinese · Simplified"),
         )
+        // A server naming Simplified Chinese: the whole of Chinese on top, the
+        // bare name first, then the scripts' runs in alphabetical order.
         val menu = subtitleMenu(chinese, preferred = "off", serverLanguages = listOf("zh-Hans"))
-        // The bare name first, then the script's own run.
-        assertEquals(listOf("Chinese", "Chinese (Simplified)"), labels(menu.top))
-        assertEquals(listOf("Chinese (Traditional)"), labels(menu.more))
+        assertEquals(listOf("Chinese", "Chinese (Simplified)", "Chinese (Traditional)"), labels(menu.top))
+        assertTrue(menu.more.isEmpty())
+        // The same for a viewer's Traditional Chinese, and for a region.
+        assertEquals(listOf("Chinese", "Chinese (Simplified)", "Chinese (Traditional)"), labels(subtitleMenu(chinese, "zh-Hant", listOf("en")).top))
+        assertEquals(listOf("Chinese", "Chinese (Simplified)", "Chinese (Traditional)"), labels(subtitleMenu(chinese, "off", listOf("zh-TW")).top))
     }
 
     @Test
@@ -399,11 +408,19 @@ class SubtitleChoicesTest {
             listOf("Portuguese", "Portuguese (Brazil)", "English"),
             labels(subtitleMenu(portuguese, "pt-PT", listOf("en", "pt-BR")).top),
         )
-        // Which tracks a server language takes is still its script's: the
-        // server's Simplified alone leaves Traditional under more languages.
+        // A server language brings its whole language, whichever script it
+        // names: the server's Simplified alone brings Traditional on top too,
+        // never under more languages.
         val simplified = subtitleMenu(tracks, "en", listOf("en", "zh-Hans"))
-        assertEquals(listOf("English", "English · AI", "Chinese", "Chinese (Simplified) · AI"), labels(simplified.top))
-        assertEquals(listOf("Chinese (Traditional)", "German"), labels(simplified.more))
+        assertEquals(listOf("English", "English · AI", "Chinese", "Chinese (Simplified) · AI", "Chinese (Traditional)"), labels(simplified.top))
+        assertEquals(listOf("German"), labels(simplified.more))
+        // A region the same: the server's Brazil brings Portugal's, the
+        // regions in alphabetical order.
+        val regions = listOf(SubtitleTrackInfo("emb:2", "pt-PT"), SubtitleTrackInfo("emb:3", "eng"), SubtitleTrackInfo("emb:4", "pt-BR"))
+        assertEquals(
+            listOf("Portuguese (Brazil)", "Portuguese (Portugal)", "English"),
+            labels(subtitleMenu(regions, "off", listOf("pt-BR", "en")).top),
+        )
     }
 
     // chino-web's subtitles.test.ts: the menu without the server's languages.

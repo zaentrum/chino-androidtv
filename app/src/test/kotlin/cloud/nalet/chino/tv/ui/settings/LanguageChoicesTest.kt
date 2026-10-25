@@ -24,6 +24,15 @@ class LanguageChoicesTest {
     }
 
     @Test
+    fun `the subtitle setting says off where no language is set, the word the player's menu says`() {
+        val choices = subtitleLanguageChoices(listOf("en", "de"), "off")
+        for (value in listOf("off", "OFF", "", "none", null)) assertEquals(value.toString(), "off", settingName(choices, value))
+        assertEquals(cloud.nalet.chino.tv.ui.player.SUBTITLES_OFF_NAME, settingName(choices, "off"))
+        assertEquals("German", settingName(choices, "ger"))
+        assertEquals("Original", settingName(audioLanguageChoices("orig"), "orig"))
+    }
+
+    @Test
     fun `the server's tags as it writes them, each once`() {
         val choices = subtitleLanguageChoices(listOf("ger", "de", "zh-hans", " ", "pt_br"), null)
         assertEquals(listOf("off", "de", "zh-Hans", "pt-BR"), choices.map { it.code })
