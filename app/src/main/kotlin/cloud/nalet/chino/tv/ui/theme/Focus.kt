@@ -192,9 +192,11 @@ val LocalFocusScrollMargin = staticCompositionLocalOf { 0.dp }
  * the item paints its own (a tv-material button or card does). A [filled]
  * control keeps its fill on focus; a plain one, and every row, gets the
  * focused surface. [cameFrom] draws the "where you came from" bar.
- * [ringGap] paints the gap between the item and its ring, for an item that
- * touches another of a colour the ring would not stand out on (the parts of
- * add to list, both blue): the ring then lies on that colour all round.
+ * [ringGap] paints a gap of that colour beside the ring on the item's side:
+ * for a ring outside, between the item and the ring; for a ring inside the
+ * edge, just inside the ring - so a ring drawn inside a filled part (the
+ * parts of add to list, blue in the Watchlist) has the dark colour on both
+ * sides and stands out on the fill.
  */
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
@@ -254,13 +256,16 @@ fun Modifier.focusStyle(
                     size = Size(barPx / grown, size.height),
                 )
             }
-            if (progress > 0f && ringGap != null && kind.ringOutside) {
+            if (progress > 0f && ringGap != null) {
                 val gap = gapPx / grown
+                // Where the gap's middle runs: outside the edge, or inside
+                // the ring that lies inside it.
+                val at = if (kind.ringOutside) -gap / 2f else ringPx / grown + gap / 2f
                 drawRect(
                     color = ringGap,
                     alpha = progress,
-                    topLeft = Offset(-gap / 2f, -gap / 2f),
-                    size = Size(size.width + gap, size.height + gap),
+                    topLeft = Offset(at, at),
+                    size = Size(size.width - 2f * at, size.height - 2f * at),
                     style = Stroke(width = gap),
                 )
             }
@@ -339,13 +344,16 @@ fun ChinoButton(
     enabled: Boolean = true,
     contentPadding: PaddingValues = ButtonDefaults.ContentPadding,
     focus: ItemFocus = rememberItemFocus(),
-    /** The colour between the button and its ring ([focusStyle]'s ringGap). */
+    /** The colour beside its ring ([focusStyle]'s ringGap). */
     ringGap: Color? = null,
+    /** How the focus style sits on it: a button's, or a row's for a part of
+     *  a control in two parts, its ring inside its edge. */
+    kind: FocusKind = FocusKind.Control,
     body: @Composable RowScope.() -> Unit,
 ) {
     Button(
         onClick = onClick,
-        modifier = modifier.focusStyle(focus, FocusKind.Control, ringGap = ringGap),
+        modifier = modifier.focusStyle(focus, kind, ringGap = ringGap),
         enabled = enabled,
         // The growth and the ring are the focus style's.
         scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1f, pressedScale = 1f),

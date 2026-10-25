@@ -22,6 +22,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.StateIcons
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Check
@@ -77,8 +78,10 @@ const val CHOOSE_LISTS = "choose lists"
  * part shows and toggles the Watchlist only - an outlined bookmark, or a dark
  * one on blue - and never touches other lists; "⌄" opens the list picker,
  * where a title leaves them. A 1 dp divider between them; two focus stops on
- * a TV, each with its own ring - the page's colour between a part and its
- * ring, so the ring stands out where it lies on the other part's blue.
+ * a TV, each with its own ring, drawn inside the part as on a row
+ * (docs/chino, title actions), so the other part stays whole and the divider
+ * visible - the page's colour just inside the ring, so it stands out on the
+ * Watchlist's blue.
  */
 @Composable
 internal fun AddToListControl(
@@ -98,6 +101,7 @@ internal fun AddToListControl(
             filled = inWatchlist,
             contentPadding = PaddingValues(0.dp),
             ringGap = ChinoBg,
+            kind = FocusKind.Row,
         ) {
             Icon(
                 imageVector = if (inWatchlist) StateIcons.BookmarkFilled else Lucide.Bookmark,
@@ -119,6 +123,7 @@ internal fun AddToListControl(
             filled = inWatchlist,
             contentPadding = PaddingValues(0.dp),
             ringGap = ChinoBg,
+            kind = FocusKind.Row,
         ) {
             Icon(
                 imageVector = Lucide.ChevronDown,
