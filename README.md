@@ -68,7 +68,10 @@ real values always come from the connected server at runtime.
   to a receiver or sound bar: a title's 5.1 tracks are in the audio menu
   beside the stereo ones, and the 5.1 track of the language plays first where
   the TV's audio output takes 5.1, the stereo one where it is stereo. Zap
-  plays in stereo
+  plays in stereo. An audio track is named by its language with the region
+  or script its server's name for it gives ("Portuguese (Brazil)" for a
+  track the master tags "por"); an older server's plain name keeps the
+  language alone
 - Subtitles, one at a time, with one look for every title: white text with a
   black outline and nothing behind it, 5.33 % of the picture's height, centred
   at the bottom within 80 % of its width and inside the TV's safe area, and

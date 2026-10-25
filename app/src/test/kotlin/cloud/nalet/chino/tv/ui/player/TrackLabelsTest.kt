@@ -80,6 +80,50 @@ class TrackLabelsTest {
     }
 
     @Test
+    fun aTracksRegionOrScriptAsItsNameGivesIt_theMastersLanguageTheFilesCode() {
+        // chino-stream names a "PT-BR" track "Portuguese (Brazil)" in the
+        // master's NAME and /play/info, its LANGUAGE still "por".
+        assertEquals(
+            listOf("Portuguese (Brazil)", "Portuguese", "Chinese (Simplified)", "Spanish (Latin America)"),
+            audioLabels(
+                listOf(
+                    AudioLabelInput("por", name = "Portuguese (Brazil)"),
+                    AudioLabelInput("por", name = "Portuguese"),
+                    AudioLabelInput("chi", name = "Chinese (Simplified)"),
+                    AudioLabelInput("spa", name = "Spanish (Latin America)"),
+                ),
+            ),
+        )
+        assertEquals("pt-BR", audioLanguage("por", "Portuguese (Brazil)"))
+        // A name in another form says the same: a code, the region's
+        // adjective; a number a server gave it to keep it unique, a layout,
+        // say nothing.
+        assertEquals("pt-BR", audioLanguage("por", "PT-BR"))
+        assertEquals("pt-BR", audioLanguage("por", "Brazilian Portuguese"))
+        assertEquals("pt-BR", audioLanguage("por", "Portuguese (Brazil) (2)"))
+        assertEquals("pt-BR", audioLanguage("por", "Portuguese (Brazil) 5.1"))
+        // An older server's name, a format, a number: the tag as it is.
+        assertEquals("por", audioLanguage("por", "Portuguese"))
+        assertEquals("eng", audioLanguage("eng", "AC3 5.1 @ 640 Kbps"))
+        assertEquals("eng", audioLanguage("eng", "Track 2"))
+        assertEquals("eng", audioLanguage("eng", null))
+        // A tag with its region keeps it; a name of another region names none.
+        assertEquals("Portuguese (Portugal)", audioLabels(listOf(AudioLabelInput("pt-PT", name = "PT-BR"))).single())
+        // No language: what the name says, as before.
+        assertEquals("und", audioLanguage("und", "PT-BR"))
+        // Two regions of one language read apart, never numbered.
+        assertEquals(
+            listOf("Portuguese (Brazil)", "Portuguese (Portugal)"),
+            audioLabels(
+                listOf(
+                    AudioLabelInput("por", name = "Portuguese (Brazil)", detail = "Stereo • mp4a.40.2"),
+                    AudioLabelInput("por", name = "Portuguese (Portugal)", detail = "Stereo • mp4a.40.2"),
+                ),
+            ),
+        )
+    }
+
+    @Test
     fun anOldPlaylistsFreeTextNamesAFormatANumberOrACodeIsNoLabel() {
         assertEquals(
             listOf("English", "French", "No dialogue", "Unknown", "Unknown (2)", "Unknown (3)"),

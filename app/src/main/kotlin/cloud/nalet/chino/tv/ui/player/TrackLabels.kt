@@ -997,16 +997,40 @@ private fun nameQualifier(name: String?, label: String, tag: String?): String {
 }
 
 /**
+ * A track's language as its tag and its name say it: the tag, with the
+ * script and the region its name gives where the tag names none - "por"
+ * named "Portuguese (Brazil)", "PT-BR" or "Brazilian Portuguese" is "pt-BR".
+ * chino-stream names a track so in the master's NAME and /play/info, its
+ * LANGUAGE the file's code; an older server's plain name ("Portuguese"), a
+ * format, a number say nothing more, and the tag stays.
+ */
+fun audioLanguage(lang: String?, name: String?): String? {
+    if (normalizeLang(lang).isEmpty()) return lang
+    val raw = name?.trim().orEmpty()
+    if (raw.isEmpty() || FORMAT_WORDS.containsMatchIn(raw)) return lang
+    // What trackName reads, a code of the language kept: "PT-BR" says Brazil.
+    val said = raw.replace(LAYOUT_WORDS, "$1")
+        .replace(EMPTY_BRACKETS, "")
+        .replace(TRAILING_NUMBER, "")
+        .replace(SPACES, " ")
+        .replace(EDGE_SEPARATORS, "")
+    if (said.isEmpty() || NUMBERED.matches(said)) return lang
+    return readTitle(said, lang).first
+}
+
+/**
  * The audio menu's labels, one per track, in order: the language the track is
- * tagged with, by name ("German"; "No dialogue" for zxx). A track tagged with
- * none is called what its name says ("Commentary"), else "Unknown". Two that
- * would read the same, with the same detail, are told apart by their names
- * ("English · Commentary"), else numbered ("English (2)").
+ * in, by name, with the script or the region its tag or its name gives
+ * ([audioLanguage]: "German", "Portuguese (Brazil)"; "No dialogue" for zxx).
+ * A track tagged with none is called what its name says ("Commentary"), else
+ * "Unknown". Two that would read the same, with the same detail, are told
+ * apart by their names ("English · Commentary"), else numbered ("English
+ * (2)").
  */
 fun audioLabels(tracks: List<AudioLabelInput>): List<String> {
     val bases = tracks.map { t ->
         if (hasLanguage(t.lang)) {
-            val name = languageName(t.lang)
+            val name = languageName(audioLanguage(t.lang, t.name))
             // No name for the code: the track's own name before the code.
             if (name != t.lang.orEmpty().trim()) return@map name
         }
