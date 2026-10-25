@@ -14,6 +14,10 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoBorderControl
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.ChinoText
+import cloud.nalet.chino.tv.ui.theme.ChinoInformationBorder
+import cloud.nalet.chino.tv.ui.theme.ChinoMuted
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalAmber
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
 import cloud.nalet.chino.tv.ui.theme.paintToScreenEdges
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -340,22 +344,26 @@ private fun ScrubberRow(
     }
 }
 
-/** A segment's stripe on the seek bar, opaque like the bar. */
-private fun segmentColor(kind: String): Color = when (kind.lowercase()) {
-    "intro" -> Color(0xFFFFB454) // amber
-    "credits" -> Color(0xFF9E86FF) // violet
-    "recap" -> Color(0xFF79B8FF) // a lighter blue than the played part's
-    "intermission" -> Color(0xFF8B949E) // grey
-    else -> Color(0xFF2EA043) // emerald — fallback for chapters etc.
-}
-
-/** The seek bar's colours, all opaque: the track, what is loaded ahead, the
- *  played part in cloud-blue as the volume's level, the thumb in fg. */
+/** The seek bar's colours, all opaque and all the design system's tokens:
+ *  the track, what is loaded ahead, the played part in cloud-blue as the
+ *  volume's level, the thumb in fg. */
 internal object SeekBarLook {
     val Track: Color = ChinoBorderHi
     val Buffered: Color = ChinoBorderControl
     val Played: Color = ChinoAccent
     val Thumb: Color = ChinoFg
+
+    /** A segment's stripe ahead of the played part: an intro in signal
+     *  amber, a recap in information's border blue - darker than the
+     *  played cloud-blue, so the two never read as one - the credits in
+     *  fg-muted, an intermission in fg-dim, a chapter in signal green. */
+    fun segment(kind: String): Color = when (kind.lowercase()) {
+        "intro" -> ChinoSignalAmber
+        "recap" -> ChinoInformationBorder
+        "credits" -> ChinoMuted
+        "intermission" -> ChinoDim
+        else -> ChinoSignalGreen
+    }
 }
 
 @Composable
@@ -435,7 +443,7 @@ private fun ScrubberBar(
                             modifier = Modifier
                                 .fillMaxWidth(widthFrac / (1f - startFrac).coerceAtLeast(0.001f))
                                 .height(barHeight)
-                                .background(segmentColor(seg.kind)),
+                                .background(SeekBarLook.segment(seg.kind)),
                         )
                     }
                 }
