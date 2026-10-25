@@ -55,6 +55,9 @@ import cloud.nalet.chino.tv.ui.theme.inReadingOrder
 import cloud.nalet.chino.tv.ui.theme.readingOrderGroup
 import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
 import cloud.nalet.chino.tv.ui.theme.requestSoon
+import cloud.nalet.chino.tv.ui.theme.SafeArea
+import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
+import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.compose.foundation.clickable
@@ -109,9 +112,14 @@ fun SettingsScreen(
     val audioChoices = remember(s.preferredAudioLang, tvLanguage) { audioLanguageChoices(s.preferredAudioLang, tvLanguage) }
     // The language menu open, if one is.
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
+    // Opened from the rail, the focus stays on the rail's Settings; back
+    // from what a button opened - your account, delete account, change
+    // server - it is on that button. Never the rail's Home.
+    val railFocus = remember { FocusRequester() }
     // The page's controls in reading order (ReadingOrder): RIGHT to the
-    // next, nothing past the last, DOWN from the last on the page; the
-    // rail's RIGHT onto the first.
+    // next and LEFT to the one before, never a jump to whatever lies
+    // nearest - LEFT from the first to the rail's Settings; nothing past the
+    // last, DOWN from the last on the page; the rail's RIGHT onto the first.
     val back = rememberReturnFocus()
     val keys = listOfNotNull(
         "intro", "credits", "next", "fewer", "more", "audio", "subtitles",
@@ -121,11 +129,7 @@ fun SettingsScreen(
         "server".takeIf { onChangeServer != null },
         "report".takeIf { reportsTaken },
     )
-    val order = remember(keys) { ReadingOrder(keys, back::requester) }
-    // Opened from the rail, the focus stays on the rail's Settings; back
-    // from what a button opened - your account, delete account, change
-    // server - it is on that button. Never the rail's Home.
-    val railFocus = remember { FocusRequester() }
+    val order = remember(keys) { ReadingOrder(keys, back::requester, start = railFocus) }
     LaunchedEffect(Unit) {
         if (!back.restore()) requestSoon(railFocus)
     }
@@ -165,12 +169,24 @@ fun SettingsScreen(
                     activeAccount = activeAccount,
                     onAccountClick = onAccountClick,
                 )
+                // The page scrolls out to the screen's end and bottom edges,
+                // as Home and a title's page do: what scrolls by shows out to
+                // them, never cut at the safe line; what rests stays inside
+                // the safe area, and a focused control is brought into view
+                // inside it.
+                ScrollsInSafeArea(trailing = SafeArea.Vertical) {
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
                         .readingOrderGroup(order)
+                        .scrollsToScreenEdges()
                         .verticalScroll(rememberScrollState())
-                        .padding(horizontal = 24.dp, vertical = 24.dp),
+                        .padding(
+                            start = 24.dp,
+                            end = 24.dp + SafeArea.Horizontal,
+                            top = 24.dp,
+                            bottom = 24.dp + SafeArea.Vertical,
+                        ),
                     verticalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
             Text(
@@ -332,6 +348,7 @@ fun SettingsScreen(
                     }
                 }
             }
+                }
                 }
             }
         }

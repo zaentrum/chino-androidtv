@@ -130,6 +130,27 @@ class SettingsFocusTest {
         languageRow(0).assertIsFocused()
     }
 
+    /** The remote's BACK, as a TV sends it: down and up, through the
+     *  activity - the focused item first, then the screen's BACK. */
+    private fun remoteBack() {
+        compose.runOnUiThread {
+            compose.activity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_DOWN, android.view.KeyEvent.KEYCODE_BACK))
+            compose.activity.dispatchKeyEvent(android.view.KeyEvent(android.view.KeyEvent.ACTION_UP, android.view.KeyEvent.KEYCODE_BACK))
+        }
+        compose.waitForIdle()
+    }
+
+    @Test
+    fun `the remote's first BACK closes a language menu`() {
+        languageRow(1).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionCenter)
+        compose.onNode(hasText("subtitle language")).assertExists()
+        remoteBack()
+        compose.onNode(hasText("subtitle language")).assertDoesNotExist()
+        languageRow(1).assertIsFocused()
+    }
+
     @Test
     fun `the rail's Zap opens Zap from Settings`() {
         compose.onNode(hasContentDescription("Zap")).performSemanticsAction(SemanticsActions.RequestFocus)
@@ -178,6 +199,37 @@ class SettingsFocusTest {
         compose.waitForIdle()
         press(Key.DirectionRight)
         button("switch account").assertIsFocused()
+    }
+
+    @Test
+    fun `LEFT goes to the control before in reading order, from the first to the rail's Settings - never a jump to what lies nearest`() {
+        val toggles = compose.onAllNodes((hasText("on") or hasText("off")) and hasClickAction() and hasRole(Role.Button))
+            .fetchSemanticsNodes()
+        fun focusedId() = compose.onNode(isFocused()).fetchSemanticsNode().id
+        // The stepper's + to its −, then up to the toggle before it, at the
+        // row's other end; nothing lies to the −'s left on the page.
+        button("+").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionLeft)
+        button("−").assertIsFocused()
+        press(Key.DirectionLeft)
+        assertEquals(toggles[2].id, focusedId())
+        press(Key.DirectionLeft)
+        assertEquals(toggles[1].id, focusedId())
+        press(Key.DirectionLeft)
+        assertEquals(toggles[0].id, focusedId())
+        // The first: the rail, at the screen's item.
+        press(Key.DirectionLeft)
+        compose.onNode(hasContentDescription("Settings")).assertIsFocused()
+        // The first button of a row: the language row before it.
+        button("see your account").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionLeft)
+        languageRow(1).assertIsFocused()
+        button("change server").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionLeft)
+        button("delete account").assertIsFocused()
     }
 
     @Test

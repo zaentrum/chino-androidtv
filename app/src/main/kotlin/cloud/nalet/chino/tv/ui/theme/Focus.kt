@@ -531,12 +531,20 @@ suspend fun focusFirstOf(targets: List<FocusRequester>, frames: Int = 2): Boolea
 /**
  * A page's controls in reading order, for the remote (Settings): RIGHT goes
  * to the next one - beside it, else the first of the next row - never up the
- * page to whatever lies nearest; nothing after the last, and DOWN from the
- * last stays on the page rather than leaving it for the rail. Focus coming
- * into the page from the rail lands on the first ([readingOrderGroup]).
- * [requester] gives each its requester: a [ReturnFocus]'s, so BACK finds it.
+ * page to whatever lies nearest; LEFT to the one before, the same way back,
+ * and from the first to [start] - the rail's item of the page - never to
+ * whatever lies nearest to its left; nothing after the last, and DOWN from
+ * the last stays on the page rather than leaving it for the rail. Focus
+ * coming into the page from the rail lands on the first
+ * ([readingOrderGroup]). [requester] gives each its requester: a
+ * [ReturnFocus]'s, so BACK finds it.
  */
-class ReadingOrder(private val keys: List<String>, requester: (String) -> FocusRequester = { FocusRequester() }) {
+class ReadingOrder(
+    private val keys: List<String>,
+    requester: (String) -> FocusRequester = { FocusRequester() },
+    /** Where LEFT from the first control goes: the rail's item of the page. */
+    val start: FocusRequester? = null,
+) {
     private val requesters = keys.associateWith(requester)
 
     operator fun get(key: String): FocusRequester = requesters.getValue(key)
@@ -565,11 +573,13 @@ fun Modifier.inWrappingRow(order: ReadingOrder, key: String): Modifier =
     }
 
 /** The control [key] of [order]: its requester, its RIGHT to the next, its
- *  DOWN on the page where it is the last. Before its focus target. */
+ *  LEFT to the one before - from the first to the order's start, the rail -
+ *  its DOWN on the page where it is the last. Before its focus target. */
 @OptIn(ExperimentalComposeUiApi::class)
 fun Modifier.inReadingOrder(order: ReadingOrder, key: String): Modifier =
     focusRequester(order[key]).focusProperties {
         right = order.after(key) ?: FocusRequester.Cancel
+        left = order.before(key) ?: order.start ?: FocusRequester.Default
         if (order.isLast(key)) down = FocusRequester.Cancel
     }
 
