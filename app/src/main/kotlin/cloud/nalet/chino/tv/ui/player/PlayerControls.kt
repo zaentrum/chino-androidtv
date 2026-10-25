@@ -14,10 +14,10 @@ import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
 import cloud.nalet.chino.tv.ui.theme.ChinoBorderControl
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.ChinoText
-import cloud.nalet.chino.tv.ui.theme.ChinoInformationBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalAmber
 import cloud.nalet.chino.tv.ui.theme.ChinoSignalGreen
+import cloud.nalet.chino.tv.ui.theme.ChinoSignalRed
 import cloud.nalet.chino.tv.ui.theme.paintToScreenEdges
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -359,15 +359,20 @@ internal object SeekBarLook {
     val Played: Color = ChinoAccent
     val Thumb: Color = ChinoFg
 
-    /** A segment's stripe ahead of the played part: an intro in signal
-     *  amber, a recap in information's border blue - darker than the
-     *  played cloud-blue, so the two never read as one - the credits in
-     *  fg-muted, an intermission in fg-dim, a chapter in signal green. */
+    /** A segment's stripe ahead of the played part, on the loaded part or
+     *  on the track - each one a token that stands out from both
+     *  (SeekBarLookTest): a recap in fg-2, light on the loaded grey, as it
+     *  opens an episode where the buffer covers it at once; an intro in
+     *  signal amber; the credits in signal red, near the end and so on the
+     *  track for all but their last minutes; an intermission in fg-muted,
+     *  the other grey - in a film's middle, far from a recap at an
+     *  episode's start - and a chapter or any other kind in signal green.
+     *  An episode's recap, intro and credits are never two greys. */
     fun segment(kind: String): Color = when (kind.lowercase()) {
         "intro" -> ChinoSignalAmber
-        "recap" -> ChinoInformationBorder
-        "credits" -> ChinoMuted
-        "intermission" -> ChinoDim
+        "recap" -> ChinoText
+        "credits" -> ChinoSignalRed
+        "intermission" -> ChinoMuted
         else -> ChinoSignalGreen
     }
 }

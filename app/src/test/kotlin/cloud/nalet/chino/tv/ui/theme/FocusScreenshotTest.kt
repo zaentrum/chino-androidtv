@@ -425,9 +425,15 @@ class FocusScreenshotTest {
                     ),
                 ),
             )
+            // An episode's start: half a minute in, the rest of its recap and
+            // its intro on the loaded part ahead, the credits on the track.
             PlayerBottomChrome(
-                isPlaying = true, positionMs = 112_000, durationMs = 887_000, bufferedMs = 300_000,
-                segments = listOf(cloud.nalet.chino.tv.data.api.Segment(kind = "intro", startMs = 20_000, endMs = 80_000)),
+                isPlaying = true, positionMs = 30_000, durationMs = 887_000, bufferedMs = 270_000,
+                segments = listOf(
+                    cloud.nalet.chino.tv.data.api.Segment(kind = "recap", startMs = 0, endMs = 75_000),
+                    cloud.nalet.chino.tv.data.api.Segment(kind = "intro", startMs = 75_000, endMs = 150_000),
+                    cloud.nalet.chino.tv.data.api.Segment(kind = "credits", startMs = 830_000, endMs = 887_000),
+                ),
                 trickplayCues = emptyList(), trickplayBaseUrl = "", streamToken = "",
                 muted = false, volume = 0.6f, onPlayPause = {}, onToggleMute = {}, onVolumeChange = {},
                 onScrubberSeek = {}, onAudio = {}, onSubtitles = {}, onQuality = {}, onSpeed = {},

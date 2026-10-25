@@ -24,7 +24,7 @@ val ChinoAccent = Color(0xFF58A6FF)       // nalet.accent — cloud-blue
 val ChinoCyan = Color(0xFF00A4DC)         // cloud-cyan
 val ChinoSignalGreen = Color(0xFF2EA043)  // signal-green — watched marker
 val ChinoSignalAmber = Color(0xFFF2B233)  // signal-amber — intro segments
-val ChinoInformationBorder = Color(0xFF3F6697) // nalet.state-information-border — 45 % information over border-2: the seek bar's recap
+val ChinoSignalRed = Color(0xFFF85149)    // signal-red — the raw red, not a state: the seek bar's credits
 val ChinoError = Color(0xFFF85149)        // nalet.state-error — errors, a destructive action's red
 val ChinoErrorBg = Color(0xFF25171C)      // nalet.state-error-bg — the error's tint, behind red text
 // A label or an icon on a filled colour (blue, green, red, amber) is ChinoBg,
