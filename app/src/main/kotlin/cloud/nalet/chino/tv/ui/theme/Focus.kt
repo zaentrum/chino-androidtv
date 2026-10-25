@@ -6,12 +6,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.RowScope
 import androidx.compose.foundation.relocation.BringIntoViewRequester
 import androidx.compose.foundation.relocation.bringIntoViewRequester
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.MutableState
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.Stable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -19,7 +23,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.staticCompositionLocalOf
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusDirection
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.focus.onFocusChanged
 import androidx.compose.ui.geometry.Offset
@@ -450,3 +459,89 @@ fun ChinoCard(
         content = content,
     )
 }
+
+/**
+ * Where the focus goes back to when a screen comes back from what one of its
+ * items opened - BACK from a title's page: that item, never the first item
+ * on the screen (the rail's Home). Which item it was outlives the screen
+ * leaving composition, saved with it; the items carry their requesters
+ * ([requester]).
+ */
+@Stable
+class ReturnFocus internal constructor(private val opened: MutableState<String?>) {
+    private val items = HashMap<String, FocusRequester>()
+
+    /** The requester of the item [key], to put on the item. */
+    fun requester(key: String): FocusRequester = items.getOrPut(key) { FocusRequester() }
+
+    /** The item [key] opens something: the focus comes back to it. */
+    fun opens(key: String) {
+        opened.value = key
+    }
+
+    /** Gives the focus back to the item that opened what the screen comes
+     *  back from, where it is still there - a few frames for a list to
+     *  place it; true when it has it. */
+    suspend fun restore(): Boolean {
+        val key = opened.value ?: return false
+        opened.value = null
+        return requestSoon(items.getOrPut(key) { FocusRequester() })
+    }
+}
+
+/** A screen's [ReturnFocus], saved with the screen. */
+@Composable
+fun rememberReturnFocus(): ReturnFocus {
+    val opened = rememberSaveable { mutableStateOf<String?>(null) }
+    return remember(opened) { ReturnFocus(opened) }
+}
+
+/** Asks [target] for the focus, over the next few frames until it is laid
+ *  out - a row's card, a page's first control; true once it has asked it. */
+suspend fun requestSoon(target: FocusRequester, frames: Int = 4): Boolean {
+    repeat(frames) {
+        if (runCatching { target.requestFocus() }.isSuccess) return true
+        withFrameNanos { }
+    }
+    return false
+}
+
+/**
+ * A page's controls in reading order, for the remote (Settings): RIGHT goes
+ * to the next one - beside it, else the first of the next row - never up the
+ * page to whatever lies nearest; nothing after the last, and DOWN from the
+ * last stays on the page rather than leaving it for the rail. Focus coming
+ * into the page from the rail lands on the first ([readingOrderGroup]).
+ * [requester] gives each its requester: a [ReturnFocus]'s, so BACK finds it.
+ */
+class ReadingOrder(private val keys: List<String>, requester: (String) -> FocusRequester = { FocusRequester() }) {
+    private val requesters = keys.associateWith(requester)
+
+    operator fun get(key: String): FocusRequester = requesters.getValue(key)
+
+    /** The first control, where the rail's RIGHT lands. */
+    val first: FocusRequester? get() = keys.firstOrNull()?.let(requesters::getValue)
+
+    internal fun after(key: String): FocusRequester? = keys.getOrNull(keys.indexOf(key) + 1)?.let(requesters::getValue)
+
+    internal fun isLast(key: String): Boolean = keys.lastOrNull() == key
+}
+
+/** The control [key] of [order]: its requester, its RIGHT to the next, its
+ *  DOWN on the page where it is the last. Before its focus target. */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.inReadingOrder(order: ReadingOrder, key: String): Modifier =
+    focusRequester(order[key]).focusProperties {
+        right = order.after(key) ?: FocusRequester.Cancel
+        if (order.isLast(key)) down = FocusRequester.Cancel
+    }
+
+/** The part of a page [order]'s controls are in: the rail's RIGHT into it
+ *  lands on the first, never on the one nearest the rail's item. */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.readingOrderGroup(order: ReadingOrder): Modifier =
+    focusProperties {
+        enter = { direction ->
+            if (direction == FocusDirection.Right) order.first ?: FocusRequester.Default else FocusRequester.Default
+        }
+    }.focusGroup()

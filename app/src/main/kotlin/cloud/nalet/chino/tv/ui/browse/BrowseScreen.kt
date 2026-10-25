@@ -15,6 +15,11 @@ import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.theme.LoadError
+import cloud.nalet.chino.tv.ui.theme.ReturnFocus
+import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
+import cloud.nalet.chino.tv.ui.theme.requestSoon
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -90,6 +95,24 @@ fun BrowseScreen(
     // scrim + #161B22 popover the Home rails use). Hosted here above the whole
     // page so its scrim dims the rail + topbar + grid; null = closed.
     var activeCardMenu by remember { mutableStateOf<CardMenuRequest?>(null) }
+    // The focus: on the rail's item of this page as it opens from the rail,
+    // back on the card that opened a title's page as it comes back from it,
+    // and on the first chip once what a try again loaded takes its place -
+    // never where the platform would put it when the try again goes, the
+    // rail.
+    val railFocus = remember { FocusRequester() }
+    val firstChip = remember { FocusRequester() }
+    val back = rememberReturnFocus()
+    var retried by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        if (!back.restore()) requestSoon(railFocus)
+    }
+    LaunchedEffect(state) {
+        if (retried && state is BrowseUiState.Ready) {
+            retried = false
+            requestSoon(firstChip)
+        }
+    }
     ChinoPage {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -101,6 +124,7 @@ fun BrowseScreen(
                     onWatchlist = onWatchlist,
                     onZap = onZapNav,
                     onSettings = onSettings,
+                    activeFocus = railFocus,
                 )
                 Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                     TvTopBar(
@@ -114,7 +138,7 @@ fun BrowseScreen(
                         is BrowseUiState.Error -> LoadError(
                             title = browseLoadErrorTitle(pageTitle),
                             failure = s.failure,
-                            onRetry = viewModel::retry,
+                            onRetry = { retried = true; viewModel.retry() },
                         )
                         is BrowseUiState.Ready -> BrowseGrid(
                             s = s,
@@ -126,7 +150,9 @@ fun BrowseScreen(
                             onLoadMore = viewModel::loadMore,
                             onShowMenu = { activeCardMenu = it },
                             onToggleWatched = viewModel::toggleWatched,
-                            onPlay = onPlay,
+                            onPlay = { id -> back.opens(id); onPlay(id) },
+                            returnFocus = back,
+                            firstChip = firstChip,
                         )
                     }
                 }
@@ -157,6 +183,8 @@ private fun BrowseGrid(
     onShowMenu: (CardMenuRequest) -> Unit = {},
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
     onPlay: (String) -> Unit = {},
+    returnFocus: ReturnFocus? = null,
+    firstChip: FocusRequester? = null,
 ) {
     val gridState = rememberLazyGridState()
     LaunchedEffect(s.hasMore, s.items.size) {
@@ -185,7 +213,7 @@ private fun BrowseGrid(
             )
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
-            FilterBar(filters = s.filters, genres = s.genres, onChange = onFilters)
+            FilterBar(filters = s.filters, genres = s.genres, onChange = onFilters, firstChip = firstChip)
         }
         if (s.items.isEmpty()) {
             item(span = { GridItemSpan(maxLineSpan) }) {
@@ -201,7 +229,8 @@ private fun BrowseGrid(
             PosterGridCard(
                 item = item,
                 posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
-                onClick = { onItemSelected(item.id) },
+                onClick = { returnFocus?.opens(item.id); onItemSelected(item.id) },
+                modifier = returnFocus?.let { Modifier.focusRequester(it.requester(item.id)) } ?: Modifier,
                 saved = item.id in savedItems,
                 // Hold-OK opens the shared actions menu: a movie's play, the
                 // watched toggle. Browse is not unwatched-filtered, so marking
@@ -235,6 +264,8 @@ private fun FilterBar(
     filters: BrowseFilters,
     genres: List<String>,
     onChange: (BrowseFilters) -> Unit,
+    /** On "all genres", the page's first control. */
+    firstChip: FocusRequester? = null,
 ) {
     // Chip rows: their chips far enough apart for a focused one's growth and
     // ring, and room at the rows' ends (shelfRoom).
@@ -248,7 +279,11 @@ private fun FilterBar(
             modifier = Modifier.shelfRoom(),
         ) {
             item("g-all") {
-                FilterChip("all genres", filters.genre == null) { onChange(filters.copy(genre = null)) }
+                FilterChip(
+                    "all genres",
+                    filters.genre == null,
+                    modifier = if (firstChip != null) Modifier.focusRequester(firstChip) else Modifier,
+                ) { onChange(filters.copy(genre = null)) }
             }
             items(genres, key = { "g:$it" }) { g ->
                 FilterChip(g, filters.genre == g) {

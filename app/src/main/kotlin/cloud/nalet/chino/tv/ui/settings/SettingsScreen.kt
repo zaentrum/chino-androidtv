@@ -50,6 +50,11 @@ import cloud.nalet.chino.tv.ui.theme.ChinoFocus
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
+import cloud.nalet.chino.tv.ui.theme.ReadingOrder
+import cloud.nalet.chino.tv.ui.theme.inReadingOrder
+import cloud.nalet.chino.tv.ui.theme.readingOrderGroup
+import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
+import cloud.nalet.chino.tv.ui.theme.requestSoon
 import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.compose.foundation.clickable
@@ -104,13 +109,32 @@ fun SettingsScreen(
     val audioChoices = remember(s.preferredAudioLang, tvLanguage) { audioLanguageChoices(s.preferredAudioLang, tvLanguage) }
     // The language menu open, if one is.
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
+    // The page's controls in reading order (ReadingOrder): RIGHT to the
+    // next, nothing past the last, DOWN from the last on the page; the
+    // rail's RIGHT onto the first.
+    val back = rememberReturnFocus()
+    val keys = listOfNotNull(
+        "intro", "credits", "next", "fewer", "more", "audio", "subtitles",
+        "profile".takeIf { onProfile != null },
+        "switch".takeIf { onSwitchAccount != null },
+        "delete".takeIf { onDeleteAccount != null },
+        "server".takeIf { onChangeServer != null },
+        "report".takeIf { reportsTaken },
+    )
+    val order = remember(keys) { ReadingOrder(keys, back::requester) }
+    // Opened from the rail, the focus stays on the rail's Settings; back
+    // from what a button opened - your account, delete account, change
+    // server - it is on that button. Never the rail's Home.
+    val railFocus = remember { FocusRequester() }
+    LaunchedEffect(Unit) {
+        if (!back.restore()) requestSoon(railFocus)
+    }
     // A menu or the report dialog that closes - a pick, BACK, close - takes
     // its focused row with it: the focus goes back to the row or the button
     // that opened it, never to the first item on the screen (the rail's
     // Home, where the next OK would leave Settings).
-    val audioRow = remember { FocusRequester() }
-    val subtitleRow = remember { FocusRequester() }
-    val reportButton = remember { FocusRequester() }
+    val audioRow = order["audio"]
+    val subtitleRow = order["subtitles"]
     var opener by remember { mutableStateOf<FocusRequester?>(null) }
     val overlayOpen = languageMenu != null || showReportPanel
     LaunchedEffect(overlayOpen) {
@@ -132,6 +156,7 @@ fun SettingsScreen(
                 onWatchlist = onWatchlist,
                 onZap = onZapNav,
                 onSettings = {},
+                activeFocus = railFocus,
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
                 cloud.nalet.chino.tv.ui.library.TvTopBar(
@@ -143,6 +168,7 @@ fun SettingsScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
+                        .readingOrderGroup(order)
                         .verticalScroll(rememberScrollState())
                         .padding(horizontal = 24.dp, vertical = 24.dp),
                     verticalArrangement = Arrangement.spacedBy(24.dp),
@@ -163,18 +189,21 @@ fun SettingsScreen(
                     help = "Skips the title sequence and any \"Previously on…\" recap at the top of an episode.",
                     value = s.autoSkipIntro,
                     onChange = viewModel::setAutoSkipIntro,
+                    modifier = Modifier.inReadingOrder(order, "intro"),
                 )
                 ToggleRow(
                     label = "Auto-skip credits",
                     help = "Skips the closing credits at the end of an episode.",
                     value = s.autoSkipCredits,
                     onChange = viewModel::setAutoSkipCredits,
+                    modifier = Modifier.inReadingOrder(order, "credits"),
                 )
                 ToggleRow(
                     label = "Auto-play next episode",
                     help = "Starts the next episode automatically when credits roll.",
                     value = s.autoPlayNext,
                     onChange = viewModel::setAutoPlayNext,
+                    modifier = Modifier.inReadingOrder(order, "next"),
                 )
                 StepperRow(
                     label = "Countdown before auto-skip",
@@ -184,6 +213,8 @@ fun SettingsScreen(
                     min = 1,
                     max = 15,
                     onChange = viewModel::setCountdownSec,
+                    fewer = Modifier.inReadingOrder(order, "fewer"),
+                    more = Modifier.inReadingOrder(order, "more"),
                 )
             }
             Section(
@@ -198,7 +229,7 @@ fun SettingsScreen(
                     choices = audioChoices,
                     value = s.preferredAudioLang,
                     onOpen = { opener = audioRow; languageMenu = LanguageMenuFor.Audio },
-                    focusRequester = audioRow,
+                    modifier = Modifier.inReadingOrder(order, "audio"),
                 )
             }
             Section(
@@ -212,7 +243,7 @@ fun SettingsScreen(
                     choices = subtitleChoices,
                     value = s.preferredSubLang,
                     onOpen = { opener = subtitleRow; languageMenu = LanguageMenuFor.Subtitles },
-                    focusRequester = subtitleRow,
+                    modifier = Modifier.inReadingOrder(order, "subtitles"),
                 )
             }
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
@@ -226,19 +257,28 @@ fun SettingsScreen(
                         // Profile first (mirrors chino-mobile's Settings Account
                         // ordering): identity + watch history.
                         if (onProfile != null) {
-                            ChinoButton(onClick = onProfile) {
+                            ChinoButton(
+                                onClick = { back.opens("profile"); onProfile() },
+                                modifier = Modifier.inReadingOrder(order, "profile"),
+                            ) {
                                 Text("see your account")
                             }
                         }
                         if (onSwitchAccount != null) {
-                            ChinoButton(onClick = onSwitchAccount) {
+                            ChinoButton(
+                                onClick = { back.opens("switch"); onSwitchAccount() },
+                                modifier = Modifier.inReadingOrder(order, "switch"),
+                            ) {
                                 Text("switch account")
                             }
                         }
                         // Last in the row: a screen of its own asks before
                         // anything is deleted.
                         if (onDeleteAccount != null) {
-                            ChinoButton(onClick = onDeleteAccount) {
+                            ChinoButton(
+                                onClick = { back.opens("delete"); onDeleteAccount() },
+                                modifier = Modifier.inReadingOrder(order, "delete"),
+                            ) {
                                 Text("delete account")
                             }
                         }
@@ -257,7 +297,10 @@ fun SettingsScreen(
                         ?: "Connect to a different Chino server.",
                 ) {
                     SettingButtons {
-                        ChinoButton(onClick = onChangeServer) {
+                        ChinoButton(
+                            onClick = { back.opens("server"); onChangeServer() },
+                            modifier = Modifier.inReadingOrder(order, "server"),
+                        ) {
                             Text("change server")
                         }
                     }
@@ -280,10 +323,10 @@ fun SettingsScreen(
                             // Reset BEFORE showing so a stale Filed/Failed body
                             // from the previous report doesn't flash.
                             viewModel.resetBugReport()
-                            opener = reportButton
+                            opener = order["report"]
                             showReportPanel = true
                         },
-                        modifier = Modifier.focusRequester(reportButton),
+                        modifier = Modifier.inReadingOrder(order, "report"),
                     ) {
                         Text("report a problem")
                     }
@@ -478,10 +521,12 @@ internal fun LanguageSettingRow(
     focus: cloud.nalet.chino.tv.ui.theme.ItemFocus = rememberItemFocus(),
     /** Takes the focus back when the row's menu closes. */
     focusRequester: FocusRequester? = null,
+    /** Before its focus target: its place in the page's reading order. */
+    modifier: Modifier = Modifier,
 ) {
     val name = chosenLanguage(choices, value)?.name ?: choices.first().name
     Row(
-        modifier = Modifier
+        modifier = modifier
             // Set in from the section's sides by more than a focused row
             // grows (1 % each side), its text where the other rows' is.
             .padding(horizontal = 8.dp)
@@ -602,6 +647,8 @@ private fun ToggleRow(
     help: String,
     value: Boolean,
     onChange: (Boolean) -> Unit,
+    /** On its on/off button. */
+    modifier: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier
@@ -623,6 +670,7 @@ private fun ToggleRow(
         // its fill on focus.
         ChinoButton(
             onClick = { onChange(!value) },
+            modifier = modifier,
             container = if (value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             content = if (value) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             filled = value,
@@ -641,6 +689,9 @@ private fun StepperRow(
     min: Int,
     max: Int,
     onChange: (Int) -> Unit,
+    /** On its − and its + buttons. */
+    fewer: Modifier = Modifier,
+    more: Modifier = Modifier,
 ) {
     Row(
         modifier = Modifier
@@ -662,7 +713,7 @@ private fun StepperRow(
             // Room for a focused button's grown ring beside the value.
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
-            ChinoButton(onClick = { if (value > min) onChange(value - 1) }) { Text("−") }
+            ChinoButton(onClick = { if (value > min) onChange(value - 1) }, modifier = fewer) { Text("−") }
             Box(
                 modifier = Modifier
                     .width(72.dp)
@@ -683,7 +734,7 @@ private fun StepperRow(
                     textAlign = androidx.compose.ui.text.style.TextAlign.Center,
                 )
             }
-            ChinoButton(onClick = { if (value < max) onChange(value + 1) }) { Text("+") }
+            ChinoButton(onClick = { if (value < max) onChange(value + 1) }, modifier = more) { Text("+") }
         }
     }
 }

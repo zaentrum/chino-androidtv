@@ -10,6 +10,7 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.focusable
+import androidx.compose.foundation.focusGroup
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -86,6 +87,8 @@ import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.theme.SafeArea
 import cloud.nalet.chino.tv.ui.theme.ScrollsInSafeArea
 import cloud.nalet.chino.tv.ui.theme.runToScreenEnd
+import cloud.nalet.chino.tv.ui.theme.ReturnFocus
+import cloud.nalet.chino.tv.ui.theme.rememberReturnFocus
 import cloud.nalet.chino.tv.ui.theme.scrollsToScreenEdges
 import cloud.nalet.chino.tv.ui.theme.LoadError
 import coil.compose.AsyncImage
@@ -270,7 +273,11 @@ internal fun LibraryContent(
     // nonce). The carousel holds while the hero has the focus, so the
     // focused button is never swapped away. Without a hero (a filter emptied
     // the rows), the search field.
+    // BACK from what a card opened - a title's page, the player from its
+    // menu - gives the focus back to that card instead.
+    val back = rememberReturnFocus()
     LaunchedEffect(homeEntryNonce) {
+        if (back.restore()) return@LaunchedEffect
         repeat(3) {
             if (runCatching { heroPlayFocus.requestFocus() }.isSuccess) return@LaunchedEffect
             androidx.compose.runtime.withFrameNanos { }
@@ -340,7 +347,8 @@ internal fun LibraryContent(
                     upTarget = searchFocus,
                     onFocusWithin = { f -> heroFocused = f; onHeroFocusChanged(f) },
                     onPlay = { onHeroPlay(item.id) },
-                    onMoreInfo = { onItemSelected(item.id) },
+                    detailsFocus = back.requester(HERO_DETAILS),
+                    onMoreInfo = { back.opens(HERO_DETAILS); onItemSelected(item.id) },
                 )
             }
         }
@@ -370,6 +378,8 @@ internal fun LibraryContent(
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
                     onPlay = onPlayCard,
+                    returnFocus = back,
+                    shelf = "continue",
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -387,6 +397,8 @@ internal fun LibraryContent(
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
                     onPlay = onPlayCard,
+                    returnFocus = back,
+                    shelf = "next",
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -410,6 +422,8 @@ internal fun LibraryContent(
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
                     onPlay = { id -> onPlayCard(id, 0) },
+                    returnFocus = back,
+                    shelf = "movies",
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -424,6 +438,8 @@ internal fun LibraryContent(
                     onSeeAll = onSeriesNav,
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
+                    returnFocus = back,
+                    shelf = "shows",
                 )
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
@@ -440,6 +456,8 @@ internal fun LibraryContent(
                     onToggleWatched = onToggleWatched,
                     onShowMenu = showCardMenu,
                     onPlay = { id -> onPlayCard(id, 0) },
+                    returnFocus = back,
+                    shelf = "top",
                 )
             }
             if (movies.isEmpty() && series.isEmpty()) {
@@ -471,6 +489,9 @@ internal fun LibraryContent(
 /** What a card hands [LibraryContent] to open the shared actions menu. */
 internal data class CardMenuRequest(val title: String, val actions: List<CardAction>)
 
+/** The hero's "see details", as [ReturnFocus] knows it. */
+private const val HERO_DETAILS = "hero/details"
+
 /* ────────────────────────────  SideRail + TopBar  ────────────────────────── */
 
 /** Vertical nav rail — `>c` brand mark up top, House / Film / Tv stacked
@@ -478,6 +499,7 @@ internal data class CardMenuRequest(val title: String, val actions: List<CardAct
  *  SideRail composable so the two clients have visual parity on the same
  *  form factor. Rail items use tv-material3 Button so DPAD focus picks up
  *  the scale + outline focused state for free. */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 internal fun TvSideRail(
     activeType: String?,
@@ -492,15 +514,27 @@ internal fun TvSideRail(
     zapActive: Boolean = false,
     onWatchlist: () -> Unit,
     watchlistActive: Boolean = false,
+    /** On the item of the screen you are on: where focus coming into the
+     *  rail lands - LEFT from the content - and what a screen opened from the
+     *  rail gives the focus to. */
+    activeFocus: FocusRequester = remember { FocusRequester() },
 ) {
+    // Home is where you are only where no other item is: not in Settings,
+    // Zap or the Watchlist, which pass no type either.
+    val homeActive = activeType == null && !settingsActive && !zapActive && !watchlistActive
+    val anyActive = homeActive || activeType == "movie" || activeType == "series" || settingsActive || zapActive || watchlistActive
     // Flat canvas rail (#0D1117) with a 1dp #30363D right-edge divider and a
     // logo-cell bottom divider — the chino-web / mobile SideRail (NOT an
-    // elevated #161B22 surface). 80dp wide incl. the divider.
+    // elevated #161B22 surface). 80dp wide incl. the divider. One group for
+    // the remote: coming into it, the focus lands on the screen's own item,
+    // never on the one nearest where it came from.
     androidx.compose.foundation.layout.Row(
         modifier = Modifier
             .width(80.dp)
             .fillMaxHeight()
-            .background(ChinoBg),
+            .background(ChinoBg)
+            .focusProperties { enter = { if (anyActive) activeFocus else FocusRequester.Default } }
+            .focusGroup(),
     ) {
         androidx.compose.foundation.layout.Column(modifier = Modifier.weight(1f).fillMaxHeight()) {
             // Logo cell: 64dp tall (= topbar height) with a bottom divider so
@@ -519,19 +553,16 @@ internal fun TvSideRail(
                 // Room between the items for a focused one's growth and ring.
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                // Home is where you are only where no other item is: not in
-                // Settings, Zap or the Watchlist, which pass no type either.
-                val homeActive = activeType == null && !settingsActive && !zapActive && !watchlistActive
-                TvRailButton(icon = Lucide.House, label = "Home", isActive = homeActive, onClick = onHome)
-                TvRailButton(icon = Lucide.Film, label = "Movies", isActive = activeType == "movie", onClick = onMovies)
-                TvRailButton(icon = Lucide.Tv, label = "Series", isActive = activeType == "series", onClick = onSeries)
+                TvRailButton(icon = Lucide.House, label = "Home", isActive = homeActive, onClick = onHome, focusRequester = activeFocus.takeIf { homeActive })
+                TvRailButton(icon = Lucide.Film, label = "Movies", isActive = activeType == "movie", onClick = onMovies, focusRequester = activeFocus.takeIf { activeType == "movie" })
+                TvRailButton(icon = Lucide.Tv, label = "Series", isActive = activeType == "series", onClick = onSeries, focusRequester = activeFocus.takeIf { activeType == "series" })
                 // Watchlist hub — its entry (web/mobile parity). The top-bar
                 // bell is the notices', as on chino-web's header.
-                TvRailButton(icon = Lucide.Bookmark, label = "Watchlist", isActive = watchlistActive, onClick = onWatchlist)
-                TvRailButton(icon = Lucide.Zap, label = "Zap", isActive = zapActive, onClick = onZap)
+                TvRailButton(icon = Lucide.Bookmark, label = "Watchlist", isActive = watchlistActive, onClick = onWatchlist, focusRequester = activeFocus.takeIf { watchlistActive })
+                TvRailButton(icon = Lucide.Zap, label = "Zap", isActive = zapActive, onClick = onZap, focusRequester = activeFocus.takeIf { zapActive })
             }
             Box(modifier = Modifier.fillMaxWidth().padding(16.dp)) {
-                TvRailButton(icon = Lucide.Settings, label = "Settings", isActive = settingsActive, onClick = onSettings)
+                TvRailButton(icon = Lucide.Settings, label = "Settings", isActive = settingsActive, onClick = onSettings, focusRequester = activeFocus.takeIf { settingsActive })
             }
         }
         // Right-edge divider — full height, forms the L with the topbar divider.
@@ -546,6 +577,7 @@ internal fun TvRailButton(
     isActive: Boolean,
     onClick: () -> Unit,
     focus: ItemFocus = rememberItemFocus(),
+    focusRequester: FocusRequester? = null,
 ) {
     // 48dp square (matches mobile RailButton): the active slot on a surface
     // fill so it stands out against the rail, its icon in the accent. A nav
@@ -553,6 +585,7 @@ internal fun TvRailButton(
     Box(
         modifier = Modifier
             .size(48.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Control, surface = if (isActive) ChinoSurface else Color.Transparent)
             // Where you are, said to a screen reader as the marker shows it.
             .semantics { selected = isActive }
@@ -757,9 +790,16 @@ private fun ShelfHeading(text: String) {
 
 /** A filter chip: filled in the accent while it is on, plain while it is off. */
 @Composable
-internal fun FilterChip(label: String, active: Boolean, focus: ItemFocus = rememberItemFocus(), onClick: () -> Unit) {
+internal fun FilterChip(
+    label: String,
+    active: Boolean,
+    focus: ItemFocus = rememberItemFocus(),
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit,
+) {
     ChinoButton(
         onClick = onClick,
+        modifier = modifier,
         // Off, a plain chip: surface-2, its label fg-2.
         container = if (active) MaterialTheme.colorScheme.primary else ChinoSurfaceHi,
         content = if (active) MaterialTheme.colorScheme.onPrimary else ChinoText,
@@ -787,6 +827,10 @@ private fun ContinueWatchingRow(
     onShowMenu: (CardMenuRequest) -> Unit = {},
     /** The card's play: from its position on the in-progress shelf. */
     onPlay: (itemId: String, resumeSec: Int) -> Unit = { _, _ -> },
+    /** Where the focus comes back to: the card that opened what Home comes
+     *  back from, by [shelf] and its id. */
+    returnFocus: ReturnFocus? = null,
+    shelf: String = "",
 ) {
     ShelfToScreenEdge {
     LazyRow(
@@ -805,11 +849,12 @@ private fun ContinueWatchingRow(
             // where the card's bar shows a position, else play; the watched
             // toggle; and remove from continue watching on the in-progress
             // shelf.
+            val key = "$shelf/${item.id}"
             val openMenu: () -> Unit = {
                 val watched = item.watchedAt != null
                 val resumeAt = item.positionSec.takeIf { showProgress && it > 0 } ?: 0
                 val actions = buildList {
-                    add(playCardAction(resumes = resumeAt > 0) { onPlay(item.id, resumeAt) })
+                    add(playCardAction(resumes = resumeAt > 0) { returnFocus?.opens(key); onPlay(item.id, resumeAt) })
                     add(watchedCardAction(watched) { next -> onToggleWatched(item.id, next) })
                     if (onRemove != null) {
                         add(
@@ -830,8 +875,9 @@ private fun ContinueWatchingRow(
                 streamToken = streamToken,
                 saved = cardInWatchlist(item, saved),
                 showProgress = showProgress,
-                onClick = { onItemSelected(item.id) },
+                onClick = { returnFocus?.opens(key); onItemSelected(item.id) },
                 onLongPress = openMenu,
+                modifier = returnFocus?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier,
             )
         }
     }
@@ -863,6 +909,7 @@ private fun ContinueWatchingCard(
     showProgress: Boolean,
     onClick: () -> Unit,
     onLongPress: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     // Portrait poster matching the mobile MediaCard: the SERIES title (for
     // episodes), an "SxxExx · episode-title" badge, and a #58A6FF progress
@@ -881,7 +928,7 @@ private fun ContinueWatchingCard(
         // on every card, plus "Remove from Continue Watching" on the in-
         // progress shelf. Short press still opens detail.
         onLongClick = onLongPress,
-        modifier = Modifier.width(180.dp),
+        modifier = modifier.width(180.dp),
         focus = focus,
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {
@@ -1028,6 +1075,8 @@ private fun HeroBanner(
     heroCount: Int = 0,
     playFocusRequester: FocusRequester? = null,
     upTarget: FocusRequester? = null,
+    /** On "see details": where BACK from the title's page gives the focus. */
+    detailsFocus: FocusRequester? = null,
     onFocusWithin: (Boolean) -> Unit = {},
     onPlay: () -> Unit,
     onMoreInfo: () -> Unit,
@@ -1148,7 +1197,9 @@ private fun HeroBanner(
             // A plain button: surface-2, its label fg-2.
             ChinoButton(
                 onClick = onMoreInfo,
-                modifier = if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier,
+                modifier = Modifier
+                    .then(if (detailsFocus != null) Modifier.focusRequester(detailsFocus) else Modifier)
+                    .then(if (upTarget != null) Modifier.focusProperties { up = upTarget } else Modifier),
             ) {
                 Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
@@ -1195,6 +1246,10 @@ internal fun ItemGrid(
     /** A movie card's play. A show's card has none: what it plays is worked
      *  out on its page. */
     onPlay: ((String) -> Unit)? = null,
+    /** Where the focus comes back to: the card that opened what Home comes
+     *  back from, by [shelf] and its id. */
+    returnFocus: ReturnFocus? = null,
+    shelf: String = "",
 ) {
     // Web's home uses finite MediaRow shelves — a single horizontal scroll of
     // fixed-width PosterCards, capped, with a See All escape hatch. DPAD_DOWN
@@ -1207,11 +1262,13 @@ internal fun ItemGrid(
         modifier = Modifier.runToScreenEnd(ShelfRun).shelfRoom().fillMaxWidth(),
     ) {
         tvRowItems(items, key = { it.id }) { item ->
+            val key = "$shelf/${item.id}"
             PosterCard(
                 item = item,
                 posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
-                onItemSelected = onItemSelected,
+                onItemSelected = { id -> returnFocus?.opens(key); onItemSelected(id) },
                 saved = item.id in saved,
+                modifier = returnFocus?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier,
                 // Hold-OK opens the shared menu: a movie's play, the watched
                 // toggle. Marking watched drops the card from this rail
                 // (rails are unwatched=true).
@@ -1220,7 +1277,9 @@ internal fun ItemGrid(
                     onShowMenu(
                         CardMenuRequest(
                             title = item.title,
-                            actions = cardActions(item, onPlay, watched) { next -> onToggleWatched(item.id, next) },
+                            actions = cardActions(item, onPlay?.let { play -> { id: String -> returnFocus?.opens(key); play(id) } }, watched) { next ->
+                                onToggleWatched(item.id, next)
+                            },
                         ),
                     )
                 },
@@ -1230,7 +1289,11 @@ internal fun ItemGrid(
         // row keeps a flush right edge. Mirrors web's MediaRow See All tile.
         if (onSeeAll != null && items.isNotEmpty()) {
             tvRowItems(listOf("__see_all__"), key = { it }) {
-                SeeAllCard(onClick = onSeeAll)
+                val key = "$shelf/see-all"
+                SeeAllCard(
+                    onClick = { returnFocus?.opens(key); onSeeAll() },
+                    modifier = returnFocus?.let { Modifier.focusRequester(it.requester(key)) } ?: Modifier,
+                )
             }
         }
     }
@@ -1248,10 +1311,10 @@ private fun ShelfToScreenEdge(content: @Composable () -> Unit) =
     ScrollsInSafeArea(trailing = SafeArea.Horizontal + ChinoFocus.Room, content = content)
 
 @Composable
-internal fun SeeAllCard(onClick: () -> Unit) {
+internal fun SeeAllCard(onClick: () -> Unit, modifier: Modifier = Modifier) {
     ChinoCard(
         onClick = onClick,
-        modifier = Modifier.width(180.dp),
+        modifier = modifier.width(180.dp),
     ) {
         Column(
             modifier = Modifier
@@ -1289,6 +1352,7 @@ internal fun PosterCard(
      *  one icon and one colour on buttons and on cards alike). */
     saved: Boolean = false,
     focus: ItemFocus = rememberItemFocus(),
+    modifier: Modifier = Modifier,
 ) {
     // Card body: poster on top in 2:3, meta strip below with title + year.
     // Matches chino-web MediaCard layout — title outside the poster, not
@@ -1301,7 +1365,7 @@ internal fun PosterCard(
         onClick = { onItemSelected(item.id) },
         // Hold-OK opens the card actions menu (web MediaCard overflow parity).
         onLongClick = onLongPress,
-        modifier = Modifier.width(180.dp),
+        modifier = modifier.width(180.dp),
         focus = focus,
     ) {
         Column(modifier = Modifier.background(MaterialTheme.colorScheme.surface)) {

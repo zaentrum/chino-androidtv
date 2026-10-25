@@ -13,6 +13,8 @@ import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
+import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
@@ -134,6 +136,48 @@ class SettingsFocusTest {
         compose.waitForIdle()
         press(Key.DirectionCenter)
         assertEquals(1, zapOpened)
+    }
+
+    private fun button(label: String) = compose.onNode(hasText(label) and hasClickAction())
+
+    private fun hasRole(role: Role) = SemanticsMatcher.expectValue(androidx.compose.ui.semantics.SemanticsProperties.Role, role)
+
+    @Test
+    fun `opened from the rail, the focus is on the rail's Settings, never Home`() {
+        compose.onNode(hasContentDescription("Settings")).assertIsFocused()
+    }
+
+    @Test
+    fun `RIGHT from the rail lands on the first control, the binge-watching toggle at the top`() {
+        compose.onNode(hasContentDescription("Settings")).assertIsFocused()
+        press(Key.DirectionRight)
+        // The toggles' on/off buttons in the page's order, the top one first.
+        val toggles = compose.onAllNodes((hasText("on") or hasText("off")) and hasClickAction() and hasRole(Role.Button))
+            .fetchSemanticsNodes()
+        val focused = compose.onNode(isFocused()).fetchSemanticsNode()
+        assertEquals(toggles.first().id, focused.id)
+        // RIGHT from a toggle at a row's end: the next one, below it.
+        press(Key.DirectionRight)
+        assertEquals(toggles[1].id, compose.onNode(isFocused()).fetchSemanticsNode().id)
+    }
+
+    @Test
+    fun `RIGHT goes to the next control in reading order, nothing past the last, and DOWN from the last stays on the page`() {
+        button("delete account").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionRight)
+        button("change server").assertIsFocused()
+        press(Key.DirectionRight)
+        button("report a problem").assertIsFocused()
+        press(Key.DirectionRight)
+        button("report a problem").assertIsFocused()
+        press(Key.DirectionDown)
+        button("report a problem").assertIsFocused()
+        // Within a row, the one beside it.
+        button("see your account").performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionRight)
+        button("switch account").assertIsFocused()
     }
 
     @Test
