@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.library
 
+import androidx.compose.ui.semantics.selected
+import androidx.compose.ui.semantics.semantics
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
@@ -195,7 +197,7 @@ fun LibraryScreen(
 }
 
 @Composable
-private fun LibraryContent(
+internal fun LibraryContent(
     movies: List<Item>,
     series: List<Item>,
     continueWatching: List<cloud.nalet.chino.tv.data.api.ContinueWatchingItem>,
@@ -244,16 +246,6 @@ private fun LibraryContent(
     val heroPlayFocus = remember { FocusRequester() }
     val searchFocus = remember { FocusRequester() }
     val pageScroll = rememberScrollState()
-    // Invisible 1dp focus "catcher" that HOLDS focus on every home entry so the
-    // screen reads as "nothing selected" (it paints no ring) yet still receives
-    // the first D-pad key (onPreviewKeyEvent only fires for the focused node;
-    // with literally nothing focused the key would go to the host View instead).
-    // Because the catcher — not the hero — holds focus, HeroBanner.hasFocus stays
-    // false, so heroRotationPaused stays false and the 12s carousel keeps running.
-    // engaged is keyed on homeEntryNonce so EVERY home (re)entry — login,
-    // BACK-from-player, and the in-place rail-Home nonce bump — re-arms it.
-    val catcherFocus = remember { FocusRequester() }
-    var engaged by remember(homeEntryNonce) { mutableStateOf(false) }
     // Whenever the hero gains focus — on home entry AND when the user presses
     // UP from a shelf back into it — snap the page to the TOP so the WHOLE
     // hero (title and all) shows, not just the bottom-left Play button that
@@ -264,18 +256,17 @@ private fun LibraryContent(
     LaunchedEffect(heroFocused) {
         if (heroFocused) runCatching { pageScroll.animateScrollTo(0) }
     }
-    // Park focus on the INVISIBLE CATCHER (not the hero Play) on EVERY home
-    // entry. This is the core of "nothing selected on entry + carousel keeps
-    // running": parking on Play would set hero.hasFocus=true and FREEZE the
-    // carousel immediately, which is exactly what the new requirement forbids.
-    // Keyed on homeEntryNonce so it re-fires for the in-place rail-Home path
-    // (which never recomposes); the navigation/back paths compose fresh and run
-    // it once anyway. NOT keyed on the hero id, so a 12s carousel rotation can't
-    // yank focus while the catcher holds it. The first directional/center key
-    // (handled in the catcher's onPreviewKeyEvent below) hands focus off to
-    // hero Play; align-to-top is then driven by the heroFocused effect above.
+    // Home opens with the focus on the hero's play, in the shared focus
+    // style, on every entry - sign-in, BACK from the player, rail Home (the
+    // nonce). The carousel holds while the hero has the focus, so the
+    // focused button is never swapped away. Without a hero (a filter emptied
+    // the rows), the search field.
     LaunchedEffect(homeEntryNonce) {
-        runCatching { catcherFocus.requestFocus() }
+        repeat(3) {
+            if (runCatching { heroPlayFocus.requestFocus() }.isSuccess) return@LaunchedEffect
+            androidx.compose.runtime.withFrameNanos { }
+        }
+        runCatching { searchFocus.requestFocus() }
     }
     // Rail-and-topbar layout matching chino-web's Header + Sidebar + the
     // chino-mobile tablet form factor. SideRail pinned to the left, TopBar
@@ -316,51 +307,6 @@ private fun LibraryContent(
                     .fillMaxSize()
                     .verticalScroll(pageScroll),
             ) {
-        // Invisible 1dp focus catcher — the FIRST child of the scroll column,
-        // sitting ABOVE the Crossfade so a carousel rotation never destroys the
-        // focused node. It paints nothing (plain Box, NOT a tv Button), so on
-        // entry the screen looks unselected while it silently holds focus.
-        //   - canFocus = !engaged + focusable(enabled = !engaged): the instant
-        //     it engages it leaves the spatial-nav graph for the rest of this
-        //     home visit, so Play DOWN skips past it to Continue-Watching and
-        //     LEFT falls through to the rail. It re-arms only when the
-        //     homeEntryNonce-keyed `engaged` resets on the next home entry.
-        //   - onPreviewKeyEvent (not onKeyEvent): decide engagement on the
-        //     dispatch-DOWN pass, BEFORE the focusable's built-in spatial nav
-        //     could fling focus to the rail (LEFT) or nowhere (UP).
-        //   - It declares no left/up/down targets, so it never competes with
-        //     the existing rail/search/Play edges.
-        Box(
-            modifier = Modifier
-                .size(1.dp)
-                .focusRequester(catcherFocus)
-                .focusProperties { canFocus = !engaged }
-                .onPreviewKeyEvent { e ->
-                    if (engaged || e.type != KeyEventType.KeyDown) {
-                        false
-                    } else when (e.nativeKeyEvent.keyCode) {
-                        android.view.KeyEvent.KEYCODE_DPAD_DOWN,
-                        android.view.KeyEvent.KEYCODE_DPAD_UP,
-                        android.view.KeyEvent.KEYCODE_DPAD_LEFT,
-                        android.view.KeyEvent.KEYCODE_DPAD_RIGHT,
-                        android.view.KeyEvent.KEYCODE_DPAD_CENTER,
-                        android.view.KeyEvent.KEYCODE_ENTER,
-                        -> {
-                            // Hand off to hero Play. Consume ONLY if focus
-                            // actually moved, else a single press would both
-                            // engage AND spatial-navigate off the 1dp catcher.
-                            // When the hero is null (filter zeroed both rows)
-                            // requestFocus throws -> stay un-engaged & un-
-                            // consumed so the user can still DPAD to the rail.
-                            val moved = runCatching { heroPlayFocus.requestFocus() }.isSuccess
-                            engaged = moved
-                            moved
-                        }
-                        else -> false
-                    }
-                }
-                .focusable(enabled = !engaged),
-        )
         // Crossfade so hero swaps every 20s glide between backdrops instead of
         // hard-cutting — feels much less jarring when you're not actively
         // looking at the screen.
@@ -576,7 +522,10 @@ internal fun TvSideRail(
                 // Room between the items for a focused one's growth and ring.
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                TvRailButton(icon = Lucide.House, label = "Home", isActive = activeType == null, onClick = onHome)
+                // Home is where you are only where no other item is: not in
+                // Settings, Zap or the Watchlist, which pass no type either.
+                val homeActive = activeType == null && !settingsActive && !zapActive && !watchlistActive
+                TvRailButton(icon = Lucide.House, label = "Home", isActive = homeActive, onClick = onHome)
                 TvRailButton(icon = Lucide.Film, label = "Movies", isActive = activeType == "movie", onClick = onMovies)
                 TvRailButton(icon = Lucide.Tv, label = "Series", isActive = activeType == "series", onClick = onSeries)
                 // Watchlist hub — its entry (web/mobile parity). The top-bar
@@ -608,6 +557,8 @@ internal fun TvRailButton(
         modifier = Modifier
             .size(48.dp)
             .focusStyle(focus, FocusKind.Control, surface = if (isActive) ChinoSurface else Color.Transparent)
+            // Where you are, said to a screen reader as the marker shows it.
+            .semantics { selected = isActive }
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == androidx.compose.ui.input.key.KeyEventType.KeyDown &&
