@@ -331,7 +331,7 @@ class FocusScreenshotTest {
     private fun Chips(focus: Pair<Int, FocusRequester>?) {
         // Browse's filters: one on (filled), the others off (plain).
         Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
-            listOf("All genres", "Drama", "Comedy", "Documentary").forEachIndexed { i, label ->
+            listOf("all genres", "Drama", "Comedy", "Documentary").forEachIndexed { i, label ->
                 Box(Modifier.requester(focus, i)) { FilterChip(label = label, active = i == 0, onClick = {}) }
             }
         }

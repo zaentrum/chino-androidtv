@@ -236,14 +236,16 @@ private fun FilterBar(
     // Chip rows: their chips far enough apart for a focused one's growth and
     // ring, and room at the rows' ends (shelfRoom).
     Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-        // Genre row — "All" clears the genre; tapping the active genre clears it.
+        // Genre row — "all genres" clears the genre; tapping the active genre
+        // clears it. The chips are in the mono face: their own words
+        // lowercase, the server's genre names in their case.
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
             contentPadding = shelfPadding(),
             modifier = Modifier.shelfRoom(),
         ) {
             item("g-all") {
-                FilterChip("All genres", filters.genre == null) { onChange(filters.copy(genre = null)) }
+                FilterChip("all genres", filters.genre == null) { onChange(filters.copy(genre = null)) }
             }
             items(genres, key = { "g:$it" }) { g ->
                 FilterChip(g, filters.genre == g) {
@@ -277,7 +279,7 @@ private fun FilterBar(
             items(BROWSE_SORTS, key = { "s:${it.second}" }) { (label, value) ->
                 FilterChip(label, filters.sort == value) { onChange(filters.copy(sort = value)) }
             }
-            // "Clear filters" — chino-web BrowseFilters parity: one action
+            // "clear filters" — chino-web BrowseFilters parity: one action
             // resets genre / decade / rating / sort back to defaults instead
             // of toggling each chip off individually. Rendered at the END of
             // the filter rows ONLY while at least one axis deviates from the
@@ -285,7 +287,7 @@ private fun FilterBar(
             // inactive chip to match web's muted-text affordance.
             if (filters != BrowseFilters()) {
                 item("clear-filters") {
-                    FilterChip("Clear filters", active = false) { onChange(BrowseFilters()) }
+                    FilterChip("clear filters", active = false) { onChange(BrowseFilters()) }
                 }
             }
         }

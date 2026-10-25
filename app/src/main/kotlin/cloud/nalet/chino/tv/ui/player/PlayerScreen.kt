@@ -195,7 +195,7 @@ fun PlayerScreen(
 }
 
 /**
- * An extra that is not there to play: "Trailer not available", and the
+ * An extra that is not there to play: "trailer not available", and the
  * title's trailer link when it has one — opened in the YouTube app where it
  * is one of its. BACK leaves the player, as from the error screen.
  */
@@ -209,7 +209,8 @@ private fun NotAvailableScreen(link: Trailer?, onOpenLink: (Trailer) -> Unit) {
         verticalArrangement = Arrangement.spacedBy(24.dp, Alignment.CenterVertically),
     ) {
         Text(
-            text = "Trailer not available",
+            // A heading, in the mono face: lowercase.
+            text = "trailer not available",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.SemiBold,
             color = ChinoFg,

@@ -30,17 +30,18 @@ val BROWSE_DECADES = listOf(
     Decade("2000s", 2000, 2009),
     Decade("1990s", 1990, 1999),
     Decade("1980s", 1980, 1989),
-    Decade("Older", 1900, 1979),
+    Decade("older", 1900, 1979),
 )
 
 val BROWSE_RATINGS = listOf(8.0, 7.0, 6.0)
 
-/** Sort options; label -> chino-api `sort` query value. */
+/** Sort options; label -> chino-api `sort` query value. The labels are
+ *  chrome, on chips in the mono face: lowercase. */
 val BROWSE_SORTS = listOf(
-    "Title" to "title",
-    "Newest added" to "newest",
-    "Rating" to "rating",
-    "Year (newest)" to "year",
+    "title" to "title",
+    "newest added" to "newest",
+    "rating" to "rating",
+    "year (newest)" to "year",
 )
 
 data class BrowseFilters(
