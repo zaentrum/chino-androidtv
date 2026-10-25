@@ -340,12 +340,7 @@ internal fun LibraryContent(
             val cwRows = continueWatching.filterNot { it.upNext }
             val nextUpRows = continueWatching.filter { it.upNext }
             if (cwRows.isNotEmpty()) {
-                Text(
-                    text = "continue watching",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                ShelfHeading("continue watching")
                 ContinueWatchingRow(
                     items = cwRows,
                     baseUrl = baseUrl,
@@ -362,12 +357,7 @@ internal fun LibraryContent(
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
             if (nextUpRows.isNotEmpty()) {
-                Text(
-                    text = "next up",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                ShelfHeading("next up")
                 ContinueWatchingRow(
                     items = nextUpRows,
                     baseUrl = baseUrl,
@@ -391,12 +381,7 @@ internal fun LibraryContent(
             // paging — the shelf no longer grows endlessly as the user
             // D-pads right; paging-to-full lives on the BrowseScreen.
             if (movies.isNotEmpty()) {
-                Text(
-                    text = "recently added movies",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                ShelfHeading("recently added movies")
                 ItemGrid(
                     items = movies,
                     baseUrl = baseUrl,
@@ -410,12 +395,7 @@ internal fun LibraryContent(
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
             if (series.isNotEmpty()) {
-                Text(
-                    text = "recently added shows",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                ShelfHeading("recently added shows")
                 ItemGrid(
                     items = series,
                     baseUrl = baseUrl,
@@ -429,12 +409,7 @@ internal fun LibraryContent(
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(20.dp))
             }
             if (topRated.isNotEmpty()) {
-                Text(
-                    text = "top rated",
-                    style = MaterialTheme.typography.titleLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    modifier = Modifier.padding(bottom = 12.dp),
-                )
+                ShelfHeading("top rated")
                 ItemGrid(
                     items = topRated,
                     baseUrl = baseUrl,
@@ -744,6 +719,19 @@ internal fun TvIconCell(
             modifier = Modifier.size(20.dp),
         )
     }
+}
+
+/** A shelf's heading on Home: in the mono face, in fg, as every section's
+ *  heading. */
+@Composable
+private fun ShelfHeading(text: String) {
+    Text(
+        text = text,
+        style = MaterialTheme.typography.titleLarge,
+        fontWeight = FontWeight.SemiBold,
+        color = ChinoFg,
+        modifier = Modifier.padding(bottom = 12.dp),
+    )
 }
 
 /** A filter chip: filled in the accent while it is on, plain while it is off. */
