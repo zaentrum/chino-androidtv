@@ -7,6 +7,7 @@ import androidx.lifecycle.viewmodel.viewModelFactory
 import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.AppSettings
 import cloud.nalet.chino.tv.data.PlayCaps
+import cloud.nalet.chino.tv.data.ProgressSaves
 import cloud.nalet.chino.tv.data.SettingsStore
 import cloud.nalet.chino.tv.data.capsMaxHeight
 import cloud.nalet.chino.tv.data.api.ChinoApi
@@ -140,6 +141,9 @@ class PlayerViewModel(
      *  and viewModelScope dies. Without this the library refresh-on-resume
      *  reads stale data because the save lost the cancellation race. */
     private val appScope: kotlinx.coroutines.CoroutineScope,
+    /** Where the progress saves are counted until answered: the title page,
+     *  back from the player, waits for them before it reads the position. */
+    private val progressSaves: ProgressSaves,
     /** Shared with the ExoPlayer data source — used for binge pre-warm
      *  fetches that hit chino-stream's master.m3u8 (HMAC stream-token auth,
      *  no bearer required). */
@@ -757,15 +761,20 @@ class PlayerViewModel(
      *  appScope so the terminal save survives ViewModel.onCleared() — the
      *  in-flight POST would otherwise be cancelled before OkHttp dispatched
      *  it, leaving the resume position stale on the next library refresh.
-     *  Nothing where the mode keeps no progress. */
-    fun reportProgress(positionSec: Int, durationSec: Int) {
-        if (!requests.progress || positionSec <= 0) return
-        appScope.launch {
+     *  Nothing where the mode keeps no progress. The save, counted until it
+     *  is answered ([ProgressSaves]); null where none was sent. */
+    fun reportProgress(positionSec: Int, durationSec: Int): kotlinx.coroutines.Job? {
+        if (!requests.progress || positionSec <= 0) return null
+        return progressSaves.send(appScope) {
             runCatching {
                 api.postProgress(itemId, ProgressBody(positionSec = positionSec, durationSec = durationSec))
             }
         }
     }
+
+    /** Held while a player of this screen is up, closed with its last save:
+     *  a page that resumes as the player goes reads the position after it. */
+    fun holdSaves(): ProgressSaves.Hold = progressSaves.hold()
 
     /** Marks this item watched on chino-api so the green "watched" badge
      *  appears on its poster and continue-watching substitutes the next
@@ -900,6 +909,7 @@ class PlayerViewModel(
                     bugReporter = container.bugReporter,
                     mode = mode,
                     appScope = container.appScope,
+                    progressSaves = container.progressSaves,
                     streamHttpClient = container.streamHttpClient,
                     baseUrl = container.baseUrl,
                     playCaps = container::playCaps,

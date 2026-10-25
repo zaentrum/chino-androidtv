@@ -550,6 +550,10 @@ private fun ExoPlayback(
 
     // Track the player's tracks list so the side panel always has the latest set.
     DisposableEffect(player) {
+        // Held while this player is up and until its last save is answered:
+        // the title page, resuming as the player goes, reads the position
+        // after that save, never the one before it.
+        val saves = viewModel.holdSaves()
         // Stamps for the buffering durations. The first frame is the quality
         // reports' (QoeAnalytics): once a playback, from the screen's start.
         var sawFirstFrame = false
@@ -685,7 +689,7 @@ private fun ExoPlayback(
         onDispose {
             val pos = (player.currentPosition / 1000L).toInt()
             val dur = (player.duration.takeIf { it != C.TIME_UNSET } ?: 0).let { (it / 1000L).toInt() }
-            if (pos > 0) viewModel.reportProgress(pos, dur)
+            saves.closeAfter(viewModel.reportProgress(pos, dur))
             viewModel.reportTelemetry(
                 "unmount",
                 mapOf(

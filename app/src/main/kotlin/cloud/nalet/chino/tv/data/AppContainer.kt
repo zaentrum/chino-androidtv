@@ -31,6 +31,10 @@ class AppContainer(context: Context) {
             kotlinx.coroutines.SupervisorJob() + kotlinx.coroutines.Dispatchers.IO,
         )
 
+    /** The player's progress saves on their way: the title page, back from
+     *  the player, reads the position once they are answered. */
+    val progressSaves = ProgressSaves()
+
     // Legacy single-account store, kept only so AccountStore can migrate
     // any in-place v0 tokens on first launch. Once the migration runs,
     // nothing reads from this any more — all auth state lives in

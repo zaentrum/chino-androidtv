@@ -15,6 +15,7 @@ import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.test.core.app.ApplicationProvider
+import cloud.nalet.chino.tv.data.ProgressSaves
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.ContinueWatchingItem
@@ -99,7 +100,7 @@ class TitleResumeTest {
 
     private val played = mutableListOf<Pair<String, Int>>()
 
-    private fun show(id: String): DetailViewModel {
+    private fun show(id: String, saves: ProgressSaves = ProgressSaves()): DetailViewModel {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = DetailViewModel(
             api = api,
@@ -109,6 +110,7 @@ class TitleResumeTest {
             baseUrl = "https://media.test/api",
             itemId = id,
             playCaps = { throw IllegalStateException("no caps here") },
+            progressSaves = saves,
         )
         compose.setContent {
             ChinoTvTheme {
@@ -153,6 +155,24 @@ class TitleResumeTest {
         compose.onNode(hasText("play")).assertExists()
         compose.onNode(hasText("resume", substring = true)).assertDoesNotExist()
         assertEquals(movieWatched, (vm.state.value as DetailUiState.Ready).item.watchedAt)
+    }
+
+    @Test
+    fun `back from the player the page reads the position once the player's last save is answered`() {
+        val saves = ProgressSaves()
+        val vm = show("m1", saves)
+        compose.onNode(hasText("resume 10:00")).assertExists()
+        // The player is up; the page resumes as it goes, before its last
+        // save has left.
+        val player = saves.hold()
+        backFromPlayer(vm)
+        compose.onNode(hasText("resume 10:00")).assertExists()
+        // The player's last save, 3:10, is answered: the page reads it.
+        position["m1"] = 190
+        compose.runOnIdle { player.closeAfter(null) }
+        compose.waitUntil(5_000) { compose.onAllNodes(hasText("resume 3:10")).fetchSemanticsNodes().isNotEmpty() }
+        compose.onNode(hasText("resume 10:00")).assertDoesNotExist()
+        assertEquals(190, vm.resumeSecond())
     }
 
     @Test

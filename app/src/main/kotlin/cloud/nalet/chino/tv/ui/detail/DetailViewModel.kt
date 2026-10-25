@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.PlayCaps
+import cloud.nalet.chino.tv.data.ProgressSaves
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.ContinueWatchingItem
@@ -73,6 +74,9 @@ class DetailViewModel(
     /** The caps a play sends, as the audio output is routed now: the
      *  pre-warm asks with the player's. */
     private val playCaps: () -> PlayCaps,
+    /** The player's progress saves on their way: back from the player the
+     *  page reads the position once they are answered. */
+    private val progressSaves: ProgressSaves = ProgressSaves(),
 ) : ViewModel() {
     private val _state = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
@@ -240,7 +244,10 @@ class DetailViewModel(
      *  movie's "resume 3:10", an episode entry's - and a movie's watched
      *  mark; on a series the continue-watching feed and the episode list, so
      *  the episode progress bars, the watched checks and the episode its
-     *  first button plays are the new ones.
+     *  first button plays are the new ones. It reads once the player's saves
+     *  are answered ([ProgressSaves.settled]): the page resumes as the
+     *  player goes, a frame before the player's last save leaves, and read
+     *  at once it would say the position before it.
      *  Best-effort: on failure we keep whatever's already on screen. */
     fun onScreenResumed() {
         if (!firstResumeConsumed) {
@@ -253,6 +260,7 @@ class DetailViewModel(
         val entry = entryEpisode
         val wantsSeriesPlay = isSeries && entry == null
         viewModelScope.launch {
+            progressSaves.settled()
             val fresh = coroutineScope {
                 // The entry's own position: the movie's, the episode's the
                 // page was opened on.
@@ -449,6 +457,7 @@ class DetailViewModel(
                     baseUrl = container.baseUrl,
                     itemId = itemId,
                     playCaps = container::playCaps,
+                    progressSaves = container.progressSaves,
                 ) as T
         }
     }
