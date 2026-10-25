@@ -26,6 +26,13 @@ import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.player.PlayerBottomChrome
 import cloud.nalet.chino.tv.ui.player.PlayerChromeOverlay
 import cloud.nalet.chino.tv.ui.player.PlayerTopChrome
+import cloud.nalet.chino.tv.ui.player.PlayerSafeArea
+import cloud.nalet.chino.tv.ui.player.SkipSegmentButton
+import cloud.nalet.chino.tv.data.api.Segment
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.test.hasAnyChild
 import org.junit.Assert.assertTrue
 import org.junit.Rule
 import org.junit.Test
@@ -139,23 +146,63 @@ class SafeAreaTest {
                     PlayerChromeOverlay(
                         visible = true,
                         top = { PlayerTopChrome(title = "Quiet Orchard", onBack = {}, onUserInteraction = {}, onHome = {}) },
-                        bottom = {
-                            PlayerBottomChrome(
-                                isPlaying = true, positionMs = 60_000, durationMs = 600_000, bufferedMs = 120_000,
-                                segments = emptyList(), trickplayCues = emptyList(), trickplayBaseUrl = "", streamToken = "",
-                                muted = false, volume = 1f, onPlayPause = {}, onToggleMute = {}, onVolumeChange = {},
-                                onScrubberSeek = {}, onAudio = {}, onSubtitles = {}, onQuality = {}, onSpeed = {},
-                                onInfo = {}, onPrevEpisode = {}, onNextEpisode = {},
-                                playPauseFocusRequester = FocusRequester(), onUserInteraction = {},
-                            )
-                        },
+                        bottom = { Bar() },
                     )
                 }
             }
         }
-        for (name in listOf(
-            "Back", "Home", "Pause", "Volume", "Audio track", "Subtitles", "Playback speed", "Quality",
-            "Previous episode", "Next episode", "Playback info",
-        )) control(name)
+        for (name in barButtons + listOf("Back", "Home")) control(name)
+    }
+
+    /** The control bar of an episode, every button on it. */
+    @Composable
+    private fun Bar() {
+        PlayerBottomChrome(
+            isPlaying = true, positionMs = 60_000, durationMs = 600_000, bufferedMs = 120_000,
+            segments = emptyList(), trickplayCues = emptyList(), trickplayBaseUrl = "", streamToken = "",
+            muted = false, volume = 1f, onPlayPause = {}, onToggleMute = {}, onVolumeChange = {},
+            onScrubberSeek = {}, onAudio = {}, onSubtitles = {}, onQuality = {}, onSpeed = {},
+            onInfo = {}, onPrevEpisode = {}, onNextEpisode = {},
+            playPauseFocusRequester = FocusRequester(), onUserInteraction = {},
+        )
+    }
+
+    private val barButtons = listOf(
+        "Pause", "Volume", "Audio track", "Subtitles", "Playback speed", "Quality",
+        "Previous episode", "Next episode", "Playback info",
+    )
+
+    @Test
+    fun `the skip pill stands above the control bar while it shows, on none of its buttons, and at the bottom when it hides`() {
+        var controls by mutableStateOf(true)
+        show {
+            Box(Modifier.fillMaxSize().background(Color.Black)) {
+                PlayerSafeArea(
+                    controlsVisible = controls,
+                    top = { PlayerTopChrome(title = "Quiet Orchard", onBack = {}, onUserInteraction = {}, onHome = {}) },
+                    bottom = { Bar() },
+                ) {
+                    SkipSegmentButton(segment = Segment(kind = "intro", startMs = 0, endMs = 90_000), onSkip = {})
+                }
+            }
+        }
+        // The pill: the focusable row around its label.
+        val pill = compose.onNode(hasAnyChild(hasText("skip intro")), useUnmergedTree = true)
+        val lifted = reach(pill, 1.05f, ringOutside = true)
+        assertInside("skip intro", lifted)
+        // Its ring at its growth clear of every button's, and of the seek
+        // row's time label below it in the corner.
+        val covered = (barButtons.map { it to compose.onNode(hasContentDescription(it)) } +
+            ("10:00" to compose.onNode(hasText("10:00"))))
+            .map { (name, node) -> name to reach(node, 1.05f, ringOutside = true) }
+            .filter { (_, r) -> r.overlaps(lifted) }
+        assertTrue("skip intro at $lifted on ${covered.map { it.first }}", covered.isEmpty())
+        // The bar hidden: back down in the safe area's corner, its ring's room below it.
+        controls = false
+        compose.waitForIdle()
+        val down = pill.fetchSemanticsNode().boundsInRoot
+        assertEquals(safe.bottom - 12f, down.bottom / 2f, 0.5f)
+        assertEquals(safe.right - 12f, down.right / 2f, 0.5f)
+        assertInside("skip intro", reach(pill, 1.05f, ringOutside = true))
     }
 }

@@ -14,7 +14,6 @@ import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.ChoiceNote
-import cloud.nalet.chino.tv.ui.theme.SafeArea
 import cloud.nalet.chino.tv.ui.theme.ChoiceRow
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -1166,18 +1165,10 @@ private fun ExoPlayback(
             placement.lift = subtitleLift
         }
     }
-    // The menus stand above the control bar, 12 dp clear of it: that far
-    // above the safe area's bottom, which the bar reaches into.
-    var rootHeight by remember { mutableStateOf(0) }
-    val density = androidx.compose.ui.platform.LocalDensity.current
-    val menuBottom = controlsTop?.let { top ->
-        (with(density) { (rootHeight - top).coerceAtLeast(0f).toDp() } + 12.dp - SafeArea.Vertical).coerceAtLeast(0.dp)
-    } ?: 0.dp
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color.Black)
-            .onGloballyPositioned { rootHeight = it.size.height },
+            .background(Color.Black),
     ) {
         AndroidView(
             modifier = Modifier.fillMaxSize(),
@@ -1271,9 +1262,9 @@ private fun ExoPlayback(
         // Everything over the picture, inside the TV's safe area: the one
         // inset the player lays its controls, menus and messages out in; the
         // bands behind the controls paint out to the screen's edges.
-        cloud.nalet.chino.tv.ui.theme.SafeAreaOverlay {
-        PlayerChromeOverlay(
-            visible = controllerVisible,
+        PlayerSafeArea(
+            controlsVisible = controllerVisible,
+            onBarTop = { controlsTop = it },
             top = {
                 PlayerTopChrome(
                     title = ready.title,
@@ -1283,54 +1274,52 @@ private fun ExoPlayback(
                 )
             },
             bottom = {
-                Box(Modifier.onGloballyPositioned { controlsTop = it.boundsInWindow().top }) {
-                    PlayerBottomChrome(
-                        isPlaying = isPlaying,
-                        positionMs = positionMs,
-                        durationMs = durationMs,
-                        bufferedMs = bufferedMs,
-                        segments = ready.segments,
-                        trickplayCues = ready.trickplayCues,
-                        trickplayBaseUrl = ready.trickplayBaseUrl,
-                        streamToken = ready.streamToken,
-                        muted = muted,
-                        volume = volume,
-                        onPlayPause = {
-                            if (player.isPlaying) player.pause() else player.play()
-                        },
-                        onToggleMute = { muted = !muted },
-                        onVolumeChange = { v -> muted = false; volume = v },
-                        onScrubberSeek = { ms -> player.seekTo(ms) },
-                        onAudio = if (audioTracks.size > 1) {
-                            { showAudioPanel = true }
-                        } else null,
-                        onSubtitles = { showSubtitlePanel = true },
-                        captionsOn = tracks.any { it.selected },
-                        onQuality = if (menu != null) {
-                            { showQualityPanel = true }
-                        } else null,
-                        onSpeed = {
-                            showSpeedPanel = true
-                            showAudioPanel = false
-                            showSubtitlePanel = false
-                            showQualityPanel = false
-                        },
-                        speedActive = showSpeedPanel || playbackSpeed != 1f,
-                        onInfo = { showInfoOverlay = true },
-                        // Prev/next chevrons only for episodes (parentSeriesId != null),
-                        // matching web which hides them on movies.
-                        onPrevEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
-                            { resolveAndPlayPrev(viewModel, onPlayNext, chromeCoroutineScope) }
-                        } else null,
-                        onNextEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
-                            { resolveAndPlayNext(viewModel, onPlayNext, chromeCoroutineScope) }
-                        } else null,
-                        playPauseFocusRequester = playPauseFocusRequester,
-                        onUserInteraction = noteInteraction,
-                    )
-                }
+                PlayerBottomChrome(
+                    isPlaying = isPlaying,
+                    positionMs = positionMs,
+                    durationMs = durationMs,
+                    bufferedMs = bufferedMs,
+                    segments = ready.segments,
+                    trickplayCues = ready.trickplayCues,
+                    trickplayBaseUrl = ready.trickplayBaseUrl,
+                    streamToken = ready.streamToken,
+                    muted = muted,
+                    volume = volume,
+                    onPlayPause = {
+                        if (player.isPlaying) player.pause() else player.play()
+                    },
+                    onToggleMute = { muted = !muted },
+                    onVolumeChange = { v -> muted = false; volume = v },
+                    onScrubberSeek = { ms -> player.seekTo(ms) },
+                    onAudio = if (audioTracks.size > 1) {
+                        { showAudioPanel = true }
+                    } else null,
+                    onSubtitles = { showSubtitlePanel = true },
+                    captionsOn = tracks.any { it.selected },
+                    onQuality = if (menu != null) {
+                        { showQualityPanel = true }
+                    } else null,
+                    onSpeed = {
+                        showSpeedPanel = true
+                        showAudioPanel = false
+                        showSubtitlePanel = false
+                        showQualityPanel = false
+                    },
+                    speedActive = showSpeedPanel || playbackSpeed != 1f,
+                    onInfo = { showInfoOverlay = true },
+                    // Prev/next chevrons only for episodes (parentSeriesId != null),
+                    // matching web which hides them on movies.
+                    onPrevEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
+                        { resolveAndPlayPrev(viewModel, onPlayNext, chromeCoroutineScope) }
+                    } else null,
+                    onNextEpisode = if (onPlayNext != null && ready.parentSeriesId != null) {
+                        { resolveAndPlayNext(viewModel, onPlayNext, chromeCoroutineScope) }
+                    } else null,
+                    playPauseFocusRequester = playPauseFocusRequester,
+                    onUserInteraction = noteInteraction,
+                )
             },
-        )
+        ) {
         // The messages over the picture, one under the other: a pick's
         // ("Subtitles: English"), and a step down the player made by itself,
         // what it did and why (docs/chino, playback) - long enough to read
@@ -1347,7 +1336,6 @@ private fun ExoPlayback(
                 notice?.let { SubtitleBanner(label = it, durationMs = 6_000, onDismiss = viewModel::qualityNoticeShown) }
             }
         }
-        androidx.compose.runtime.CompositionLocalProvider(LocalMenuBottom provides menuBottom) {
         if (showSubtitlePanel) {
             SubtitlePanel(
                 menu = subtitleMenu,
@@ -1420,8 +1408,11 @@ private fun ExoPlayback(
                 onDismiss = { showSpeedPanel = false },
             )
         }
-        }
-        pendingSkip?.let { p ->
+        // The pills in the corner - a countdown, skip, next episode, skipped
+        // intro - stand where an open menu does, above the control bar: one
+        // thing in that corner at a time, the menu while it is open.
+        val cornerFree = !menuOpen
+        if (cornerFree) pendingSkip?.let { p ->
             SkipCountdownPill(prompt = p)
         }
         // Manual Skip Intro / Skip Recap / Skip Credits control — web parity
@@ -1449,7 +1440,7 @@ private fun ExoPlayback(
             ?.takeIf { onPlayNext != null && isPostCreditsPreview(it, ready.segments) }
         val skipSeg = activeManualSeg
             ?.takeIf { it !== previewSeg && it.kind.lowercase() in SKIPPABLE_MANUAL_KINDS }
-        if (previewSeg != null) {
+        if (previewSeg != null && cornerFree) {
             NextEpisodeButton(
                 onPlay = {
                     noteInteraction()
@@ -1463,7 +1454,7 @@ private fun ExoPlayback(
                 },
             )
         }
-        if (skipSeg != null) {
+        if (skipSeg != null && cornerFree) {
             SkipSegmentButton(
                 segment = skipSeg,
                 onSkip = {
@@ -1491,7 +1482,12 @@ private fun ExoPlayback(
             )
         }
         if (skippedIntroPill) {
-            SkippedIntroPill(onTimeout = { skippedIntroPill = false })
+            // Its 6 s run on while a menu hides it.
+            LaunchedEffect(Unit) {
+                delay(6_000)
+                skippedIntroPill = false
+            }
+            if (cornerFree) SkippedIntroPill()
         }
         }
     }
@@ -1529,8 +1525,76 @@ private fun isPostCreditsPreview(seg: Segment, all: List<Segment>): Boolean {
  */
 
 /** How far above the bottom of the player's safe area its menus stand: over
- *  the control bar while it shows (PlayerScreen measures it). */
+ *  the control bar, 12 dp clear of it ([PlayerSafeArea] measures it). */
 internal val LocalMenuBottom = androidx.compose.runtime.compositionLocalOf { 0.dp }
+
+/** How far above the bottom of the player's safe area the pills in its
+ *  corner stand ([CornerPill]): over the control bar as the menus while it
+ *  shows, else the room a focused pill's ring needs. */
+internal val LocalPillBottom = androidx.compose.runtime.compositionLocalOf { ChinoFocus.Room }
+
+/**
+ * Everything over the picture, inside the TV's safe area: the controls,
+ * [top] and the control bar [bottom], while [controlsVisible], and [over]
+ * them the menus, the pills in the corner and the messages. The menus stand
+ * above the bar ([LocalMenuBottom]), never on it; so do the pills while it
+ * shows - none covers a button of the bar - and they go back down to the
+ * safe area's bottom when it hides ([LocalPillBottom]), at the pace of its
+ * fade. [onBarTop] hears where the bar's top is in the window: the
+ * subtitles move up above it.
+ */
+@Composable
+internal fun PlayerSafeArea(
+    controlsVisible: Boolean,
+    top: @Composable () -> Unit,
+    bottom: @Composable () -> Unit,
+    onBarTop: (Float) -> Unit = {},
+    over: @Composable androidx.compose.foundation.layout.BoxScope.() -> Unit,
+) {
+    var barTop by remember { mutableStateOf<Float?>(null) }
+    var safeBottom by remember { mutableStateOf(0f) }
+    val density = androidx.compose.ui.platform.LocalDensity.current
+    // 12 dp clear of the bar: that far above the safe area's bottom, which
+    // the bar reaches into.
+    val aboveBar = barTop?.let { t -> with(density) { (safeBottom - t).coerceAtLeast(0f).toDp() } + 12.dp } ?: 0.dp
+    val pillBottom by androidx.compose.animation.core.animateDpAsState(
+        targetValue = if (controlsVisible && barTop != null) aboveBar else ChinoFocus.Room,
+        animationSpec = spring(stiffness = Spring.StiffnessMediumLow),
+        label = "pillBottom",
+    )
+    cloud.nalet.chino.tv.ui.theme.SafeAreaOverlay {
+        Spacer(Modifier.matchParentSize().onGloballyPositioned { safeBottom = it.boundsInWindow().bottom })
+        PlayerChromeOverlay(
+            visible = controlsVisible,
+            top = top,
+            bottom = {
+                Box(Modifier.onGloballyPositioned { c -> c.boundsInWindow().top.let { barTop = it; onBarTop(it) } }) {
+                    bottom()
+                }
+            },
+        )
+        androidx.compose.runtime.CompositionLocalProvider(
+            LocalMenuBottom provides aboveBar,
+            LocalPillBottom provides pillBottom,
+        ) { over() }
+    }
+}
+
+/** A pill in the corner of the player's safe area - a countdown, skip, next
+ *  episode, skipped intro: at its bottom-right, with room for a focused
+ *  pill's ring, above the control bar while it shows ([LocalPillBottom]). */
+@Composable
+private fun CornerPill(content: @Composable () -> Unit) {
+    Box(
+        modifier = Modifier.fillMaxSize().padding(
+            start = ChinoFocus.Room,
+            top = ChinoFocus.Room,
+            end = ChinoFocus.Room,
+            bottom = LocalPillBottom.current,
+        ),
+        contentAlignment = Alignment.BottomEnd,
+    ) { content() }
+}
 
 @Composable
 private fun MenuPopover(header: String, width: Dp, content: @Composable ColumnScope.() -> Unit) {
@@ -1650,11 +1714,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
         is PendingSkip.PlayNext -> "Up next in ${prompt.secLeft}s"
         is PendingSkip.PreviewNext -> "Next episode ▶ in ${prompt.secLeft}s"
     }
-    Box(
-        // Inside the safe area, with room for a focused button's ring.
-        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
-        contentAlignment = Alignment.BottomEnd,
-    ) {
+    CornerPill {
         Column(
             modifier = Modifier
                 .background(ChinoSurface, shape = RectangleShape)
@@ -1680,7 +1740,7 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
  *  (CENTER/ENTER), but the caller never requests focus onto it so it can't
  *  steal focus from the transport controls; the user DPADs over to it. */
 @Composable
-private fun SkipSegmentButton(
+internal fun SkipSegmentButton(
     segment: Segment,
     onSkip: () -> Unit,
 ) {
@@ -1693,11 +1753,7 @@ private fun SkipSegmentButton(
     }
     // Web's button is white-on-black: a filled button, its fill kept on focus.
     val focus = rememberItemFocus()
-    Box(
-        // Inside the safe area, with room for a focused button's ring.
-        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
-        contentAlignment = Alignment.BottomEnd,
-    ) {
+    CornerPill {
         Row(
             modifier = Modifier
                 .focusStyle(focus, FocusKind.Control, surface = Color.White, filled = true)
@@ -1742,11 +1798,7 @@ private fun NextEpisodeButton(
     // Blue (this is the primary action, not a dismiss): a filled button, its
     // fill kept on focus.
     val focus = rememberItemFocus()
-    Box(
-        // Inside the safe area, with room for a focused button's ring.
-        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
-        contentAlignment = Alignment.BottomEnd,
-    ) {
+    CornerPill {
         Row(
             modifier = Modifier
                 .focusStyle(focus, FocusKind.Control, surface = ChinoAccent, filled = true)
@@ -2129,21 +2181,14 @@ private fun TitleOverlay(title: String) {
 }
 
 /** Brief bottom-end pill shown right after a binge auto-play-next chain
- *  opened the player past the intro. Auto-dismisses after 6 s; BACK during
- *  that window is intercepted by the caller's BackHandler to undo the skip
- *  (seek back to 0:00). Mirrors the "Skipping intro in Ns" SkipCountdownPill
- *  styling so the user reads it as the same affordance family. */
+ *  opened the player past the intro. The caller dismisses it after 6 s;
+ *  BACK during that window is intercepted by the caller's BackHandler to
+ *  undo the skip (seek back to 0:00). Mirrors the "Skipping intro in Ns"
+ *  SkipCountdownPill styling so the user reads it as the same affordance
+ *  family. */
 @Composable
-private fun SkippedIntroPill(onTimeout: () -> Unit) {
-    LaunchedEffect(Unit) {
-        delay(6_000)
-        onTimeout()
-    }
-    Box(
-        // Inside the safe area, with room for a focused button's ring.
-        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
-        contentAlignment = Alignment.BottomEnd,
-    ) {
+private fun SkippedIntroPill() {
+    CornerPill {
         Column(
             modifier = Modifier
                 .background(ChinoSurface, shape = RectangleShape)
