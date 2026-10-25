@@ -11,15 +11,18 @@ import java.util.Locale
  * subtitles: the setting; playback: the audio setting). Pure:
  * LanguageChoicesTest runs it on the JVM.
  *
- * The subtitles: "Off", then the server's subtitle languages, read from its
- * configuration (GET /v1/subtitles/languages) like the player's menu, in its
- * order - never a list fixed in the app; a server that names none offers
- * every language by name. The audio: "Original", then every language by
- * name, as the server names no audio languages. Each language by the name
- * the player's menus give it ([languageName]: "German", "Chinese
- * (Simplified)"), so one language has one name in the app. A language chosen
- * before that the list no longer has stays in it, so the setting says what
- * is set.
+ * The subtitles: "off", as the player's menu says it, then the server's
+ * subtitle languages, read from its configuration (GET
+ * /v1/subtitles/languages) like the player's menu, in its order - never a
+ * list fixed in the app; a server that names none offers every language by
+ * name. The audio: "Original", then every language by name, as the server
+ * names no audio languages. Where every language is offered, the viewer's
+ * own come first - the one set, the TV's - then all the others in
+ * alphabetical order, so a remote doesn't scroll from Abkhazian to the
+ * language it is after. Each language by the name the player's menus give
+ * it ([languageName]: "German", "Chinese (Simplified)"), so one language has
+ * one name in the app. A language chosen before that the list no longer has
+ * stays in it, so the setting says what is set.
  */
 
 /** One entry of a language setting: what is stored, what it is called. */
@@ -49,27 +52,36 @@ val EVERY_LANGUAGE: List<LanguageChoice> by lazy {
         .toList()
 }
 
-/** The subtitle setting's entries: "Off", then [serverLanguages] (the
- *  server's tags, its order), or every language where it names none. */
-fun subtitleLanguageChoices(serverLanguages: List<String>, current: String?): List<LanguageChoice> =
-    listOf(LanguageChoice(SUBTITLES_OFF, "Off")) +
-        languages(serverLanguages, current?.takeIf { asksForSubtitles(it) })
+/** The subtitle setting's entries: "off", then [serverLanguages] (the
+ *  server's tags, its order), or - where it names none - every language,
+ *  the one set and the TV's ([device]) first. */
+fun subtitleLanguageChoices(serverLanguages: List<String>, current: String?, device: String? = null): List<LanguageChoice> =
+    listOf(LanguageChoice(SUBTITLES_OFF, SUBTITLES_OFF)) +
+        languages(serverLanguages, current?.takeIf { asksForSubtitles(it) }, device)
 
-/** The audio setting's entries: "Original", then every language. */
-fun audioLanguageChoices(current: String?): List<LanguageChoice> =
+/** The audio setting's entries: "Original", then every language, the one
+ *  set and the TV's ([device]) first. */
+fun audioLanguageChoices(current: String?, device: String? = null): List<LanguageChoice> =
     listOf(LanguageChoice(AUDIO_ORIGINAL, "Original")) +
-        languages(emptyList(), current?.takeIf { it != AUDIO_ORIGINAL })
+        languages(emptyList(), current?.takeIf { it != AUDIO_ORIGINAL }, device)
 
-/** The languages of a setting: [serverLanguages] by name, or every language;
- *  [current], a language, among them where they lack it. */
-private fun languages(serverLanguages: List<String>, current: String?): List<LanguageChoice> {
+/** The languages of a setting: [serverLanguages] by name, [current], a
+ *  language, among them where they lack it; or every language, [current]
+ *  and [device] first, then the others in alphabetical order. */
+private fun languages(serverLanguages: List<String>, current: String?, device: String?): List<LanguageChoice> {
     val named = serverLanguages.map(::languageTag).filter { it.isNotEmpty() }.distinct()
         .map { LanguageChoice(it, languageName(it)) }
-    val offered = named.ifEmpty { EVERY_LANGUAGE }
-    val chosen = current?.let(::languageTag)?.takeIf { it.isNotEmpty() } ?: return offered
-    if (offered.any { it.code == chosen }) return offered
-    val withChosen = offered + LanguageChoice(chosen, languageName(chosen))
-    return if (named.isEmpty()) withChosen.sortedWith(compareBy(ALPHABETICAL) { it.name }) else withChosen
+    val chosen = current?.let(::languageTag)?.takeIf { it.isNotEmpty() }
+    if (named.isNotEmpty()) {
+        if (chosen == null || named.any { it.code == chosen }) return named
+        return named + LanguageChoice(chosen, languageName(chosen))
+    }
+    val own = listOfNotNull(chosen, device?.let(::languageTag)?.takeIf { it.isNotEmpty() })
+        .distinct()
+        .map { LanguageChoice(it, languageName(it)) }
+        .filter { !it.name.equals(it.code, ignoreCase = true) || it.code == chosen }
+    val codes = own.map { it.code }.toSet()
+    return own + EVERY_LANGUAGE.filter { it.code !in codes }
 }
 
 /** The entry of [choices] that [value] - a stored setting - stands for:

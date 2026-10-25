@@ -92,12 +92,16 @@ fun SettingsScreen(
     val bugReport by viewModel.bugReport.collectAsState()
     var showReportPanel by remember { mutableStateOf(false) }
     // The languages each setting offers (LanguageChoices.kt): the server's
-    // subtitle languages, every language for the audio.
+    // subtitle languages, every language for the audio - where every
+    // language is offered, the one set and the TV's first.
     val serverLanguages by viewModel.serverSubtitleLanguages.collectAsState()
-    val subtitleChoices = remember(serverLanguages, s.preferredSubLang) {
-        subtitleLanguageChoices(serverLanguages, s.preferredSubLang)
+    val tvLanguage = cloud.nalet.chino.tv.ui.player.deviceLanguage(
+        androidx.compose.ui.platform.LocalConfiguration.current.locales[0],
+    )
+    val subtitleChoices = remember(serverLanguages, s.preferredSubLang, tvLanguage) {
+        subtitleLanguageChoices(serverLanguages, s.preferredSubLang, tvLanguage)
     }
-    val audioChoices = remember(s.preferredAudioLang) { audioLanguageChoices(s.preferredAudioLang) }
+    val audioChoices = remember(s.preferredAudioLang, tvLanguage) { audioLanguageChoices(s.preferredAudioLang, tvLanguage) }
     // The language menu open, if one is.
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
     // A menu or the report dialog that closes - a pick, BACK, close - takes
@@ -460,7 +464,7 @@ private fun ReportDialogRow(
 private enum class LanguageMenuFor { Audio, Subtitles }
 
 /**
- * A language setting: a row in the focus style with the language set ("Off",
+ * A language setting: a row in the focus style with the language set ("off",
  * "Original", "German"), which opens its menu of one choice ([LanguageMenu]),
  * as the languages can be many - every language, where the server names none.
  */

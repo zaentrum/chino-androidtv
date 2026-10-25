@@ -13,10 +13,10 @@ import java.util.Locale
  *  audio setting): the server's, by the player's names, or every language. */
 class LanguageChoicesTest {
     @Test
-    fun `the subtitle setting - Off, then the server's languages in its order, by the player's names`() {
-        val choices = subtitleLanguageChoices(listOf("en", "de", "zh-Hans"), "off")
+    fun `the subtitle setting - off as the player says it, then the server's languages in its order, by the player's names`() {
+        val choices = subtitleLanguageChoices(listOf("en", "de", "zh-Hans"), "off", device = "fr")
         assertEquals(
-            listOf("off" to "Off", "en" to "English", "de" to "German", "zh-Hans" to "Chinese (Simplified)"),
+            listOf("off" to "off", "en" to "English", "de" to "German", "zh-Hans" to "Chinese (Simplified)"),
             choices.map { it.code to it.name },
         )
         // One language, one name: the menu's.
@@ -31,20 +31,32 @@ class LanguageChoicesTest {
     }
 
     @Test
-    fun `a server that names none offers every language by name, in alphabetical order`() {
-        val choices = subtitleLanguageChoices(emptyList(), "off")
+    fun `a server that names none offers every language by name, the viewer's own first, then the others in alphabetical order`() {
+        // Nothing set and a TV in German: German first, never Abkhazian.
+        val choices = subtitleLanguageChoices(emptyList(), "off", device = "de")
         assertEquals("off", choices.first().code)
-        val languages = choices.drop(1)
-        assertEquals(EVERY_LANGUAGE, languages)
-        assertTrue(languages.size > 100)
-        val names = languages.map { it.name }
+        assertEquals("de" to "German", choices[1].let { it.code to it.name })
+        val rest = choices.drop(2)
+        assertEquals(EVERY_LANGUAGE.filter { it.code != "de" }, rest)
+        assertTrue(rest.size > 100)
+        val names = rest.map { it.name }
         assertEquals(names.sortedWith(Collator.getInstance(Locale.ENGLISH)), names)
-        assertEquals(names.distinct(), names)
-        for (name in listOf("Chinese", "Dutch", "English", "French", "German", "Japanese", "Korean")) {
+        assertEquals(choices.map { it.name }.distinct(), choices.map { it.name })
+        for (name in listOf("Chinese", "Dutch", "English", "French", "Japanese", "Korean")) {
             assertTrue(name, name in names)
         }
         // Names, never codes.
-        for (c in languages) assertFalse(c.code, c.name.equals(c.code, ignoreCase = true))
+        for (c in rest) assertFalse(c.code, c.name.equals(c.code, ignoreCase = true))
+        // The one set, then the TV's; each once.
+        assertEquals(listOf("off", "fr", "de"), subtitleLanguageChoices(emptyList(), "fr", device = "de").take(3).map { it.code })
+        assertEquals(
+            listOf("off", "de", EVERY_LANGUAGE.first().code),
+            subtitleLanguageChoices(emptyList(), "ger", device = "de").take(3).map { it.code },
+        )
+        // A TV in Chinese of China: its script.
+        assertEquals("Chinese (Simplified)", subtitleLanguageChoices(emptyList(), "off", device = "zh-Hans")[1].name)
+        // No TV language known: every language in alphabetical order.
+        assertEquals(EVERY_LANGUAGE, subtitleLanguageChoices(emptyList(), "off").drop(1))
     }
 
     @Test
@@ -57,11 +69,15 @@ class LanguageChoicesTest {
     }
 
     @Test
-    fun `the audio setting - Original, then every language`() {
+    fun `the audio setting - Original, then every language, the one set and the TV's first`() {
         val choices = audioLanguageChoices("orig")
         assertEquals("orig" to "Original", choices.first().let { it.code to it.name })
         assertEquals(EVERY_LANGUAGE, choices.drop(1))
         assertEquals("German", chosenLanguage(audioLanguageChoices("de"), "de")?.name)
+        val own = audioLanguageChoices("ja", device = "en")
+        assertEquals(listOf("orig", "ja", "en"), own.take(3).map { it.code })
+        assertEquals(EVERY_LANGUAGE.filter { it.code !in setOf("ja", "en") }, own.drop(3))
+        assertEquals(listOf("orig", "en"), audioLanguageChoices("orig", device = "en").take(2).map { it.code })
     }
 
     @Test
