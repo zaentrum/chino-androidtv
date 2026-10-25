@@ -70,6 +70,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
+import cloud.nalet.chino.tv.ui.theme.ChinoDangerButton
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -111,8 +112,25 @@ fun WatchlistScreen(
     val openListId by viewModel.openListId.collectAsState()
     val openItems by viewModel.openItems.collectAsState()
     val openItemsLoading by viewModel.openItemsLoading.collectAsState()
-    // Modal overlay: the create / rename name field. BACK dismisses.
+    // Modal overlay: the create / rename name field, the delete question.
+    // BACK dismisses.
     var overlay by remember { mutableStateOf<ListOverlay?>(null) }
+    // A dialog that closes takes its focused field or button with it: the
+    // focus goes back to the button that opened it - new list, rename list,
+    // delete list - never to the first item on the screen.
+    val newListButton = remember { FocusRequester() }
+    val renameButton = remember { FocusRequester() }
+    val deleteButton = remember { FocusRequester() }
+    var opener by remember { mutableStateOf<FocusRequester?>(null) }
+    // A list deleted takes its view with it: the focus goes to the hub's new
+    // list once the hub is back.
+    var focusHub by remember { mutableStateOf(false) }
+    LaunchedEffect(overlay == null) {
+        if (overlay == null) {
+            opener?.let { runCatching { it.requestFocus() } }
+            opener = null
+        }
+    }
     ChinoPage {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
@@ -148,8 +166,15 @@ fun WatchlistScreen(
                                     savedItems = savedItems,
                                     onItemSelected = onItemSelected,
                                     onOpenList = viewModel::openList,
-                                    onNewList = { overlay = ListOverlay.Create },
+                                    onNewList = { opener = newListButton; overlay = ListOverlay.Create },
+                                    newListFocus = newListButton,
                                 )
+                                if (focusHub) {
+                                    LaunchedEffect(Unit) {
+                                        runCatching { newListButton.requestFocus() }
+                                        focusHub = false
+                                    }
+                                }
                             } else {
                                 MoreContent(
                                     list = openList,
@@ -160,8 +185,12 @@ fun WatchlistScreen(
                                     savedItems = savedItems,
                                     onItemSelected = onItemSelected,
                                     onBack = viewModel::closeList,
-                                    onRename = { overlay = ListOverlay.Rename(openList) },
-                                    onDelete = { viewModel.deleteList(openList.id) },
+                                    onRename = { opener = renameButton; overlay = ListOverlay.Rename(openList) },
+                                    // Asked first: the list and what is saved
+                                    // in it can't be brought back.
+                                    onDelete = { opener = deleteButton; overlay = ListOverlay.Delete(openList) },
+                                    renameFocus = renameButton,
+                                    deleteFocus = deleteButton,
                                 )
                             }
                         }
@@ -183,6 +212,16 @@ fun WatchlistScreen(
                     onSubmit = { name -> if (name.isNotBlank()) viewModel.renameList(ov.list.id, name); overlay = null },
                     onDismiss = { overlay = null },
                 )
+                is ListOverlay.Delete -> ConfirmDeleteListDialog(
+                    list = ov.list,
+                    onConfirm = {
+                        opener = null
+                        focusHub = true
+                        viewModel.deleteList(ov.list.id)
+                        overlay = null
+                    },
+                    onDismiss = { overlay = null },
+                )
             }
         }
     }
@@ -200,6 +239,7 @@ private fun episodeBadgeFor(item: Item): String? =
 private sealed interface ListOverlay {
     data object Create : ListOverlay
     data class Rename(val list: Watchlist) : ListOverlay
+    data class Delete(val list: Watchlist) : ListOverlay
 }
 
 /** Hub: title + New-list chip, then one shelf per list. The whole column
@@ -212,6 +252,7 @@ private fun HubContent(
     onItemSelected: (String) -> Unit,
     onOpenList: (String) -> Unit,
     onNewList: () -> Unit,
+    newListFocus: FocusRequester,
 ) {
     Column(
         modifier = Modifier
@@ -233,7 +274,7 @@ private fun HubContent(
                 fontWeight = FontWeight.Bold,
             )
             Spacer(modifier = Modifier.weight(1f))
-            NewListChip(onClick = onNewList)
+            NewListChip(onClick = onNewList, modifier = Modifier.focusRequester(newListFocus))
         }
         s.lists.forEach { list ->
             ShelfHeader(list = list, onOpen = { onOpenList(list.id) })
@@ -335,6 +376,8 @@ private fun MoreContent(
     onBack: () -> Unit,
     onRename: () -> Unit,
     onDelete: () -> Unit,
+    renameFocus: FocusRequester,
+    deleteFocus: FocusRequester,
 ) {
     BackHandler(onBack = onBack)
     Column(modifier = Modifier.fillMaxSize()) {
@@ -359,10 +402,20 @@ private fun MoreContent(
                 fontSize = 18.sp,
             )
             Spacer(modifier = Modifier.weight(1f))
-            HeaderButton(icon = Lucide.Pencil, label = "rename list", onClick = onRename)
+            HeaderButton(
+                icon = Lucide.Pencil,
+                label = "rename list",
+                onClick = onRename,
+                modifier = Modifier.focusRequester(renameFocus),
+            )
             // The default list can be renamed but never deleted.
             if (!list.isDefault) {
-                HeaderButton(icon = Lucide.Trash2, label = "delete list", onClick = onDelete)
+                HeaderButton(
+                    icon = Lucide.Trash2,
+                    label = "delete list",
+                    onClick = onDelete,
+                    modifier = Modifier.focusRequester(deleteFocus),
+                )
             }
         }
         when {
@@ -420,12 +473,59 @@ private fun HeaderButton(
 
 /** The hub's "new list": a plain button, its plus in the accent. */
 @Composable
-private fun NewListChip(onClick: () -> Unit) {
-    ChinoButton(onClick = onClick) {
+private fun NewListChip(onClick: () -> Unit, modifier: Modifier = Modifier) {
+    ChinoButton(onClick = onClick, modifier = modifier) {
         Icon(Lucide.Plus, contentDescription = null, tint = ChinoAccent, modifier = Modifier.size(16.dp))
         Spacer(Modifier.width(6.dp))
         Text(text = "new list")
     }
+}
+
+/**
+ * The question before a list is deleted (the design system's confirm): the
+ * title the action - "delete list" - a body that names what goes, "cancel"
+ * with the focus, and the danger button repeating the title. BACK cancels.
+ */
+@Composable
+internal fun ConfirmDeleteListDialog(
+    list: Watchlist,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit,
+) {
+    BackHandler(onBack = onDismiss)
+    val cancel = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
+    Box(
+        modifier = Modifier
+            .fillMaxSize()
+            .scrim(),
+        contentAlignment = Alignment.Center,
+    ) {
+        Column(
+            modifier = Modifier
+                .width(460.dp)
+                .background(ChinoSurface)
+                .border(1.dp, ChinoBorder, RectangleShape)
+                .padding(24.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp),
+        ) {
+            Text(text = "delete list", style = MaterialTheme.typography.titleLarge, color = ChinoFg)
+            Text(text = deleteListBody(list), color = ChinoText, fontSize = 15.sp)
+            Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+                ChinoButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancel)) { Text("cancel") }
+                ChinoDangerButton(onClick = onConfirm) { Text("delete list") }
+            }
+        }
+    }
+}
+
+/** What deleting [list] takes: the list, and its titles off it - they stay
+ *  in the library and on the other lists. */
+internal fun deleteListBody(list: Watchlist): String = when (list.itemCount) {
+    0 -> "“${list.name}” is deleted. Nothing is saved in it."
+    1 -> "“${list.name}” is deleted, with the title saved in it. The title stays in the library and in your other lists."
+    else -> "“${list.name}” is deleted, with the ${list.itemCount} titles saved in it. " +
+        "They stay in the library and in your other lists."
 }
 
 /** Modal name field for create / rename — the on-screen IME handles D-pad text

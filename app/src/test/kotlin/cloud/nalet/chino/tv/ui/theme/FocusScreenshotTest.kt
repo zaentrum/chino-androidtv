@@ -62,6 +62,8 @@ import cloud.nalet.chino.tv.ui.settings.LanguageSettingRow
 import cloud.nalet.chino.tv.ui.settings.Section
 import cloud.nalet.chino.tv.ui.settings.audioLanguageChoices
 import cloud.nalet.chino.tv.ui.settings.subtitleLanguageChoices
+import cloud.nalet.chino.tv.ui.watchlist.ConfirmDeleteListDialog
+import cloud.nalet.chino.tv.data.api.Watchlist
 import coil.Coil
 import coil.ImageLoader
 import coil.annotation.ExperimentalCoilApi
@@ -141,6 +143,17 @@ class FocusScreenshotTest {
     // label at rest, filled amber with a dark label on focus, the ring around.
     @Test fun dangerButtonAtRest() = shot("focus_button_danger_rest") { Danger(focus = null) }
     @Test fun dangerButtonFocused() = shot("focus_button_danger_focused", focus = 1) { Danger(focus = it) }
+    // The question before a list is deleted: cancel with the focus first,
+    // the danger button beside it.
+    @Test fun deleteListQuestion() = shot("watchlist_delete_list_focused") {
+        Box(Modifier.width(1152.dp).height(600.dp)) {
+            ConfirmDeleteListDialog(
+                list = Watchlist(id = "l2", name = "Weekend", itemCount = 12),
+                onConfirm = {},
+                onDismiss = {},
+            )
+        }
+    }
 
     @Test fun chipsAtRest() = shot("focus_chip_rest") { Chips(focus = null) }
     @Test fun chipFocused() = shot("focus_chip_focused", focus = 1) { Chips(focus = it) }
