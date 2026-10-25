@@ -98,6 +98,13 @@ object Routes {
         "player/$itemId?fromStart=$fromStart&fromBinge=$fromBinge&resume=$resumeSec"
 }
 
+/** Where a title page's play goes: the title (a series' episode) from
+ *  [resumeSec], or from its beginning where that is 0 - start over, and a
+ *  play with nothing to resume - never from a saved position the player
+ *  would look up. */
+internal fun detailPlayRoute(itemId: String, resumeSec: Int): String =
+    Routes.player(itemId, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0))
+
 /** Idle-reset threshold: backgrounded shorter than this resumes in place;
  *  longer (or equal) reopens at the Library root. 30 minutes. */
 private const val IDLE_RESET_AFTER_MS = 30L * 60L * 1000L
@@ -606,9 +613,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                         // guard pushes a SECOND player/{id} entry. The duplicate
                         // DETAIL/PLAYER pair is what makes BACK loop back into the
                         // player instead of reaching home (Stube #151).
-                        navController.navigate(
-                            Routes.player(id, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0)),
-                        ) {
+                        navController.navigate(detailPlayRoute(id, resumeSec)) {
                             launchSingleTop = true
                         }
                     },
