@@ -60,4 +60,33 @@ class ProgressSavesTest {
         val waited = (System.nanoTime() - started) / 1_000_000
         assertTrue("waited $waited ms", waited in 100..5_000)
     }
+
+    @Test
+    fun `a last save sent after the page's navigation still has the whole wait for its answer`() = runBlocking {
+        val saves = ProgressSaves(waitAtMostMs = 1_000)
+        val hold = saves.hold()
+        val read = async(Dispatchers.Default) { saves.settled(); "read" }
+        // Home built anew: the player sends its last save once the
+        // navigation has ended, 800 ms on.
+        Thread.sleep(800)
+        val answer = CompletableDeferred<Unit>()
+        val last = saves.send(scope) { answer.await() }
+        hold.closeAfter(last)
+        // 1.3 s after the read began, past one wait, the save is still on its
+        // way for 500 ms: the read waits for it.
+        Thread.sleep(500)
+        assertFalse("the last save is not answered yet", read.isCompleted)
+        answer.complete(Unit)
+        assertEquals("read", read.await())
+    }
+
+    @Test
+    fun `a player that never sends its last save keeps a read waiting no longer than the two waits`() = runBlocking {
+        val saves = ProgressSaves(waitAtMostMs = 100)
+        saves.hold()
+        val started = System.nanoTime()
+        saves.settled()
+        val waited = (System.nanoTime() - started) / 1_000_000
+        assertTrue("waited $waited ms", waited in 200..5_000)
+    }
 }
