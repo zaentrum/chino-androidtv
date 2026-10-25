@@ -1189,14 +1189,16 @@ private fun FooterGrid(item: Item) {
     // server's, for the player's skips, not something to read here.
     if (subtitleLabel == null) return
     Row(modifier = Modifier.padding(top = 16.dp)) {
-        FooterColumn("Subtitles", subtitleLabel)
+        FooterColumn("subtitles", subtitleLabel)
     }
 }
 
 @Composable
 private fun FooterColumn(header: String, value: String) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-        Text(text = header, color = ChinoMuted, fontSize = 14.sp)
+        // A label: chrome, in the mono face, lowercase; what it names in
+        // the body face.
+        Text(text = header, color = ChinoMuted, fontSize = 14.sp, fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily)
         Text(
             text = value,
             color = ChinoText,
@@ -1409,10 +1411,13 @@ private fun ActorCard(actor: CastMember, onClick: (() -> Unit)?) {
 @Composable
 private fun CrewLine(group: CreditGroup, onPersonSelected: (String) -> Unit) {
     Row(verticalAlignment = Alignment.CenterVertically) {
+        // The role's heading, as "starring" above the actors: chrome, in the
+        // mono face, lowercase ("director", "writers", "music").
         Text(
-            text = group.label,
+            text = crewHeading(group),
             color = ChinoMuted,
             fontSize = 14.sp,
+            fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily,
             maxLines = 1,
             overflow = TextOverflow.Ellipsis,
             modifier = Modifier.width(160.dp),

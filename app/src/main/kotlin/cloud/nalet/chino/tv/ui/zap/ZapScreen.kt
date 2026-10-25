@@ -352,14 +352,37 @@ internal fun ChannelInfoOverlay(
                     modifier = Modifier.fillMaxWidth(0.6f),
                 )
             }
-            Text(
-                text = "OK · Watch from here     ▼ / CH+ Next     CH- Back     ▲ Info     ◀ ${if (muted) "Unmute" else "Mute"}     ▶ Watchlist",
-                color = ChinoMuted,
-                fontSize = 14.sp,
-            )
+            // The keys and what they do: chrome, in the mono face beside the
+            // chip - the words lowercase, the remote's keys and the
+            // Watchlist by their names; a key and its action wrap as one.
+            @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+            androidx.compose.foundation.layout.FlowRow(
+                horizontalArrangement = Arrangement.spacedBy(20.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp),
+            ) {
+                zapKeyHints(muted).forEach { hint ->
+                    Text(
+                        text = hint,
+                        color = ChinoMuted,
+                        fontSize = 14.sp,
+                        fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily,
+                        maxLines = 1,
+                    )
+                }
+            }
         }
     }
 }
+
+/** Zap's key hints: each key by its name on the remote, then what it does. */
+internal fun zapKeyHints(muted: Boolean): List<String> = listOf(
+    "OK · watch from here",
+    "▼ / CH+ next",
+    "CH- back",
+    "▲ info",
+    "◀ ${if (muted) "unmute" else "mute"}",
+    "▶ Watchlist",
+)
 
 /** Watchlist pill in the channel-info overlay: an outlined bookmark, or a dark
  *  one on blue when the title is in the Watchlist. DPAD-RIGHT toggles it (see

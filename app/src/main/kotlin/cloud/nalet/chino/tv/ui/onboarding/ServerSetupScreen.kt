@@ -83,8 +83,10 @@ fun ServerSetupScreen(
                 modifier = Modifier.width(640.dp),
             ) {
                 LogoMark(sizeDp = 56)
+                // The screen's heading: chrome, in the mono face, lowercase.
                 Text(
-                    text = if (viewModel.changeServer) "Change server" else "Connect to your server",
+                    text = serverSetupHeading(viewModel.changeServer),
+                    style = MaterialTheme.typography.headlineSmall,
                     color = ChinoFg,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -166,6 +168,11 @@ fun ServerSetupScreen(
         }
     }
 }
+
+/** The server screen's heading: "change server" from Settings, "connect to
+ *  your server" on the first run. */
+internal fun serverSetupHeading(changeServer: Boolean): String =
+    if (changeServer) "change server" else "connect to your server"
 
 @Composable
 private fun UrlField(

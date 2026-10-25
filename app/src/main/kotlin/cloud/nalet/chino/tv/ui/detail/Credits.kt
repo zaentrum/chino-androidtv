@@ -129,6 +129,11 @@ fun creditKey(credit: CastMember): String = creditKey(roleOf(credit), credit.per
 private fun creditKey(role: String, personId: String?, name: String) =
     "$role:" + (personId?.takeIf { it.isNotBlank() } ?: name)
 
+/** A crew line's heading on the title page, chrome as "starring" is:
+ *  [CreditGroup.label] lowercase, "director", "writers", "music",
+ *  "sound designer". */
+fun crewHeading(group: CreditGroup): String = group.label.lowercase()
+
 /** A person's role on one title, for their filmography: "Director", "Composer". */
 fun roleName(role: String): String {
     val r = role.trim().lowercase()
