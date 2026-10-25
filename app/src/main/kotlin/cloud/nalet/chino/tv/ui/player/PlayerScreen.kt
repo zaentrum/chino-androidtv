@@ -150,6 +150,9 @@ fun PlayerScreen(
 ) {
     val state by viewModel.state.collectAsState()
     val context = LocalContext.current
+    // The control bar's focus, kept while a quality's pick rebuilds the
+    // player: the focus comes back to the quality button there too.
+    val barFocus = remember { ControlBarFocus() }
     when (val s = state) {
         PlayerUiState.Preparing -> Centered("Preparing…")
         is PlayerUiState.Error -> {
@@ -168,7 +171,7 @@ fun PlayerScreen(
                 launchTrailerLink(context, link)
             },
         )
-        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext, onHome, onClose)
+        is PlayerUiState.Ready -> ExoPlayback(s, viewModel, onPlayNext, onHome, onClose, barFocus)
     }
 }
 
@@ -283,6 +286,7 @@ private fun ExoPlayback(
     onPlayNext: ((String) -> Unit)?,
     onHome: (() -> Unit)?,
     onClose: (() -> Unit)?,
+    barFocus: ControlBarFocus,
 ) {
     val context = LocalContext.current
     // Key the ExoPlayer factory on (masterUrl + reloadKey) so switchQuality
@@ -1119,7 +1123,7 @@ private fun ExoPlayback(
         delay(gracePeriod)
         controllerVisible = false
     }
-    val playPauseFocusRequester = remember { FocusRequester() }
+    val playPauseFocusRequester = barFocus.playPause
     val chromeCoroutineScope = androidx.compose.runtime.rememberCoroutineScope()
     // When chrome reappears (visible flips false→true), park focus on the
     // play/pause button so DPAD_LEFT/RIGHT lands on a sensible default. Without
@@ -1129,12 +1133,16 @@ private fun ExoPlayback(
     // subtitles key opens the menu over hidden chrome) moved the focus to
     // play/pause, out of the menu - DOWN went nowhere and OK paused the title.
     // A menu that closes - a pick, BACK - takes its focused row with it: the
-    // focus goes back to play/pause, so the next OK lands somewhere.
-    LaunchedEffect(controllerVisible, menuOpen) {
-        if (controllerVisible && !menuOpen) {
-            runCatching { playPauseFocusRequester.requestFocus() }
-        }
+    // focus goes back to the menu's button, never to play/pause, where the
+    // next OK would pause the title (ControlBarFocusEffect).
+    val openMenu = when {
+        showSubtitlePanel -> PlayerMenu.Subtitles
+        showAudioPanel -> PlayerMenu.Audio
+        showQualityPanel -> PlayerMenu.Quality
+        showSpeedPanel -> PlayerMenu.Speed
+        else -> null
     }
+    ControlBarFocusEffect(controlsVisible = controllerVisible, openMenu = openMenu, focus = barFocus)
     val backDispatcher = androidx.activity.compose.LocalOnBackPressedDispatcherOwner.current
     // The subtitle moves up above the controls while they show and back down
     // when they hide, at their own pace: the spring their fade runs on
@@ -1305,6 +1313,7 @@ private fun ExoPlayback(
                     } else null,
                     playPauseFocusRequester = playPauseFocusRequester,
                     onUserInteraction = noteInteraction,
+                    menuButton = barFocus::button,
                 )
             },
         ) {

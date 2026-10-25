@@ -59,6 +59,10 @@ import com.composables.icons.lucide.Settings2
 import com.composables.icons.lucide.Volume2
 import com.composables.icons.lucide.VolumeX
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.Stable
+import androidx.compose.runtime.withFrameNanos
+import cloud.nalet.chino.tv.ui.theme.focusFirstOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -110,6 +114,62 @@ import cloud.nalet.chino.tv.data.api.Segment
  *  the focus ring + scale animation across all buttons. */
 internal data class ControlVisualState(val focused: Boolean, val enabled: Boolean = true)
 
+/** The player's menus, each opened by its button in the control bar - or
+ *  the remote's own subtitles or audio key. */
+internal enum class PlayerMenu { Audio, Subtitles, Speed, Quality }
+
+/**
+ * Where the focus goes in the player's control bar: to play/pause as the
+ * controls come back, and, as a menu closes - a pick, BACK - to the button
+ * that opened it, the menu's own: subtitles back on subtitles, never on
+ * play/pause, where the next OK would pause the title ([ControlBarFocusEffect]).
+ * It outlives the player a quality's pick rebuilds, so the focus comes back
+ * to quality there too. The buttons carry its requesters ([button]).
+ */
+@Stable
+internal class ControlBarFocus {
+    val playPause = FocusRequester()
+    private val buttons = PlayerMenu.entries.associateWith { FocusRequester() }
+
+    /** The requester of [menu]'s button, to put on the button. */
+    fun button(menu: PlayerMenu): FocusRequester = buttons.getValue(menu)
+
+    /** The menu open last, until the focus is back on its button. */
+    internal var lastOpen: PlayerMenu? = null
+}
+
+/**
+ * The control bar's focus as its controls show and its menus open and close
+ * ([ControlBarFocus]): while [openMenu] is open its rows have the focus; as
+ * it closes the focus goes back to its button - or to play/pause where the
+ * bar has none (the remote's audio key on a title of one track); as the
+ * controls come back, [controlsVisible], to play/pause. An open menu keeps
+ * the focus: the chrome coming back as the remote's subtitles key opens the
+ * menu over hidden controls leaves it in the menu.
+ */
+@Composable
+internal fun ControlBarFocusEffect(controlsVisible: Boolean, openMenu: PlayerMenu?, focus: ControlBarFocus) {
+    LaunchedEffect(controlsVisible, openMenu) {
+        if (openMenu != null) {
+            focus.lastOpen = openMenu
+            return@LaunchedEffect
+        }
+        if (!controlsVisible) return@LaunchedEffect
+        if (focus.lastOpen == null) {
+            // Back from hidden: somewhere for the first key to land.
+            runCatching { focus.playPause.requestFocus() }
+            return@LaunchedEffect
+        }
+        // A frame for the menu to go. A pick that rebuilds the player - a
+        // quality's - takes this screen with it first, and the next one's
+        // bar gives the focus back.
+        withFrameNanos { }
+        val closed = focus.lastOpen ?: return@LaunchedEffect
+        focus.lastOpen = null
+        focusFirstOf(listOf(focus.button(closed), focus.playPause), frames = 4)
+    }
+}
+
 /** Bottom-aligned chrome row with skip-back / play-pause / skip-forward at left,
  *  the scrubber in the middle, and the action buttons at right. */
 @Composable
@@ -143,7 +203,11 @@ internal fun PlayerBottomChrome(
     onNextEpisode: (() -> Unit)?,
     playPauseFocusRequester: FocusRequester,
     onUserInteraction: () -> Unit,
+    /** The menus' buttons' requesters: the focus comes back to the button
+     *  of a menu that closes ([ControlBarFocus]). */
+    menuButton: ((PlayerMenu) -> FocusRequester)? = null,
 ) {
+    val opens: (PlayerMenu) -> Modifier = { m -> menuButton?.let { Modifier.focusRequester(it(m)) } ?: Modifier }
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -198,6 +262,7 @@ internal fun PlayerBottomChrome(
                 ControlIconButton(
                     icon = Lucide.AudioLines,
                     contentDescription = "Audio track",
+                    modifier = opens(PlayerMenu.Audio),
                     accent = audioActive,
                     onClick = { onUserInteraction(); onAudio() },
                 )
@@ -206,6 +271,7 @@ internal fun PlayerBottomChrome(
                 ControlIconButton(
                     icon = Lucide.Captions,
                     contentDescription = "Subtitles",
+                    modifier = opens(PlayerMenu.Subtitles),
                     accent = captionsOn,
                     onClick = { onUserInteraction(); onSubtitles() },
                 )
@@ -213,6 +279,7 @@ internal fun PlayerBottomChrome(
             ControlIconButton(
                 icon = Lucide.Gauge,
                 contentDescription = "Playback speed",
+                modifier = opens(PlayerMenu.Speed),
                 accent = speedActive,
                 onClick = { onUserInteraction(); onSpeed() },
             )
@@ -220,6 +287,7 @@ internal fun PlayerBottomChrome(
                 ControlIconButton(
                     icon = Lucide.Settings2,
                     contentDescription = "Quality",
+                    modifier = opens(PlayerMenu.Quality),
                     accent = qualityActive,
                     onClick = { onUserInteraction(); onQuality() },
                 )
