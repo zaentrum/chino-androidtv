@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
+import cloud.nalet.chino.tv.data.ProgressSaves
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.ProgressBody
@@ -64,6 +65,9 @@ class LibraryViewModel(
     private val telemetry: Telemetry,
     private val baseUrl: String,
     private val userFlags: UserFlagsRepository,
+    /** The player's progress saves on their way: back from the player,
+     *  continue watching is read once they are answered. */
+    private val progressSaves: ProgressSaves = ProgressSaves(),
 ) : ViewModel() {
     private val _state = MutableStateFlow<LibraryUiState>(LibraryUiState.Loading)
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
@@ -275,10 +279,16 @@ class LibraryViewModel(
     /** Re-fetch just the continue-watching shelf. Called on ON_RESUME so
      *  finishing a movie / closing the player updates the row without a full
      *  grid reload (which would flicker the hero and reset scroll position).
+     *  It reads once the player's saves are answered ([ProgressSaves.settled]),
+     *  as the title page does: Home resumes as the player goes, a frame before
+     *  the player's last save leaves, and read at once the shelf would show
+     *  the position before it - the card's bar where it was before playing,
+     *  a movie just finished still on the shelf.
      *  Best-effort: on failure we keep whatever's already on screen. */
     fun refreshContinueWatching() {
-        val ready = _state.value as? LibraryUiState.Ready ?: return
+        if (_state.value !is LibraryUiState.Ready) return
         viewModelScope.launch {
+            progressSaves.settled()
             val cw = runCatching { api.continueWatching().items }.getOrNull() ?: return@launch
             val current = _state.value as? LibraryUiState.Ready ?: return@launch
             _state.value = current.copy(continueWatching = cw)
@@ -393,7 +403,10 @@ class LibraryViewModel(
         fun factory(container: AppContainer) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
             override fun <T : ViewModel> create(modelClass: Class<T>): T =
-                LibraryViewModel(container.chinoApi, container.streamTokenManager, container.telemetry, container.baseUrl, container.userFlags) as T
+                LibraryViewModel(
+                    container.chinoApi, container.streamTokenManager, container.telemetry, container.baseUrl, container.userFlags,
+                    progressSaves = container.progressSaves,
+                ) as T
         }
     }
 }
