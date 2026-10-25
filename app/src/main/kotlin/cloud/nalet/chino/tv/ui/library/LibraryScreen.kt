@@ -396,7 +396,7 @@ private fun LibraryContent(
             val nextUpRows = continueWatching.filter { it.upNext }
             if (cwRows.isNotEmpty()) {
                 Text(
-                    text = "Continue Watching",
+                    text = "continue watching",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -418,7 +418,7 @@ private fun LibraryContent(
             }
             if (nextUpRows.isNotEmpty()) {
                 Text(
-                    text = "Next Up",
+                    text = "next up",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -447,7 +447,7 @@ private fun LibraryContent(
             // D-pads right; paging-to-full lives on the BrowseScreen.
             if (movies.isNotEmpty()) {
                 Text(
-                    text = "Recently added — Movies",
+                    text = "recently added movies",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -466,7 +466,7 @@ private fun LibraryContent(
             }
             if (series.isNotEmpty()) {
                 Text(
-                    text = "Recently added — Shows",
+                    text = "recently added shows",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -485,7 +485,7 @@ private fun LibraryContent(
             }
             if (topRated.isNotEmpty()) {
                 Text(
-                    text = "Top Rated",
+                    text = "top rated",
                     style = MaterialTheme.typography.titleLarge,
                     fontWeight = FontWeight.SemiBold,
                     modifier = Modifier.padding(bottom = 12.dp),
@@ -1264,7 +1264,7 @@ private fun HeroBanner(
             ) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "Play", fontSize = 16.sp)
+                Text(text = "play", fontSize = 16.sp)
             }
             // A plain button: surface-2, its label fg-2.
             ChinoButton(
@@ -1273,7 +1273,7 @@ private fun HeroBanner(
             ) {
                 Icon(Lucide.Info, contentDescription = null, modifier = Modifier.size(20.dp))
                 androidx.compose.foundation.layout.Spacer(modifier = Modifier.width(8.dp))
-                Text(text = "More Info", fontSize = 16.sp)
+                Text(text = "see details", fontSize = 16.sp)
             }
         }
         // Hero pagination dots — bottom-left, below the buttons (8dp circles,
@@ -1377,10 +1377,10 @@ internal fun SeeAllCard(onClick: () -> Unit) {
             )
             androidx.compose.foundation.layout.Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = "See All",
+                text = "see all",
+                style = MaterialTheme.typography.titleSmall,
                 color = ChinoAccent,
                 fontWeight = FontWeight.Medium,
-                style = MaterialTheme.typography.bodyMedium,
             )
         }
     }

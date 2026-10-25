@@ -4,6 +4,7 @@ import androidx.compose.animation.core.CubicBezierEasing
 import androidx.compose.animation.core.Easing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.PaddingValues
@@ -43,6 +44,7 @@ import androidx.tv.material3.ButtonDefaults
 import androidx.tv.material3.Card
 import androidx.tv.material3.CardDefaults
 import androidx.tv.material3.MaterialTheme
+import androidx.tv.material3.ProvideTextStyle
 import kotlinx.coroutines.launch
 
 /*
@@ -368,7 +370,41 @@ fun ChinoButton(
             focusedContentColor = if (filled) content else ChinoFocus.title(content.copy(alpha = 1f), focused = true),
         ),
         contentPadding = contentPadding,
-        content = body,
+        // Its label in the mono face, as all chrome is (the design system's
+        // voice): lowercase, names and codes inside keeping their case.
+        content = { ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(fontFamily = ChinoMonoFamily)) { body() } },
+    )
+}
+
+/**
+ * The design system's danger button, for what deletes something or can't be
+ * undone: an amber outline and an amber label at rest; on focus filled amber
+ * with a dark label, and the focus style's ring and growth as every button.
+ */
+@Composable
+fun ChinoDangerButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    focus: ItemFocus = rememberItemFocus(),
+    body: @Composable RowScope.() -> Unit,
+) {
+    val outline = Border(BorderStroke(1.dp, ChinoSignalAmber), shape = RectangleShape)
+    Button(
+        onClick = onClick,
+        modifier = modifier.focusStyle(focus, FocusKind.Control),
+        scale = ButtonDefaults.scale(scale = 1f, focusedScale = 1f, pressedScale = 1f),
+        border = ButtonDefaults.border(border = outline, focusedBorder = outline, pressedBorder = outline),
+        glow = ButtonDefaults.glow(),
+        shape = ButtonDefaults.shape(shape = RectangleShape),
+        colors = ButtonDefaults.colors(
+            containerColor = Color.Transparent,
+            contentColor = ChinoSignalAmber,
+            focusedContainerColor = ChinoSignalAmber,
+            focusedContentColor = ChinoBg,
+            pressedContainerColor = ChinoSignalAmber,
+            pressedContentColor = ChinoBg,
+        ),
+        content = { ProvideTextStyle(MaterialTheme.typography.labelLarge.copy(fontFamily = ChinoMonoFamily)) { body() } },
     )
 }
 

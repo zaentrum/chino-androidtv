@@ -391,8 +391,10 @@ private fun SaveChip(saved: Boolean) {
             tint = if (saved) ChinoBg else ChinoText,
             modifier = Modifier.size(18.dp),
         )
+        // Chrome, in the mono face; the Watchlist keeps its name's case.
         Text(
             text = if (saved) "in your Watchlist" else "add to Watchlist",
+            style = androidx.tv.material3.MaterialTheme.typography.labelLarge.copy(fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily),
             color = if (saved) ChinoBg else ChinoText,
             fontSize = 14.sp,
             fontWeight = FontWeight.Medium,

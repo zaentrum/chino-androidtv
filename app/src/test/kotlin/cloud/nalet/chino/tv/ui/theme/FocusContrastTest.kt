@@ -53,7 +53,7 @@ class FocusContrastTest {
         assertPair("error on bg", ChinoError, ChinoBg, published = 5.71, min = 4.5)
         assertPair("error on surface", ChinoError, ChinoSurface, published = 5.41, min = 4.5)
         assertPair("error on surface-2", ChinoError, ChinoSurfaceHi, published = 5.14, min = 4.5)
-        // Delete Account's button: red on the error's tint.
+        // Red on the error's tint, where an error is said on it.
         assertPair("error on its tint", ChinoError, ChinoErrorBg, published = 5.14, min = 4.5)
         // A destructive entry focused: its red label would not read on the
         // focused surface, so it is fg there; its icon keeps the red, enough
@@ -62,6 +62,16 @@ class FocusContrastTest {
         assertEquals(ChinoFg, ChinoFocus.text(ChinoError, focused = true))
         assertEquals(ChinoError, ChinoFocus.text(ChinoError, focused = false))
         assertAtLeast("a red icon on surface-focus", ChinoError, ChinoSurfaceFocus, 3.0)
+    }
+
+    @Test
+    fun `the danger button reads at rest and focused`() {
+        // At rest an amber label (and outline) on the page; focused filled
+        // amber with the page's colour on it, the ring outside on the page.
+        assertAtLeast("signal-amber on bg", ChinoSignalAmber, ChinoBg, 4.5)
+        assertAtLeast("signal-amber on surface", ChinoSignalAmber, ChinoSurface, 4.5)
+        assertAtLeast("bg on signal-amber", ChinoBg, ChinoSignalAmber, 4.5)
+        assertAtLeast("the ring on bg beside it", ChinoFocusRing, ChinoBg, 3.0)
     }
 
     @Test

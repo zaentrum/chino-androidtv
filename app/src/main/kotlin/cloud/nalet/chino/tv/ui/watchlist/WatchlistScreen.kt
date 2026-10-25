@@ -173,13 +173,13 @@ fun WatchlistScreen(
             when (val ov = overlay) {
                 null -> Unit
                 ListOverlay.Create -> NameDialog(
-                    title = "New list",
+                    title = "new list",
                     initial = "",
                     onSubmit = { name -> if (name.isNotBlank()) viewModel.createList(name); overlay = null },
                     onDismiss = { overlay = null },
                 )
                 is ListOverlay.Rename -> NameDialog(
-                    title = "Rename list",
+                    title = "rename list",
                     initial = ov.list.name,
                     onSubmit = { name -> if (name.isNotBlank()) viewModel.renameList(ov.list.id, name); overlay = null },
                     onDismiss = { overlay = null },
@@ -227,7 +227,8 @@ private fun HubContent(
             verticalAlignment = Alignment.CenterVertically,
         ) {
             Text(
-                text = "Your lists",
+                text = "your lists",
+                style = MaterialTheme.typography.headlineMedium,
                 color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
@@ -454,8 +455,8 @@ private fun NewListChip(onClick: () -> Unit) {
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(6.dp),
     ) {
-        Icon(Lucide.Plus, contentDescription = "New list", tint = ChinoAccent, modifier = Modifier.size(16.dp))
-        Text(text = "New list", color = ChinoFocus.title(ChinoText, focus.focused), fontSize = 14.sp)
+        Icon(Lucide.Plus, contentDescription = null, tint = ChinoAccent, modifier = Modifier.size(16.dp))
+        Text(text = "new list", style = MaterialTheme.typography.titleSmall, color = ChinoFocus.title(ChinoText, focus.focused), fontSize = 14.sp)
     }
 }
 
@@ -490,7 +491,7 @@ private fun NameDialog(
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(14.dp),
         ) {
-            Text(text = title, color = ChinoFg, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
+            Text(text = title, style = MaterialTheme.typography.titleMedium, color = ChinoFg, fontSize = 18.sp, fontWeight = FontWeight.SemiBold)
             Row(
                 modifier = Modifier
                     .fillMaxWidth()

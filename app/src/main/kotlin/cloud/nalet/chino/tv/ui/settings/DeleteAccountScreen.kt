@@ -1,5 +1,8 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import androidx.tv.material3.MaterialTheme
+import cloud.nalet.chino.tv.ui.theme.ChinoFocus
+import cloud.nalet.chino.tv.ui.theme.ChinoDangerButton
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import androidx.activity.compose.BackHandler
@@ -94,8 +97,11 @@ fun DeleteAccountScreen(
                 modifier = Modifier.width(720.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
             ) {
+                // The title is the action; the confirming button repeats it
+                // and is the danger button.
                 Text(
-                    text = "Delete Account",
+                    text = "delete account",
+                    style = MaterialTheme.typography.headlineSmall,
                     color = ChinoFg,
                     fontSize = 28.sp,
                     fontWeight = FontWeight.SemiBold,
@@ -148,7 +154,7 @@ fun DeleteAccountScreen(
 
                 Row(
                     modifier = Modifier.padding(top = 8.dp),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
                 ) {
                     ChinoButton(
                         // Never disabled: a disabled button would drop focus
@@ -156,18 +162,11 @@ fun DeleteAccountScreen(
                         onClick = { if (!deleting) onCancel() },
                         modifier = Modifier.focusRequester(cancelFocus),
                     ) {
-                        Text(if (final) "Close" else "Cancel")
+                        Text(if (final) "close" else "cancel")
                     }
                     if (!final) {
-                        // Filled in the error's tint, which it keeps on focus:
-                        // red on its tint, as the design system has it.
-                        ChinoButton(
-                            onClick = { viewModel.delete() },
-                            container = ChinoErrorBg,
-                            content = ChinoError,
-                            filled = true,
-                        ) {
-                            Text(if (deleting) "Deleting…" else "Delete Account")
+                        ChinoDangerButton(onClick = { viewModel.delete() }) {
+                            Text(if (deleting) "deleting…" else "delete account")
                         }
                     }
                 }

@@ -170,7 +170,9 @@ private fun BrowseGrid(
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
-                text = pageTitle,
+                // The page's title: chrome, lowercase, in the mono face.
+                text = pageTitle.lowercase(),
+                style = MaterialTheme.typography.headlineMedium,
                 color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,

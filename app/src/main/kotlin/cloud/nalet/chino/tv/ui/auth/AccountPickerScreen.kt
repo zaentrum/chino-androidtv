@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import androidx.tv.material3.MaterialTheme
+import cloud.nalet.chino.tv.ui.theme.ChinoDangerButton
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.scrim
@@ -86,7 +88,8 @@ fun AccountPickerScreen(
             verticalArrangement = Arrangement.spacedBy(32.dp),
         ) {
             Text(
-                text = "Who's watching?",
+                text = "who's watching?",
+                style = MaterialTheme.typography.displaySmall,
                 color = ChinoFg,
                 fontSize = 40.sp,
                 fontWeight = FontWeight.SemiBold,
@@ -220,12 +223,20 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
+                // The title is the action; the confirming button repeats it
+                // and is the danger button.
+                Text(
+                    text = "remove account",
+                    style = MaterialTheme.typography.titleLarge,
+                    color = ChinoFg,
+                    textAlign = TextAlign.Center,
+                )
                 Avatar(displayName = account.displayName, email = account.email, size = 72.dp)
                 Text(
-                    text = "Remove ${account.displayName}?",
+                    text = account.displayName,
                     color = ChinoFg,
-                    fontSize = 20.sp,
-                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 18.sp,
+                    fontWeight = FontWeight.Medium,
                     textAlign = TextAlign.Center,
                 )
                 Text(
@@ -234,13 +245,9 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                     fontSize = 13.sp,
                     textAlign = TextAlign.Center,
                 )
-                Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                    ChinoButton(onClick = onDismiss) { Text("Cancel") }
-                    // Filled in the error colour, which it keeps on focus; its
-                    // label in the page's colour, as on a filled blue button.
-                    ChinoButton(onClick = onConfirm, container = ChinoError, content = ChinoBg, filled = true) {
-                        Text("Remove")
-                    }
+                Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+                    ChinoButton(onClick = onDismiss) { Text("cancel") }
+                    ChinoDangerButton(onClick = onConfirm) { Text("remove account") }
                 }
             }
         }
@@ -269,13 +276,14 @@ private fun AddAccountTile(onClick: () -> Unit) {
         ) {
             Icon(
                 imageVector = Lucide.Plus,
-                contentDescription = "Add account",
+                contentDescription = "add account",
                 tint = ChinoFg,
                 modifier = Modifier.size(56.dp),
             )
         }
         Text(
-            text = "Add account",
+            text = "add account",
+            style = MaterialTheme.typography.titleMedium,
             color = ChinoFocus.title(ChinoText, focus.focused),
             fontSize = 18.sp,
             fontWeight = FontWeight.Medium,

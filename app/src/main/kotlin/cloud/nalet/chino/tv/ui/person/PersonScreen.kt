@@ -179,7 +179,7 @@ private fun Filmography(
         }
         item(span = { GridItemSpan(maxLineSpan) }) {
             Text(
-                text = "Filmography",
+                text = "filmography",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = ChinoFg,
@@ -307,7 +307,7 @@ private fun Biography(text: String, readMoreFocus: FocusRequester, onReadMore: (
                 onClick = onReadMore,
                 modifier = Modifier.focusRequester(readMoreFocus),
             ) {
-                Text(text = "Read more", fontWeight = FontWeight.SemiBold)
+                Text(text = "read more", fontWeight = FontWeight.SemiBold)
             }
         }
     }

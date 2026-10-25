@@ -400,7 +400,8 @@ private fun PeopleSection(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         Text(
-            text = "Cast & crew",
+            text = "cast & crew",
+            style = MaterialTheme.typography.titleLarge,
             color = ChinoFg,
             fontSize = 22.sp,
             fontWeight = FontWeight.Bold,

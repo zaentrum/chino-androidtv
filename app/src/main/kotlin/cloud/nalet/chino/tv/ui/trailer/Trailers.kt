@@ -61,9 +61,9 @@ fun trailerChoice(item: Item): TrailerChoice? =
     localTrailer(item.extras)?.let { TrailerChoice.Local(it) }
         ?: pickTrailer(item.trailers)?.let { TrailerChoice.Link(it) }
 
-/** What a button that opens [link] says: "Watch on YouTube". */
+/** What a button that opens [link] says, chrome in lowercase with the site keeping its name: "watch on YouTube". */
 fun trailerLinkLabel(link: Trailer): String =
-    link.site?.takeIf { it.isNotBlank() }?.let { "Watch on $it" } ?: "Watch the trailer"
+    link.site?.takeIf { it.isNotBlank() }?.let { "watch on $it" } ?: "watch the trailer"
 
 /** Opens a trailer link: a YouTube video in the YouTube app, any other
  *  link in whatever takes it. Nothing happens on a TV that has neither. */

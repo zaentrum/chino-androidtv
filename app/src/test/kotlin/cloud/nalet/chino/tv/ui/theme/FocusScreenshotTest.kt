@@ -137,6 +137,11 @@ class FocusScreenshotTest {
     @Test fun filledButtonFocused() = shot("focus_button_filled_focused", focus = 0) { Buttons(focus = it) }
     @Test fun plainButtonFocused() = shot("focus_button_plain_focused", focus = 1) { Buttons(focus = it) }
 
+    // The danger button, for what deletes something: an amber outline and
+    // label at rest, filled amber with a dark label on focus, the ring around.
+    @Test fun dangerButtonAtRest() = shot("focus_button_danger_rest") { Danger(focus = null) }
+    @Test fun dangerButtonFocused() = shot("focus_button_danger_focused", focus = 1) { Danger(focus = it) }
+
     @Test fun chipsAtRest() = shot("focus_chip_rest") { Chips(focus = null) }
     @Test fun chipFocused() = shot("focus_chip_focused", focus = 1) { Chips(focus = it) }
     @Test fun filledChipFocused() = shot("focus_chip_filled_focused", focus = 0) { Chips(focus = it) }
@@ -284,15 +289,24 @@ class FocusScreenshotTest {
     private fun Buttons(focus: Pair<Int, FocusRequester>?) {
         // The detail page's actions: the filled Play, then plain ones.
         Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-            Box(Modifier.requester(focus, 0)) { PlayButton(label = "Resume S01E02", onClick = {}) }
+            Box(Modifier.requester(focus, 0)) { PlayButton(label = "resume S01E02", onClick = {}) }
             Box(Modifier.requester(focus, 1)) {
                 ChinoButton(onClick = {}) {
                     Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                     Spacer(Modifier.width(8.dp))
-                    Text("Start over")
+                    Text("start over")
                 }
             }
-            Box(Modifier.requester(focus, 2)) { ChinoButton(onClick = {}) { Text("Trailer") } }
+            Box(Modifier.requester(focus, 2)) { ChinoButton(onClick = {}) { Text("trailer") } }
+        }
+    }
+
+    @Composable
+    private fun Danger(focus: Pair<Int, FocusRequester>?) {
+        // Delete account's question: cancel, and the action it asks about.
+        Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room)) {
+            Box(Modifier.requester(focus, 0)) { ChinoButton(onClick = {}) { Text("cancel") } }
+            Box(Modifier.requester(focus, 1)) { ChinoDangerButton(onClick = {}) { Text("delete account") } }
         }
     }
 
@@ -439,7 +453,7 @@ class FocusScreenshotTest {
                 id = "p1", title = "Quiet Orchard", kind = "movie", year = 2021,
                 watchedAt = if (on) "2026-10-01T20:00:00Z" else null,
             ),
-            primaryLabel = "Resume 12:34",
+            primaryLabel = "resume 12:34",
             canResume = true,
             inWatchlist = on,
             liked = on,

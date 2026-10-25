@@ -134,7 +134,8 @@ private fun ReadyContent(
     ) {
         item {
             Text(
-                text = "Account",
+                text = "account",
+                style = MaterialTheme.typography.headlineMedium,
                 color = ChinoFg,
                 fontSize = 34.sp,
                 fontWeight = FontWeight.Bold,
@@ -145,7 +146,8 @@ private fun ReadyContent(
                 email = activeAccount?.email.orEmpty(),
             )
             Text(
-                text = "Watch history",
+                text = "watch history",
+                style = MaterialTheme.typography.titleLarge,
                 color = ChinoFg,
                 fontSize = 20.sp,
                 fontWeight = FontWeight.SemiBold,

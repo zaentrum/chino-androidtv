@@ -109,7 +109,7 @@ fun ServerSetupScreen(
                     enabled = !probing && url.isNotBlank(),
                     modifier = Modifier.fillMaxWidth(),
                 ) {
-                    Text(text = if (probing) "Connecting…" else "Connect")
+                    Text(text = if (probing) "connecting…" else "connect")
                 }
 
                 if (viewModel.presetUrl.isNotBlank() && url.trim() != viewModel.presetUrl) {
@@ -121,7 +121,7 @@ fun ServerSetupScreen(
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(text = "Use ${viewModel.presetUrl.substringAfter("://")}")
+                        Text(text = "use ${viewModel.presetUrl.substringAfter("://")}")
                     }
                 }
 
@@ -140,7 +140,7 @@ fun ServerSetupScreen(
                         horizontalAlignment = Alignment.Start,
                         verticalArrangement = Arrangement.spacedBy(8.dp),
                     ) {
-                        Text(text = "Recent", color = ChinoMuted, fontSize = 14.sp)
+                        Text(text = "recent", style = MaterialTheme.typography.titleSmall, color = ChinoMuted, fontSize = 14.sp)
                         recents.forEach { r ->
                             ChinoButton(
                                 onClick = { url = r; viewModel.connect(r) },
@@ -160,7 +160,7 @@ fun ServerSetupScreen(
                         enabled = !probing,
                         modifier = Modifier.fillMaxWidth(),
                     ) {
-                        Text(text = "Cancel")
+                        Text(text = "cancel")
                     }
                 }
             }

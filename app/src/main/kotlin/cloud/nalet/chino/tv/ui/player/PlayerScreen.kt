@@ -288,8 +288,8 @@ private fun TerminalErrorScreen(
                         modifier = Modifier.focusRequester(reportRow),
                     ) {
                         Text(
-                            if (report is BugReportState.Sending) "Sending the report…"
-                            else "Report this problem",
+                            if (report is BugReportState.Sending) "sending the report…"
+                            else "report this problem",
                         )
                     }
                 }
@@ -1686,10 +1686,10 @@ private fun SkipSegmentButton(
 ) {
     // Web wording: "Skip Intro" / "Skip Recap" / "Skip Credits".
     val label = when (segment.kind.lowercase()) {
-        "intro" -> "Skip Intro"
-        "recap" -> "Skip Recap"
-        "credits" -> "Skip Credits"
-        else -> "Skip"
+        "intro" -> "skip intro"
+        "recap" -> "skip recap"
+        "credits" -> "skip credits"
+        else -> "skip"
     }
     // Web's button is white-on-black: a filled button, its fill kept on focus.
     val focus = rememberItemFocus()
@@ -1722,6 +1722,7 @@ private fun SkipSegmentButton(
             Text(
                 text = label,
                 color = Color.Black,
+                style = MaterialTheme.typography.labelLarge.copy(fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily),
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -1769,8 +1770,9 @@ private fun NextEpisodeButton(
                 modifier = Modifier.size(18.dp),
             )
             Text(
-                text = "Next episode",
+                text = "next episode",
                 color = ChinoBg,
+                style = MaterialTheme.typography.labelLarge.copy(fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily),
                 fontWeight = FontWeight.SemiBold,
             )
         }
@@ -2077,7 +2079,7 @@ private fun PlaybackInfoOverlay(
             verticalArrangement = Arrangement.spacedBy(6.dp),
         ) {
             Text(
-                text = "Playback info",
+                text = "playback info",
                 color = ChinoFg,
                 style = MaterialTheme.typography.titleSmall,
                 fontWeight = FontWeight.SemiBold,

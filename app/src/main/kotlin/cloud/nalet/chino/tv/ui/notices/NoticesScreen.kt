@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.notices
 
+import androidx.tv.material3.MaterialTheme
 import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
@@ -203,7 +204,8 @@ private fun NoticesList(
                 verticalAlignment = Alignment.CenterVertically,
             ) {
                 Text(
-                    text = "Notices",
+                    text = "notices",
+                    style = MaterialTheme.typography.headlineMedium,
                     color = ChinoFg,
                     fontSize = 34.sp,
                     fontWeight = FontWeight.Bold,
@@ -218,7 +220,7 @@ private fun NoticesList(
                     ) {
                         Icon(Lucide.CheckCheck, contentDescription = null, modifier = Modifier.size(20.dp))
                         Spacer(Modifier.width(8.dp))
-                        Text(text = "Mark All Read")
+                        Text(text = "mark all read")
                     }
                 }
             }

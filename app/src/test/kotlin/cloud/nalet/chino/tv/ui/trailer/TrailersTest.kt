@@ -68,8 +68,8 @@ class TrailersTest {
 
     @Test
     fun `a link's button names its site`() {
-        assertEquals("Watch on YouTube", trailerLinkLabel(Trailer("https://youtu.be/x1", site = "YouTube")))
-        assertEquals("Watch the trailer", trailerLinkLabel(Trailer("https://video.example.org/t")))
+        assertEquals("watch on YouTube", trailerLinkLabel(Trailer("https://youtu.be/x1", site = "YouTube")))
+        assertEquals("watch the trailer", trailerLinkLabel(Trailer("https://video.example.org/t")))
     }
 
     private fun extra(

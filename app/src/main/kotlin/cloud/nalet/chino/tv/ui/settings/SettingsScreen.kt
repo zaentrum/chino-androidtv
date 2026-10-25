@@ -128,13 +128,13 @@ fun SettingsScreen(
                     verticalArrangement = Arrangement.spacedBy(24.dp),
                 ) {
             Text(
-                text = "Settings",
+                text = "settings",
                 style = MaterialTheme.typography.displaySmall,
                 fontWeight = FontWeight.Bold,
                 color = ChinoFg,
             )
             Section(
-                title = "Binge watching",
+                title = "binge watching",
                 subtitle = "Skip recurring parts back-to-back without leaving the player. " +
                     "A short countdown gives you a chance to cancel before each skip fires.",
             ) {
@@ -168,7 +168,7 @@ fun SettingsScreen(
                 )
             }
             Section(
-                title = "Audio",
+                title = "audio",
                 // The same text in every app (docs/chino, playback: the audio
                 // setting).
                 subtitle = "Titles play with audio in the language you pick here, where they have it. " +
@@ -182,7 +182,7 @@ fun SettingsScreen(
                 )
             }
             Section(
-                title = "Subtitles",
+                title = "subtitles",
                 // The same text in every app (docs/chino, subtitles).
                 subtitle = "Subtitles in the language you pick here come on when a title's audio is in another " +
                     "language. Otherwise, only the foreign-language parts get subtitles, where a title has them. " +
@@ -196,7 +196,7 @@ fun SettingsScreen(
             }
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
                 Section(
-                    title = "Account",
+                    title = "account",
                     // "account", the word for who is watching (docs/chino words).
                     subtitle = "See your account and its watch history, sign in to another " +
                         "account or add one, or delete your account.",
@@ -209,19 +209,19 @@ fun SettingsScreen(
                         // ordering): identity + watch history.
                         if (onProfile != null) {
                             ChinoButton(onClick = onProfile) {
-                                Text("Your account")
+                                Text("see your account")
                             }
                         }
                         if (onSwitchAccount != null) {
                             ChinoButton(onClick = onSwitchAccount) {
-                                Text("Switch account")
+                                Text("switch account")
                             }
                         }
                         // Last in the row: a screen of its own asks before
                         // anything is deleted.
                         if (onDeleteAccount != null) {
                             ChinoButton(onClick = onDeleteAccount) {
-                                Text("Delete Account")
+                                Text("delete account")
                             }
                         }
                     }
@@ -234,12 +234,12 @@ fun SettingsScreen(
             // chino-mobile's Settings "Change server" row.
             if (onChangeServer != null) {
                 Section(
-                    title = "Server",
+                    title = "server",
                     subtitle = serverHost?.let { "Connected to $it." }
                         ?: "Connect to a different Chino server.",
                 ) {
                     ChinoButton(onClick = onChangeServer) {
-                        Text("Change server")
+                        Text("change server")
                     }
                 }
             }
@@ -251,7 +251,7 @@ fun SettingsScreen(
             // Only where the server takes reports: the line promises them a
             // recipient (features.feedback in /api/config).
             if (reportsTaken) Section(
-                title = "Feedback",
+                title = "feedback",
                 subtitle = "Tell the people who run this server. The app's and the device's details go with your report.",
             ) {
                 ChinoButton(
@@ -262,7 +262,7 @@ fun SettingsScreen(
                         showReportPanel = true
                     },
                 ) {
-                    Text("Report a problem")
+                    Text("report a problem")
                 }
             }
                 }
@@ -369,6 +369,7 @@ private fun ReportProblemDialog(
             } else {
                 Text(
                     text = "report a problem",
+                    style = MaterialTheme.typography.titleSmall,
                     color = ChinoMuted,
                     fontSize = 12.sp,
                     fontWeight = FontWeight.Medium,
@@ -578,7 +579,7 @@ private fun ToggleRow(
             content = if (value) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,
             filled = value,
         ) {
-            Text(text = if (value) "ON" else "OFF", fontWeight = FontWeight.SemiBold)
+            Text(text = if (value) "on" else "off", fontWeight = FontWeight.SemiBold)
         }
     }
 }

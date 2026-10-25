@@ -254,9 +254,9 @@ private fun DetailContent(
     val canResume = seriesPlay?.resumes ?: (s.resumeSec > 30)
     val primaryLabel = when {
         seriesPlay != null ->
-            listOfNotNull(if (seriesPlay.resumes) "Resume" else "Play", seriesPlay.code).joinToString(" ")
-        canResume -> "Resume ${formatHM(s.resumeSec)}"
-        else -> "Play"
+            listOfNotNull(if (seriesPlay.resumes) "resume" else "play", seriesPlay.code).joinToString(" ")
+        canResume -> "resume ${formatHM(s.resumeSec)}"
+        else -> "play"
     }
     // Where the content column starts on the page, from the page's top: the
     // still shows above it, where nothing sits on it; from there down the
@@ -432,7 +432,8 @@ private fun DetailContent(
 @Composable
 internal fun DetailActions(
     item: Item,
-    /** "Play", "Resume 12:34", "Resume S02E03", "Play S02E04". */
+    /** "play", "resume 12:34", "resume S02E03", "play S02E04": chrome,
+     *  lowercase, the episode's code keeping its capitals. */
     primaryLabel: String,
     /** The primary resumes a saved position — "Start over" is offered too. */
     canResume: Boolean,
@@ -475,7 +476,7 @@ internal fun DetailActions(
             ) {
                 Icon(Lucide.Play, contentDescription = null, modifier = Modifier.size(20.dp))
                 Spacer(Modifier.width(8.dp))
-                Text(text = "Start over")
+                Text(text = "start over")
             }
         }
         // Trailer — labeled secondary CTA next to Play (web shows it too): a
@@ -503,7 +504,7 @@ internal fun DetailActions(
                     modifier = Modifier.size(20.dp),
                 )
                 Spacer(Modifier.width(8.dp))
-                Text(text = "Trailer")
+                Text(text = "trailer")
             }
         }
         // Add to list: the bookmark toggles the Watchlist alone - never
@@ -575,7 +576,8 @@ private fun AddToListPanel(
                 .padding(vertical = 6.dp),
         ) {
             Text(
-                text = "ADD TO LIST",
+                text = "add to list",
+                style = MaterialTheme.typography.titleSmall,
                 color = ChinoMuted,
                 fontSize = 12.sp,
                 fontWeight = FontWeight.Medium,
@@ -757,7 +759,7 @@ private fun EpisodesBlock(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "Episodes",
+            text = "episodes",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = ChinoFg,
@@ -1215,7 +1217,7 @@ private fun MoreLikeThisSection(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            text = "More like this",
+            text = "more like this",
             style = MaterialTheme.typography.titleLarge,
             fontWeight = FontWeight.SemiBold,
             color = ChinoFg,
@@ -1317,7 +1319,7 @@ private fun CreditsSection(
     ) {
         if (credits.actors.isNotEmpty()) {
             Text(
-                text = "Starring",
+                text = "starring",
                 style = MaterialTheme.typography.titleLarge,
                 fontWeight = FontWeight.SemiBold,
                 color = ChinoFg,
