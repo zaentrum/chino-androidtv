@@ -86,7 +86,9 @@ import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.ItemFocus
 import cloud.nalet.chino.tv.ui.theme.PosterImage
+import cloud.nalet.chino.tv.ui.theme.ReadingOrder
 import cloud.nalet.chino.tv.ui.theme.focusStyle
+import cloud.nalet.chino.tv.ui.theme.inWrappingRow
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.shelfPadding
 import cloud.nalet.chino.tv.ui.theme.shelfRoom
@@ -451,7 +453,11 @@ private fun RowToScreenEdge(content: @Composable () -> Unit) =
 /** Detail action row, the order and states every app has (docs/chino, title
  *  actions): Play (or Resume) · Start over · Trailer, then add to list - the
  *  Watchlist's bookmark with its "⌄" - · watched · liked (TitleActions.kt).
- *  Their names say the state. */
+ *  Their names say the state. Where the column is too narrow for all of them
+ *  ("resume 1:40:05", start over and trailer) the row wraps, a control as a
+ *  whole - never one cut or squeezed to nothing - the next line a control
+ *  gap below; RIGHT and LEFT follow the row's order across the wrap. */
+@OptIn(ExperimentalLayoutApi::class)
 @Composable
 internal fun DetailActions(
     item: Item,
@@ -472,20 +478,36 @@ internal fun DetailActions(
     onPlayTrailer: (extraId: String) -> Unit,
 ) {
     val watched = item.watchedAt != null
-    Row(
+    val trailer = trailerChoice(item)
+    val order = remember(canResume, trailer != null) {
+        ReadingOrder(
+            buildList {
+                add("play")
+                if (canResume) add("start over")
+                if (trailer != null) add("trailer")
+                addAll(listOf("watchlist", "lists", "watched", "liked"))
+            },
+        )
+    }
+    FlowRow(
         // Room for a focused control's ring and growth: 12 dp between a
-        // grown ring and the next control, and between a ring and the
-        // description under it.
+        // grown ring and the next control - beside it, or on the next line
+        // where the row wraps - and between a ring and the description
+        // under it. Every control has the row's one height.
         modifier = Modifier.padding(top = 16.dp, bottom = 12.dp),
         horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
-        verticalAlignment = Alignment.CenterVertically,
+        verticalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
     ) {
         // Without a position to resume (a series' next episode included) the
         // player starts at 0:00 rather than at a finished episode's last
         // saved second.
         // One height for the whole row, the title actions' (TitleActions.kt),
         // and one plain surface for what is off and what is not filled.
-        PlayButton(label = primaryLabel, onClick = { onPlay(canResume) }, modifier = Modifier.height(TitleActionLook.Size))
+        PlayButton(
+            label = primaryLabel,
+            onClick = { onPlay(canResume) },
+            modifier = Modifier.inWrappingRow(order, "play").height(TitleActionLook.Size),
+        )
         // "Start over" — secondary CTA shown only when there's a saved position
         // (so the primary reads "Resume"; for a series, the episode it
         // resumes). Plays from the beginning via onPlay(false); the player
@@ -494,7 +516,7 @@ internal fun DetailActions(
         if (canResume) {
             ChinoButton(
                 onClick = { onPlay(false) },
-                modifier = Modifier.height(TitleActionLook.Size),
+                modifier = Modifier.inWrappingRow(order, "start over").height(TitleActionLook.Size),
                 container = TitleActionLook.OffFill,
                 content = TitleActionLook.OffContent,
             ) {
@@ -506,10 +528,10 @@ internal fun DetailActions(
         // Trailer — labeled secondary CTA next to Play (web shows it too): a
         // trailer this server plays opens in the player, else the
         // title's link opens in the YouTube app as before (trailerChoice).
-        trailerChoice(item)?.let { choice ->
+        trailer?.let { choice ->
             val context = androidx.compose.ui.platform.LocalContext.current
             ChinoButton(
-                modifier = Modifier.height(TitleActionLook.Size),
+                modifier = Modifier.inWrappingRow(order, "trailer").height(TitleActionLook.Size),
                 container = TitleActionLook.OffFill,
                 content = TitleActionLook.OffContent,
                 onClick = {
@@ -537,9 +559,11 @@ internal fun DetailActions(
             inWatchlist = inWatchlist,
             onToggleWatchlist = { onToggleWatchlist(!inWatchlist) },
             onChooseLists = onOpenListPicker,
+            watchlistModifier = Modifier.inWrappingRow(order, "watchlist"),
+            listsModifier = Modifier.inWrappingRow(order, "lists"),
         )
-        WatchedToggle(watched = watched, onToggle = onToggleWatched)
-        LikedToggle(liked = liked, onToggle = { onToggleLike(!liked) })
+        WatchedToggle(watched = watched, onToggle = onToggleWatched, modifier = Modifier.inWrappingRow(order, "watched"))
+        LikedToggle(liked = liked, onToggle = { onToggleLike(!liked) }, modifier = Modifier.inWrappingRow(order, "liked"))
     }
 }
 

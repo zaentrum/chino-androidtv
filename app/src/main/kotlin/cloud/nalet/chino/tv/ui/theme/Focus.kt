@@ -524,8 +524,23 @@ class ReadingOrder(private val keys: List<String>, requester: (String) -> FocusR
 
     internal fun after(key: String): FocusRequester? = keys.getOrNull(keys.indexOf(key) + 1)?.let(requesters::getValue)
 
+    internal fun before(key: String): FocusRequester? =
+        keys.indexOf(key).takeIf { it > 0 }?.let { keys[it - 1] }?.let(requesters::getValue)
+
     internal fun isLast(key: String): Boolean = keys.lastOrNull() == key
 }
+
+/** The control [key] of a row that wraps ([order] its controls in the row's
+ *  order): RIGHT to the next and LEFT to the one before, across the wrap too
+ *  - from the end of a line to the start of the next, never to whatever lies
+ *  nearest; nothing past the last, never back up to the line above; UP and
+ *  DOWN as anywhere. Before its focus target. */
+@OptIn(ExperimentalComposeUiApi::class)
+fun Modifier.inWrappingRow(order: ReadingOrder, key: String): Modifier =
+    focusRequester(order[key]).focusProperties {
+        right = order.after(key) ?: FocusRequester.Cancel
+        order.before(key)?.let { left = it }
+    }
 
 /** The control [key] of [order]: its requester, its RIGHT to the next, its
  *  DOWN on the page where it is the last. Before its focus target. */

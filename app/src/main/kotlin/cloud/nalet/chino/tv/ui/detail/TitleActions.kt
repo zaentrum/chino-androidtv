@@ -89,13 +89,16 @@ internal fun AddToListControl(
     onToggleWatchlist: () -> Unit,
     onChooseLists: () -> Unit,
     modifier: Modifier = Modifier,
+    /** On the main part, and on the "⌄", before their focus targets. */
+    watchlistModifier: Modifier = Modifier,
+    listsModifier: Modifier = Modifier,
 ) {
     val fill = if (inWatchlist) TitleActionLook.Watchlist else TitleActionLook.OffFill
     val content = if (inWatchlist) TitleActionLook.OnContent else TitleActionLook.OffContent
     Row(modifier = modifier.height(TitleActionLook.Size), verticalAlignment = Alignment.CenterVertically) {
         ChinoButton(
             onClick = onToggleWatchlist,
-            modifier = Modifier.size(TitleActionLook.Size),
+            modifier = watchlistModifier.size(TitleActionLook.Size),
             container = fill,
             content = content,
             filled = inWatchlist,
@@ -117,7 +120,7 @@ internal fun AddToListControl(
         )
         ChinoButton(
             onClick = onChooseLists,
-            modifier = Modifier.width(TitleActionLook.CaretWidth).height(TitleActionLook.Size),
+            modifier = listsModifier.width(TitleActionLook.CaretWidth).height(TitleActionLook.Size),
             container = fill,
             content = content,
             filled = inWatchlist,
@@ -144,10 +147,11 @@ internal fun TitleToggle(
     onFill: Color,
     name: String,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
     ChinoButton(
         onClick = onClick,
-        modifier = Modifier.size(TitleActionLook.Size),
+        modifier = modifier.size(TitleActionLook.Size),
         container = if (on) onFill else TitleActionLook.OffFill,
         content = if (on) TitleActionLook.OnContent else TitleActionLook.OffContent,
         filled = on,
@@ -159,10 +163,10 @@ internal fun TitleToggle(
 
 /** Watched: a check, outlined, or dark on green. */
 @Composable
-internal fun WatchedToggle(watched: Boolean, onToggle: () -> Unit) =
-    TitleToggle(watched, Lucide.Check, Lucide.Check, TitleActionLook.Watched, watchedName(watched), onToggle)
+internal fun WatchedToggle(watched: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) =
+    TitleToggle(watched, Lucide.Check, Lucide.Check, TitleActionLook.Watched, watchedName(watched), onToggle, modifier)
 
 /** Liked: a heart, outlined, or dark on the design system's red. */
 @Composable
-internal fun LikedToggle(liked: Boolean, onToggle: () -> Unit) =
-    TitleToggle(liked, Lucide.Heart, StateIcons.HeartFilled, TitleActionLook.Liked, likedName(liked), onToggle)
+internal fun LikedToggle(liked: Boolean, onToggle: () -> Unit, modifier: Modifier = Modifier) =
+    TitleToggle(liked, Lucide.Heart, StateIcons.HeartFilled, TitleActionLook.Liked, likedName(liked), onToggle, modifier)
