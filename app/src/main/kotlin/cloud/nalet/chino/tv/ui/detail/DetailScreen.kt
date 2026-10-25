@@ -1225,15 +1225,25 @@ private fun GenreChips(genres: List<String>) {
     }
 }
 
-@Composable
-private fun FooterGrid(item: Item) {
-    // The subtitle languages by name ("German", "No dialogue"), each once; a
-    // track in no language by its label.
-    val subtitleLabel = item.subtitles
+/** English alphabetical order, accents after their letters ("Māori"). */
+private val ALPHABETICAL: java.text.Collator = java.text.Collator.getInstance(java.util.Locale.ENGLISH)
+
+/** A title's subtitle languages as its page lists them: by name ("German",
+ *  "No dialogue"), each once, a track in no language by its label, in
+ *  alphabetical order of the names shown - never by their codes, where
+ *  "deu" would put German before English and "zho" Chinese last; null for
+ *  none. */
+internal fun subtitleNames(subtitles: List<cloud.nalet.chino.tv.data.model.Subtitle>): String? =
+    subtitles
         .mapNotNull { languageOrLabel(it.lang, it.label) }
         .distinct()
+        .sortedWith(ALPHABETICAL)
         .joinToString(", ")
         .takeIf { it.isNotBlank() }
+
+@Composable
+private fun FooterGrid(item: Item) {
+    val subtitleLabel = subtitleNames(item.subtitles)
     // What the server found in the file - its intro, its credits - is the
     // server's, for the player's skips, not something to read here.
     if (subtitleLabel == null) return

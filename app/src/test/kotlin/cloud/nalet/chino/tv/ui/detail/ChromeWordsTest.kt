@@ -41,7 +41,7 @@ class ChromeWordsTest {
         title = "Quiet Orchard",
         kind = "movie",
         year = 2021,
-        subtitles = listOf(Subtitle(lang = "eng"), Subtitle(lang = "ger")),
+        subtitles = listOf(Subtitle(lang = "ger"), Subtitle(lang = "eng"), Subtitle(lang = "zho")),
         cast = listOf(
             CastMember(name = "Ada Vale", role = "actor", character = "The keeper"),
             CastMember(name = "Ben Ash", role = "director"),
@@ -89,8 +89,9 @@ class ChromeWordsTest {
         for (label in listOf("subtitles", "starring", "director", "writers", "producer", "music")) {
             assertEquals(label, ChinoMonoFamily, fontOf(label))
         }
-        // What they name stays in the body face, in its case.
-        compose.onNode(hasText("English, German")).assertExists()
+        // What they name stays in the body face, in its case - the names
+        // in alphabetical order, never their codes'.
+        compose.onNode(hasText("Chinese, English, German")).assertExists()
         assertEquals(listOf("director", "writers", "producer", "music"), groupCredits(movie.cast).crew.map(::crewHeading))
     }
 
