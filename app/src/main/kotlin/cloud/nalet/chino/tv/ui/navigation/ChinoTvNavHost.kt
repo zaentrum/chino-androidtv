@@ -412,6 +412,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     // every screen — re-pressing it while the hub is already on
                     // top must not stack a second copy.
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -436,6 +437,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     // every screen — re-pressing it while the hub is already on
                     // top must not stack a second copy.
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -479,6 +481,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     onSearch = { navController.navigate(Routes.SEARCH) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -514,6 +517,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     // every screen — re-pressing it while the hub is already on
                     // top must not stack a second copy.
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -550,6 +554,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     onSearch = { navController.navigate(Routes.SEARCH) },
                     onSettings = { navController.navigate(Routes.SETTINGS) { launchSingleTop = true } },
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -571,6 +576,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     // every screen — re-pressing it while the hub is already on
                     // top must not stack a second copy.
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },
@@ -664,6 +670,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     onSearch = { navController.navigate(Routes.SEARCH) },
                     onSettings = { navController.navigate(Routes.SETTINGS) },
                     onWatchlist = { navController.navigate(Routes.WATCHLIST) { launchSingleTop = true } },
+                    onZapNav = { navController.navigate(Routes.ZAP) },
                     onAccountClick = {
                         navController.navigate(Routes.PICKER) { popUpTo(Routes.LIBRARY) { inclusive = false } }
                     },

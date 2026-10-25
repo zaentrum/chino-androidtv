@@ -80,6 +80,7 @@ fun ProfileScreen(
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
+    onZapNav: () -> Unit,
     onAccountClick: () -> Unit = {},
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: Account? = null,
@@ -94,6 +95,7 @@ fun ProfileScreen(
                 onMovies = onMoviesNav,
                 onSeries = onSeriesNav,
                 onWatchlist = onWatchlist,
+                onZap = onZapNav,
                 onSettings = onSettings,
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {

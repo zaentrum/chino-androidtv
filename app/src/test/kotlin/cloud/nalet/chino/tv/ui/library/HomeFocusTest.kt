@@ -43,7 +43,7 @@ class HomeFocusTest {
                     genres = emptyList(), filter = BrowseFilter(), heroItem = hero, heroCount = 1,
                     onItemSelected = {}, onHeroPlay = {}, onSearch = {}, onSettings = {}, onWatchlist = {},
                     onAccountClick = {}, onMoviesNav = {}, onSeriesNav = {}, noticesBell = null,
-                    activeAccount = null, onFilterChange = {},
+                    activeAccount = null, onFilterChange = {}, onZap = {},
                 )
             }
         }
@@ -57,7 +57,7 @@ class HomeFocusTest {
     fun `in Settings the rail marks Settings, not Home`() {
         compose.setContent {
             ChinoTvTheme {
-                TvSideRail(activeType = null, settingsActive = true, onHome = {}, onMovies = {}, onSeries = {}, onSettings = {})
+                TvSideRail(activeType = null, settingsActive = true, onHome = {}, onMovies = {}, onSeries = {}, onSettings = {}, onZap = {}, onWatchlist = {})
             }
         }
         compose.onNode(hasContentDescription("Settings")).assert(selected)
@@ -70,7 +70,7 @@ class HomeFocusTest {
     fun `on a screen of no rail item, none is marked`() {
         compose.setContent {
             ChinoTvTheme {
-                TvSideRail(activeType = "search", onHome = {}, onMovies = {}, onSeries = {}, onSettings = {})
+                TvSideRail(activeType = "search", onHome = {}, onMovies = {}, onSeries = {}, onSettings = {}, onZap = {}, onWatchlist = {})
             }
         }
         for (item in listOf("Home", "Movies", "Series", "Watchlist", "Zap", "Settings")) {

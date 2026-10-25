@@ -11,6 +11,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assertIsFocused
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onRoot
@@ -25,6 +26,7 @@ import cloud.nalet.chino.tv.feedback.BugReporter
 import cloud.nalet.chino.tv.feedback.FilePendingReportStore
 import cloud.nalet.chino.tv.ui.theme.ChinoTvTheme
 import cloud.nalet.chino.tv.ui.theme.SafeAreaScreen
+import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Rule
 import org.junit.Test
@@ -45,6 +47,7 @@ class SettingsFocusTest {
     @get:Rule val compose = createAndroidComposeRule<androidx.activity.ComponentActivity>()
 
     private lateinit var viewModel: SettingsViewModel
+    private var zapOpened = 0
 
     @Before
     fun settings() {
@@ -72,6 +75,7 @@ class SettingsFocusTest {
                         onDeleteAccount = {},
                         onChangeServer = {},
                         serverHost = "media.test",
+                        onZapNav = { zapOpened++ },
                     )
                 }
             }
@@ -122,6 +126,14 @@ class SettingsFocusTest {
         back()
         compose.onNode(hasText("audio language")).assertDoesNotExist()
         languageRow(0).assertIsFocused()
+    }
+
+    @Test
+    fun `the rail's Zap opens Zap from Settings`() {
+        compose.onNode(hasContentDescription("Zap")).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        press(Key.DirectionCenter)
+        assertEquals(1, zapOpened)
     }
 
     @Test

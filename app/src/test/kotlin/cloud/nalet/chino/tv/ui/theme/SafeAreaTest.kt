@@ -90,7 +90,7 @@ class SafeAreaTest {
         show {
             SafeAreaScreen {
                 Row(Modifier.fillMaxSize()) {
-                    TvSideRail(activeType = null, onHome = {}, onMovies = {}, onSeries = {}, onSettings = {})
+                    TvSideRail(activeType = null, onHome = {}, onMovies = {}, onSeries = {}, onSettings = {}, onZap = {}, onWatchlist = {})
                     Column(Modifier.weight(1f)) {
                         TvTopBar(activeAccount = null, onAccountClick = {})
                         Box(Modifier.fillMaxSize())

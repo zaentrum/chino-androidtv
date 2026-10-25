@@ -102,7 +102,7 @@ fun WatchlistScreen(
     onSettings: () -> Unit,
     onWatchlist: () -> Unit,
     onAccountClick: () -> Unit,
-    onZapNav: () -> Unit = {},
+    onZapNav: () -> Unit,
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: Account? = null,
 ) {

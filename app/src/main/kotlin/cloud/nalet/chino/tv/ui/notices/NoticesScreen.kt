@@ -99,6 +99,7 @@ fun NoticesScreen(
     onSearch: () -> Unit = {},
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
+    onZapNav: () -> Unit,
     onAccountClick: () -> Unit = {},
     activeAccount: Account? = null,
 ) {
@@ -119,6 +120,7 @@ fun NoticesScreen(
                 onMovies = onMoviesNav,
                 onSeries = onSeriesNav,
                 onWatchlist = onWatchlist,
+                onZap = onZapNav,
                 onSettings = onSettings,
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {

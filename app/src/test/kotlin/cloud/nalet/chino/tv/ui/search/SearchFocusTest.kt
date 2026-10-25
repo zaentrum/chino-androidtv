@@ -56,6 +56,7 @@ class SearchFocusTest {
                     onQueryChange = {},
                     onSlotAction = {},
                     onItemSelected = {},
+                    onZapNav = {},
                 )
             }
         }

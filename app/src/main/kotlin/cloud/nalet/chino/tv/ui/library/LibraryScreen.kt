@@ -115,7 +115,7 @@ fun LibraryScreen(
     onAccountClick: () -> Unit = {},
     onMoviesNav: () -> Unit = {},
     onSeriesNav: () -> Unit = {},
-    onZap: () -> Unit = {},
+    onZap: () -> Unit,
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
 ) {
@@ -224,7 +224,7 @@ internal fun LibraryContent(
     onHeroFocusChanged: (Boolean) -> Unit = {},
     homeEntryNonce: Int = 0,
     onRailHome: () -> Unit = {},
-    onZap: () -> Unit = {},
+    onZap: () -> Unit,
     onRemoveFromContinueWatching: (String) -> Unit = {},
     // Card-action watched toggle. `markWatched` is the NEXT desired state.
     onToggleWatched: (itemId: String, markWatched: Boolean) -> Unit = { _, _ -> },
@@ -490,9 +490,11 @@ internal fun TvSideRail(
     onSeries: () -> Unit,
     onSettings: () -> Unit,
     settingsActive: Boolean = false,
-    onZap: () -> Unit = {},
+    /** Every screen's rail goes to Zap and to the Watchlist: no default, so
+     *  a screen cannot leave an item there that does nothing. */
+    onZap: () -> Unit,
     zapActive: Boolean = false,
-    onWatchlist: () -> Unit = {},
+    onWatchlist: () -> Unit,
     watchlistActive: Boolean = false,
 ) {
     // Flat canvas rail (#0D1117) with a 1dp #30363D right-edge divider and a

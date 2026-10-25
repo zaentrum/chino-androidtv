@@ -97,6 +97,7 @@ fun SearchScreen(
     onSeriesNav: () -> Unit = {},
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
+    onZapNav: () -> Unit,
     onAccountClick: () -> Unit = {},
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
@@ -121,6 +122,7 @@ fun SearchScreen(
         onSeriesNav = onSeriesNav,
         onSettings = onSettings,
         onWatchlist = onWatchlist,
+        onZapNav = onZapNav,
         onAccountClick = onAccountClick,
         noticesBell = noticesBell,
         activeAccount = activeAccount,
@@ -146,6 +148,7 @@ internal fun SearchContent(
     onSeriesNav: () -> Unit = {},
     onSettings: () -> Unit = {},
     onWatchlist: () -> Unit = {},
+    onZapNav: () -> Unit,
     onAccountClick: () -> Unit = {},
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
@@ -169,6 +172,7 @@ internal fun SearchContent(
                 onMovies = onMoviesNav,
                 onSeries = onSeriesNav,
                 onWatchlist = onWatchlist,
+                onZap = onZapNav,
                 onSettings = onSettings,
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {

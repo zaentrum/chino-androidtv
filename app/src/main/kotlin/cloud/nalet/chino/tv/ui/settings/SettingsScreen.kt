@@ -82,6 +82,7 @@ fun SettingsScreen(
     onSeriesNav: () -> Unit = {},
     onSearch: () -> Unit = {},
     onWatchlist: () -> Unit = {},
+    onZapNav: () -> Unit,
     onAccountClick: () -> Unit = {},
     noticesBell: cloud.nalet.chino.tv.ui.notices.NoticesBell? = null,
     activeAccount: cloud.nalet.chino.tv.data.auth.Account? = null,
@@ -125,6 +126,7 @@ fun SettingsScreen(
                 onMovies = onMoviesNav,
                 onSeries = onSeriesNav,
                 onWatchlist = onWatchlist,
+                onZap = onZapNav,
                 onSettings = {},
             )
             Column(modifier = Modifier.fillMaxHeight().weight(1f)) {
