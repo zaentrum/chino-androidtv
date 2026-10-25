@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.profile
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -84,7 +85,7 @@ fun ProfileScreen(
     activeAccount: Account? = null,
 ) {
     val state by viewModel.state.collectAsState()
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Row(modifier = Modifier.fillMaxSize()) {
             TvSideRail(
                 activeType = null,

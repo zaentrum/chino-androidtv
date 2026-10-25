@@ -58,6 +58,8 @@ import coil.compose.AsyncImage
 import com.composables.icons.lucide.Bookmark
 import com.composables.icons.lucide.Lucide
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
+import cloud.nalet.chino.tv.ui.theme.SafeAreaOverlay
+import cloud.nalet.chino.tv.ui.theme.paintToScreenEdges
 
 /** How long the channel-info overlay lingers before fading (old-TV info-bar feel). */
 private const val OVERLAY_LINGER_MS = 60_000L
@@ -276,17 +278,21 @@ fun ZapScreen(
                         modifier = Modifier.fillMaxSize().background(Color.Black),
                     )
                 }
-                AnimatedVisibility(
-                    visible = overlayVisible,
-                    enter = fadeIn(),
-                    exit = fadeOut(),
-                    modifier = Modifier.align(Alignment.BottomStart),
-                ) {
-                    ChannelInfoOverlay(
-                        item = a.item,
-                        muted = muted,
-                        saved = a.item.id in savedItems,
-                    )
+                // The channel's info inside the TV's safe area; its band
+                // paints out to the screen's edges.
+                SafeAreaOverlay {
+                    AnimatedVisibility(
+                        visible = overlayVisible,
+                        enter = fadeIn(),
+                        exit = fadeOut(),
+                        modifier = Modifier.align(Alignment.BottomStart),
+                    ) {
+                        ChannelInfoOverlay(
+                            item = a.item,
+                            muted = muted,
+                            saved = a.item.id in savedItems,
+                        )
+                    }
                 }
             }
         }
@@ -302,14 +308,15 @@ private fun ChannelInfoOverlay(
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
+            .paintToScreenEdges(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
                     0.6f to Color(0xCC000000),
                     1f to Color(0xF2000000),
                 ),
+                top = false,
             )
-            .padding(start = 56.dp, end = 56.dp, top = 80.dp, bottom = 56.dp),
+            .padding(top = 80.dp),
     ) {
         Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Row(

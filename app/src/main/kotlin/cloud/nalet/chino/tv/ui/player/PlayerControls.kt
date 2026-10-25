@@ -10,6 +10,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoDim
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
+import cloud.nalet.chino.tv.ui.theme.paintToScreenEdges
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -134,13 +135,16 @@ internal fun PlayerBottomChrome(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
+            // The band out to the screen's edges; the controls inside the
+            // safe area, with room for a focused one's ring.
+            .paintToScreenEdges(
                 Brush.verticalGradient(
                     0f to Color.Transparent,
                     1f to Color(0xCC000000),
                 ),
+                top = false,
             )
-            .padding(horizontal = 32.dp, vertical = 20.dp),
+            .padding(ChinoFocus.Room),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         // Scrubber row — focusable bar with time labels.
@@ -246,13 +250,16 @@ internal fun PlayerTopChrome(
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(
+            // The band out to the screen's edges; the controls inside the
+            // safe area, with room for a focused one's ring.
+            .paintToScreenEdges(
                 Brush.verticalGradient(
                     0f to Color(0xCC000000),
                     1f to Color.Transparent,
                 ),
+                bottom = false,
             )
-            .padding(horizontal = 32.dp, vertical = 20.dp),
+            .padding(ChinoFocus.Room),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(16.dp),
     ) {

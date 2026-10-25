@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.notices
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.FocusKind
@@ -109,7 +110,7 @@ fun NoticesScreen(
             value = System.currentTimeMillis()
         }
     }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Row(modifier = Modifier.fillMaxSize()) {
             TvSideRail(
                 activeType = "notices", // non-matching → no rail item highlighted

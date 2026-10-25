@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.person
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
@@ -99,7 +101,7 @@ fun PersonScreen(
     // True while the whole biography is up over the page; BACK closes it.
     var readingBiography by remember { mutableStateOf(false) }
     val readMoreFocus = remember { FocusRequester() }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSideRail(
@@ -325,7 +327,7 @@ private fun BiographyPanel(name: String, text: String, onDismiss: () -> Unit) {
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000)),
+            .scrim(),
         contentAlignment = Alignment.Center,
     ) {
         Column(

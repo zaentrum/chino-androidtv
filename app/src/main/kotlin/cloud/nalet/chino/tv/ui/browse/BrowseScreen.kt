@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.browse
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -86,7 +87,7 @@ fun BrowseScreen(
     // scrim + #161B22 popover the Home rails use). Hosted here above the whole
     // page so its scrim dims the rail + topbar + grid; null = closed.
     var activeCardMenu by remember { mutableStateOf<CardMenuRequest?>(null) }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Box(modifier = Modifier.fillMaxSize()) {
             Row(modifier = Modifier.fillMaxSize()) {
                 TvSideRail(

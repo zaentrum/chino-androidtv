@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
@@ -85,8 +86,9 @@ fun DeleteAccountScreen(
     LaunchedEffect(final) { runCatching { cancelFocus.requestFocus() } }
 
     val who = viewModel.account?.let { a -> a.email.ifBlank { a.displayName } }
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().padding(64.dp), contentAlignment = Alignment.Center) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+        // Inside the safe area the shell lays it out in.
+        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Column(
                 modifier = Modifier.width(720.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),

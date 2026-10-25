@@ -13,6 +13,7 @@ import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.ChoiceNote
+import cloud.nalet.chino.tv.ui.theme.SafeArea
 import cloud.nalet.chino.tv.ui.theme.ChoiceRow
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
@@ -1164,11 +1165,12 @@ private fun ExoPlayback(
             placement.lift = subtitleLift
         }
     }
-    // The menus stand above the control bar, 12 dp clear of it.
+    // The menus stand above the control bar, 12 dp clear of it: that far
+    // above the safe area's bottom, which the bar reaches into.
     var rootHeight by remember { mutableStateOf(0) }
     val density = androidx.compose.ui.platform.LocalDensity.current
     val menuBottom = controlsTop?.let { top ->
-        with(density) { (rootHeight - top).coerceAtLeast(0f).toDp() } + 12.dp
+        (with(density) { (rootHeight - top).coerceAtLeast(0f).toDp() } + 12.dp - SafeArea.Vertical).coerceAtLeast(0.dp)
     } ?: 0.dp
     Box(
         modifier = Modifier
@@ -1265,6 +1267,10 @@ private fun ExoPlayback(
         // period set in `lastInteractionTs` above. The mode badge was removed
         // from the chrome — the Mode/encoder detail now lives only in the
         // Playback-info overlay (Info button), matching chino-web.
+        // Everything over the picture, inside the TV's safe area: the one
+        // inset the player lays its controls, menus and messages out in; the
+        // bands behind the controls paint out to the screen's edges.
+        cloud.nalet.chino.tv.ui.theme.SafeAreaOverlay {
         PlayerChromeOverlay(
             visible = controllerVisible,
             top = {
@@ -1486,6 +1492,7 @@ private fun ExoPlayback(
         if (skippedIntroPill) {
             SkippedIntroPill(onTimeout = { skippedIntroPill = false })
         }
+        }
     }
 }
 
@@ -1527,7 +1534,7 @@ internal val LocalMenuBottom = androidx.compose.runtime.compositionLocalOf { 0.d
 @Composable
 private fun MenuPopover(header: String, width: Dp, content: @Composable ColumnScope.() -> Unit) {
     Box(
-        modifier = Modifier.fillMaxSize().padding(end = 24.dp, bottom = LocalMenuBottom.current),
+        modifier = Modifier.fillMaxSize().padding(bottom = LocalMenuBottom.current),
         contentAlignment = Alignment.BottomEnd,
     ) {
         cloud.nalet.chino.tv.ui.theme.ChoiceMenu(header = header, width = width, content = content)
@@ -1643,7 +1650,8 @@ private fun SkipCountdownPill(prompt: PendingSkip) {
         is PendingSkip.PreviewNext -> "Next episode ▶ in ${prompt.secLeft}s"
     }
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        // Inside the safe area, with room for a focused button's ring.
+        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Column(
@@ -1685,7 +1693,8 @@ private fun SkipSegmentButton(
     // Web's button is white-on-black: a filled button, its fill kept on focus.
     val focus = rememberItemFocus()
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        // Inside the safe area, with room for a focused button's ring.
+        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Row(
@@ -1732,7 +1741,8 @@ private fun NextEpisodeButton(
     // fill kept on focus.
     val focus = rememberItemFocus()
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        // Inside the safe area, with room for a focused button's ring.
+        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Row(
@@ -2052,8 +2062,9 @@ private fun PlaybackInfoOverlay(
         if (quality.isNotBlank()) add("Quality" to quality)
         if (isEmpty()) add("Info" to "No playback metadata available")
     }
+    // At the safe area's top-right corner, its text inside it.
     Box(
-        modifier = Modifier.fillMaxSize().padding(24.dp),
+        modifier = Modifier.fillMaxSize(),
         contentAlignment = Alignment.TopEnd,
     ) {
         Column(
@@ -2126,7 +2137,8 @@ private fun SkippedIntroPill(onTimeout: () -> Unit) {
         onTimeout()
     }
     Box(
-        modifier = Modifier.fillMaxSize().padding(32.dp),
+        // Inside the safe area, with room for a focused button's ring.
+        modifier = Modifier.fillMaxSize().padding(ChinoFocus.Room),
         contentAlignment = Alignment.BottomEnd,
     ) {
         Column(

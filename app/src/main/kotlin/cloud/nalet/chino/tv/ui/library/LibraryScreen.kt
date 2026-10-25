@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.library
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -140,7 +142,7 @@ fun LibraryScreen(
         lifecycleOwner.lifecycle.addObserver(observer)
         onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
     }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         when (val s = state) {
             LibraryUiState.Loading -> CenterText(stringResource(R.string.library_loading))
             // The screen's way on: try again, focused first.
@@ -1529,7 +1531,7 @@ internal fun CardActionsMenu(
             // Scrim — dim the page behind so the focused menu reads at 10ft.
             // The scrim itself is clickable so a pointer tap outside dismisses;
             // DPAD users press BACK (handled above).
-            .background(Color(0xCC000000))
+            .scrim()
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {

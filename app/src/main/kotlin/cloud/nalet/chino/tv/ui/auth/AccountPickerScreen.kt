@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.auth
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.scrim
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -75,9 +77,10 @@ fun AccountPickerScreen(
     val accounts by accountStore.accounts.collectAsState(initial = seedAccounts)
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<Account?>(null) }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Column(
-            modifier = Modifier.fillMaxSize().padding(48.dp),
+            // Inside the safe area the shell lays it out in.
+            modifier = Modifier.fillMaxSize().padding(24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
             verticalArrangement = Arrangement.spacedBy(32.dp),
         ) {
@@ -200,7 +203,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000))
+            .scrim()
             .clickable(onClick = onDismiss),
         contentAlignment = Alignment.Center,
     ) {

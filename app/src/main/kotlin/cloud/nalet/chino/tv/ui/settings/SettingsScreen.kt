@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.settings
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoError
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
@@ -100,7 +101,7 @@ fun SettingsScreen(
     var languageMenu by remember { mutableStateOf<LanguageMenuFor?>(null) }
     // Integrated into the same shell as the rest of the app — rail (Settings
     // active) + top bar — instead of a standalone full-screen page.
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Row(modifier = Modifier.fillMaxSize()) {
             cloud.nalet.chino.tv.ui.library.TvSideRail(
                 activeType = null,
@@ -332,7 +333,7 @@ private fun ReportProblemDialog(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000)),
+            .scrim(),
         contentAlignment = Alignment.Center,
     ) {
         // Not clipped: a focused row grows past the panel's edge.

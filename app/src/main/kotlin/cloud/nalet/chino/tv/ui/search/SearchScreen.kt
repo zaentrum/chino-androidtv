@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.search
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
@@ -160,7 +161,7 @@ internal fun SearchContent(
     // Integrated into the app shell — rail + top bar — with the LIVE search
     // field hosted IN the top bar (web parity: the search input lives in the
     // header), instead of a standalone full-screen page.
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         Row(modifier = Modifier.fillMaxSize()) {
             cloud.nalet.chino.tv.ui.library.TvSideRail(
                 activeType = "search", // non-matching → no rail item highlighted

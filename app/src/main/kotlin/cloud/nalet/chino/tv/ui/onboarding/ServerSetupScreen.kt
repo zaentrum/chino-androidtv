@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.onboarding
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -73,8 +74,9 @@ fun ServerSetupScreen(
 
     val probing = state is ServerSetupState.Probing
 
-    Surface(modifier = Modifier.fillMaxSize()) {
-        Box(modifier = Modifier.fillMaxSize().padding(64.dp), contentAlignment = Alignment.Center) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
+        // Inside the safe area the shell lays it out in.
+        Box(modifier = Modifier.fillMaxSize().padding(24.dp), contentAlignment = Alignment.Center) {
             Column(
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(18.dp),

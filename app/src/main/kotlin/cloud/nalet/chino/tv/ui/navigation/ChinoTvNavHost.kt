@@ -14,6 +14,9 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -26,6 +29,7 @@ import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
 import cloud.nalet.chino.tv.ui.theme.LogoMark
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.LocalSignIn
+import cloud.nalet.chino.tv.ui.theme.SafeAreaScreen
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 import cloud.nalet.chino.tv.ui.auth.AuthViewModel
@@ -284,7 +288,7 @@ fun ChinoTvNavHost(container: AppContainer) {
 
     CompositionLocalProvider(LocalSignIn provides goToSignIn) {
         NavHost(navController = navController, startDestination = start) {
-            composable(Routes.SERVER) {
+            screen(Routes.SERVER) {
                 val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
                 val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -299,7 +303,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(Routes.SERVER_CHANGE) {
+            screen(Routes.SERVER_CHANGE) {
                 val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.changeServerFactory(container))
                 val appCtx = androidx.compose.ui.platform.LocalContext.current.applicationContext
@@ -331,7 +335,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(Routes.AUTH) {
+            screen(Routes.AUTH) {
                 val vm: AuthViewModel = viewModel(factory = AuthViewModel.factory(container))
                 DeviceCodeScreen(
                     viewModel = vm,
@@ -342,7 +346,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(Routes.PICKER) {
+            screen(Routes.PICKER) {
                 AccountPickerScreen(
                     accountStore = container.accountStore,
                     onPicked = {
@@ -355,7 +359,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(Routes.LIBRARY) {
+            screen(Routes.LIBRARY) {
                 val vm: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
                 // APP-START warm: prefetch the first upcoming Zap card so opening
                 // Zap is instant. Idempotent per process (guarded inside the
@@ -391,7 +395,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.MOVIES) {
+            screen(Routes.MOVIES) {
                 val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "movie"), key = "browse/movie")
                 cloud.nalet.chino.tv.ui.browse.BrowseScreen(
@@ -415,7 +419,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.SERIES) {
+            screen(Routes.SERIES) {
                 val vm: cloud.nalet.chino.tv.ui.browse.BrowseViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.browse.BrowseViewModel.factory(container, "series"), key = "browse/series")
                 cloud.nalet.chino.tv.ui.browse.BrowseScreen(
@@ -439,7 +443,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.WATCHLIST) {
+            screen(Routes.WATCHLIST) {
                 val vm: WatchlistViewModel = viewModel(factory = WatchlistViewModel.factory(container))
                 WatchlistScreen(
                     viewModel = vm,
@@ -461,7 +465,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.NOTICES) {
+            screen(Routes.NOTICES) {
                 val vm: NoticesViewModel = viewModel(factory = NoticesViewModel.factory(container))
                 NoticesScreen(
                     viewModel = vm,
@@ -481,7 +485,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.SETTINGS) {
+            screen(Routes.SETTINGS) {
                 val vm: SettingsViewModel = viewModel(factory = SettingsViewModel.factory(container))
                 SettingsScreen(
                     viewModel = vm,
@@ -517,7 +521,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.DELETE_ACCOUNT) {
+            screen(Routes.DELETE_ACCOUNT) {
                 val vm: cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
                 cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
@@ -534,7 +538,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(Routes.PROFILE) {
+            screen(Routes.PROFILE) {
                 val vm: cloud.nalet.chino.tv.ui.profile.ProfileViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.profile.ProfileViewModel.factory(container))
                 cloud.nalet.chino.tv.ui.profile.ProfileScreen(
@@ -553,7 +557,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(Routes.SEARCH) {
+            screen(Routes.SEARCH) {
                 val vm: SearchViewModel = viewModel(factory = SearchViewModel.factory(container))
                 SearchScreen(
                     viewModel = vm,
@@ -574,7 +578,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            composable(
+            screen(
                 route = Routes.DETAIL,
                 arguments = listOf(navArgument("itemId") { type = NavType.StringType }),
             ) { backStackEntry ->
@@ -642,7 +646,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     },
                 )
             }
-            composable(
+            screen(
                 route = Routes.PERSON,
                 arguments = listOf(navArgument("personId") { type = NavType.StringType }),
             ) { backStackEntry ->
@@ -721,6 +725,18 @@ fun ChinoTvNavHost(container: AppContainer) {
         }
     }
 }
+
+/**
+ * A destination of the shell: its screen inside the TV's safe area
+ * ([SafeAreaScreen]), the one place the shell lays it out - so no screen
+ * sets its own edges. The player, a trailer and Zap are pictures to the
+ * screen's edges and put their own controls inside it.
+ */
+private fun NavGraphBuilder.screen(
+    route: String,
+    arguments: List<NamedNavArgument> = emptyList(),
+    content: @Composable (NavBackStackEntry) -> Unit,
+) = composable(route = route, arguments = arguments) { entry -> SafeAreaScreen { content(entry) } }
 
 /** Brand-coloured cold-launch splash. Shows for the duration of the
  *  AccountStore EncryptedSharedPreferences open + decrypt — typically

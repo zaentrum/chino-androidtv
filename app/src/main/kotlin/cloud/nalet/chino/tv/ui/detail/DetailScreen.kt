@@ -1,5 +1,7 @@
 package cloud.nalet.chino.tv.ui.detail
 
+import cloud.nalet.chino.tv.ui.theme.PageColors
+import cloud.nalet.chino.tv.ui.theme.scrim
 import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
@@ -91,6 +93,7 @@ import cloud.nalet.chino.tv.ui.theme.shelfRoom
 import cloud.nalet.chino.tv.ui.theme.LoadError
 import cloud.nalet.chino.tv.ui.theme.WatchedMark
 import cloud.nalet.chino.tv.ui.theme.WatchlistMark
+import cloud.nalet.chino.tv.ui.theme.bleedToScreenEdges
 import cloud.nalet.chino.tv.ui.trailer.TrailerChoice
 import cloud.nalet.chino.tv.ui.trailer.launchTrailerLink
 import cloud.nalet.chino.tv.ui.trailer.trailerChoice
@@ -163,7 +166,7 @@ fun DetailScreen(
     val play: (Boolean) -> Unit = { resume ->
         onPlay(viewModel.playTarget(), if (resume) viewModel.resumeSecond() else 0)
     }
-    Surface(modifier = Modifier.fillMaxSize()) {
+    Surface(modifier = Modifier.fillMaxSize(), colors = PageColors) {
         when (val s = state) {
             DetailUiState.Loading -> Centered("Loading…")
             // The screen's way on: try again, focused first; back where the
@@ -250,7 +253,9 @@ private fun DetailContent(
         // Backdrop: top 60% of the screen with a gradient that fades into the
         // page background. Matches chino-web DetailPage's aspect-[21/9] hero +
         // bg-gradient-to-t treatment.
-        Box(modifier = Modifier.fillMaxWidth().height(560.dp)) {
+        // The still reaches the screen's edges past the safe area the page
+        // sits in; what sits on it stays inside.
+        Box(modifier = Modifier.fillMaxWidth().height(560.dp).bleedToScreenEdges(bottom = false)) {
             AsyncImage(
                 model = backdropUrl,
                 contentDescription = s.item.title,
@@ -524,7 +529,7 @@ private fun AddToListPanel(
     Box(
         modifier = Modifier
             .fillMaxSize()
-            .background(Color(0xCC000000)),
+            .scrim(),
         contentAlignment = Alignment.Center,
     ) {
         // Not clipped: a focused row grows past the panel's edge.
