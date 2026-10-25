@@ -178,8 +178,7 @@ fun SettingsScreen(
                 )
                 StepperRow(
                     label = "Countdown before auto-skip",
-                    help = "Seconds the countdown stays on screen before the player skips. " +
-                        "Shorter feels snappier; longer gives more time to cancel.",
+                    help = "Seconds the countdown stays on screen before the player skips.",
                     value = s.countdownSec,
                     suffix = "s",
                     min = 1,
@@ -320,6 +319,9 @@ fun SettingsScreen(
     }
 }
 
+/** What a filed report says under its number: where it went. */
+internal const val REPORT_SENT = "Sent to the people who run this server."
+
 /** Canned bug-report categories — DPAD-only, so the manual path offers a
  *  pick-one list instead of free text (no on-screen-IME round-trip in this
  *  iteration). The category doubles as the ticket title; "Something else"
@@ -382,7 +384,7 @@ private fun ReportProblemDialog(
                     modifier = Modifier.padding(horizontal = 20.dp),
                 )
                 Text(
-                    text = "Thanks — the report reached the people who run this server.",
+                    text = REPORT_SENT,
                     color = ChinoMuted,
                     fontSize = 13.sp,
                     modifier = Modifier.padding(horizontal = 20.dp, vertical = 4.dp),

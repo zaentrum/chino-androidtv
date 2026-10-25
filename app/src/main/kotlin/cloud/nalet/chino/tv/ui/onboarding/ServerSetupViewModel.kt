@@ -82,7 +82,7 @@ class ServerSetupViewModel(
                             }.getOrDefault(false)
                             if (!wiped) {
                                 _state.value = ServerSetupState.Error(
-                                    "Couldn't sign out the current account — please try again.",
+                                    "The current account couldn't be signed out.",
                                 )
                                 return@launch
                             }

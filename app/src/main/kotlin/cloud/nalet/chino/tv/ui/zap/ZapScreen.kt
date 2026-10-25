@@ -245,7 +245,7 @@ fun ZapScreen(
             },
     ) {
         when (state) {
-            is ZapUiState.Loading -> ZapMessage("Tuning in…")
+            is ZapUiState.Loading -> ZapMessage(ZAP_LOADING)
             is ZapUiState.Empty -> ZapMessage("Nothing left to zap. Come back later.")
             is ZapUiState.Active -> {
                 AndroidView(
@@ -373,6 +373,9 @@ internal fun ChannelInfoOverlay(
         }
     }
 }
+
+/** What Zap says while its first title loads: what is happening, plainly. */
+internal const val ZAP_LOADING = "Loading…"
 
 /** Zap's key hints: each key by its name on the remote, then what it does. */
 internal fun zapKeyHints(muted: Boolean): List<String> = listOf(

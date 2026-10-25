@@ -121,28 +121,6 @@ import kotlinx.coroutines.launch
  * previews or up next, and it closes at its end (onClose).
  */
 
-/** Witty rotating-message pool for the preparing/buffering overlay.
- *  Verbatim from chino-web/src/components/PlayerPage.tsx — keeping the
- *  same strings means web + TV share a brand voice during the
- *  intentionally-awkward "we're loading something" moments. Add new
- *  entries to chino-web first and port back here. */
-private val LOADING_MESSAGES: List<String> = listOf(
-    "Calling the projectionist…",
-    "Threading the film reels…",
-    "Dimming the house lights…",
-    "Buttering the popcorn…",
-    "Polishing the lens…",
-    "Cueing up the opening credits…",
-    "Warming up the decoder…",
-    "Adjusting the focus…",
-    "Sweeping the popcorn aisle…",
-    "Final preparations…",
-    "Almost ready, hold tight…",
-    "Negotiating with the codec gods…",
-    "Convincing HEVC to play nice…",
-    "Buffering more cinema magic…",
-)
-
 /** How long a mid-stream rebuffer must persist before the player does something
  *  about it (PlaybackRecovery: an on-the-fly title drops a quality rung, a
  *  packaged one is retried in place). The playback buffer is huge (4 min), so
@@ -273,7 +251,7 @@ private fun TerminalErrorScreen(
                         fontWeight = FontWeight.SemiBold,
                     )
                     Text(
-                        text = "Thanks — the report reached the people who run this server.",
+                        text = cloud.nalet.chino.tv.ui.settings.REPORT_SENT,
                         color = ChinoMuted,
                         fontSize = 13.sp,
                     )
@@ -1215,39 +1193,10 @@ private fun ExoPlayback(
             // PlayerScreen.android.kt update block.
             update = { v -> if (v.player !== player) v.player = player },
         )
-        // Preparing-spinner overlay — covers the gap between mount and the
-        // first decoded frame, plus any re-buffering events mid-stream.
-        // Stacked column: rotating arc spinner above, witty rotating
-        // status text below. Text cycles through LOADING_MESSAGES every
-        // 2 s (matches chino-web's pattern + verbatim string list) and
-        // resets to a stable index per "preparing" episode so the user
-        // doesn't see the same line every time they pause.
+        // Covers the gap between mount and the first decoded frame, and a
+        // rebuffer mid-stream: the loader alone, no line over the picture.
         val isPreparing = !sawFirstFrameState.value || bufferingState.value
-        if (isPreparing) {
-            Box(
-                modifier = Modifier.fillMaxSize(),
-                contentAlignment = Alignment.Center,
-            ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(20.dp),
-                ) {
-                    PreparingSpinner()
-                    var msgIdx by remember { mutableStateOf((0..LOADING_MESSAGES.lastIndex).random()) }
-                    LaunchedEffect(Unit) {
-                        while (true) {
-                            delay(2_000)
-                            msgIdx = (msgIdx + 1) % LOADING_MESSAGES.size
-                        }
-                    }
-                    Text(
-                        text = LOADING_MESSAGES[msgIdx],
-                        color = ChinoText,
-                        style = MaterialTheme.typography.titleMedium,
-                    )
-                }
-            }
-        }
+        if (isPreparing) BufferingIndicator()
         // The quality menu /play/info offers (null: nothing to pick) and the
         // rung that plays, by its menu label — Auto says it: "Auto · Medium (720p)".
         // A mode without /play/info (an extra) has its master's variants for
@@ -2254,6 +2203,17 @@ private fun formatTime(totalSec: Int): String {
  *  rolled with Canvas + infiniteRepeatable so we don't pull in Material3 (TV
  *  Material doesn't expose CircularProgressIndicator and full Material3 would
  *  bloat the APK by ~700 KB for one widget). */
+/** While the picture is on its way - before the first frame, or a stall
+ *  mid-stream: the loader in the middle of the screen, and nothing to read.
+ *  Its being there says what is happening; a line of words would only
+ *  repeat it. */
+@Composable
+internal fun BufferingIndicator() {
+    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        PreparingSpinner()
+    }
+}
+
 @Composable
 private fun PreparingSpinner() {
     val infinite = rememberInfiniteTransition(label = "spinner")
