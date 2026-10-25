@@ -69,7 +69,7 @@ import cloud.nalet.chino.tv.ui.library.TvTopBar
 import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
-import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoButton
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoText
@@ -343,9 +343,10 @@ private fun MoreContent(
                 .fillMaxWidth()
                 .padding(start = 24.dp, end = 24.dp, top = 24.dp, bottom = 12.dp),
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            // Room between the buttons for a focused one's ring.
+            horizontalArrangement = Arrangement.spacedBy(ChinoFocus.Room),
         ) {
-            HeaderIconButton(icon = Lucide.ArrowLeft, label = "Back", onClick = onBack)
+            HeaderButton(icon = Lucide.ArrowLeft, label = "back", onClick = onBack)
             Text(
                 text = list.name,
                 color = ChinoFg,
@@ -358,12 +359,10 @@ private fun MoreContent(
                 fontSize = 18.sp,
             )
             Spacer(modifier = Modifier.weight(1f))
+            HeaderButton(icon = Lucide.Pencil, label = "rename list", onClick = onRename)
+            // The default list can be renamed but never deleted.
             if (!list.isDefault) {
-                HeaderIconButton(icon = Lucide.Pencil, label = "Rename", onClick = onRename)
-                HeaderIconButton(icon = Lucide.Trash2, label = "Delete", tint = ChinoError, onClick = onDelete)
-            } else {
-                // The default list can be renamed but never deleted.
-                HeaderIconButton(icon = Lucide.Pencil, label = "Rename", onClick = onRename)
+                HeaderButton(icon = Lucide.Trash2, label = "delete list", onClick = onDelete)
             }
         }
         when {
@@ -402,60 +401,30 @@ private fun MoreContent(
     }
 }
 
-/** Small focusable header action — back / rename / delete in the MORE view. */
+/** A header action of the MORE view - back, rename list, delete list: a
+ *  plain button, as on every screen - surface-2, its label fg-2 in the mono
+ *  face, lowercase, fg on focus - its icon in the label's colour. */
 @Composable
-private fun HeaderIconButton(
+private fun HeaderButton(
     icon: androidx.compose.ui.graphics.vector.ImageVector,
     label: String,
-    tint: Color = ChinoFg,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
 ) {
-    val focus = rememberItemFocus()
-    Row(
-        modifier = Modifier
-            .height(40.dp)
-            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
-            .focusable()
-            .onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown &&
-                    (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                        e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)
-                ) {
-                    onClick(); true
-                } else false
-            }
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
-        Icon(icon, contentDescription = label, tint = tint, modifier = Modifier.size(16.dp))
-        // Delete's red label is fg while focused, its icon red.
-        Text(text = label, color = ChinoFocus.text(tint, focus.focused), fontSize = 14.sp)
+    ChinoButton(onClick = onClick, modifier = modifier) {
+        Icon(icon, contentDescription = null, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(6.dp))
+        Text(text = label)
     }
 }
 
+/** The hub's "new list": a plain button, its plus in the accent. */
 @Composable
 private fun NewListChip(onClick: () -> Unit) {
-    val focus = rememberItemFocus()
-    Row(
-        modifier = Modifier
-            .height(40.dp)
-            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
-            .focusable()
-            .onKeyEvent { e ->
-                if (e.type == KeyEventType.KeyDown &&
-                    (e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_DPAD_CENTER ||
-                        e.nativeKeyEvent.keyCode == android.view.KeyEvent.KEYCODE_ENTER)
-                ) {
-                    onClick(); true
-                } else false
-            }
-            .padding(horizontal = 14.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-    ) {
+    ChinoButton(onClick = onClick) {
         Icon(Lucide.Plus, contentDescription = null, tint = ChinoAccent, modifier = Modifier.size(16.dp))
-        Text(text = "new list", style = MaterialTheme.typography.titleSmall, color = ChinoFocus.title(ChinoText, focus.focused), fontSize = 14.sp)
+        Spacer(Modifier.width(6.dp))
+        Text(text = "new list")
     }
 }
 

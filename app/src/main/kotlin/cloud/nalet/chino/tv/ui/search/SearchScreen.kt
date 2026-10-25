@@ -445,7 +445,8 @@ private fun PersonChip(
         modifier = Modifier
             .width(220.dp)
             .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
-            .focusStyle(focus, FocusKind.Control, surface = ChinoSurface)
+            // A plain chip: surface-2, its name fg-2, fg on focus.
+            .focusStyle(focus, FocusKind.Control, surface = ChinoFocus.PlainContainer)
             .focusable()
             .onKeyEvent { e ->
                 if (e.type == KeyEventType.KeyDown &&
@@ -468,7 +469,7 @@ private fun PersonChip(
         Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
             Text(
                 text = person.name,
-                color = ChinoFg,
+                color = ChinoFocus.title(ChinoText, focus.focused),
                 fontSize = 15.sp,
                 fontWeight = FontWeight.Medium,
                 maxLines = 1,
