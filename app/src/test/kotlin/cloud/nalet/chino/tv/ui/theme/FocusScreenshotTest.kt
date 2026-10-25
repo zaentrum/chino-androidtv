@@ -52,6 +52,7 @@ import cloud.nalet.chino.tv.ui.library.RatingBadge
 import cloud.nalet.chino.tv.ui.library.TvRailButton
 import cloud.nalet.chino.tv.ui.notices.BellWithCount
 import cloud.nalet.chino.tv.ui.player.ControlIconButton
+import cloud.nalet.chino.tv.ui.player.PlayerBottomChrome
 import cloud.nalet.chino.tv.ui.player.SpeedPanel
 import cloud.nalet.chino.tv.ui.player.SubtitlePanel
 import cloud.nalet.chino.tv.ui.player.SubtitleTrackInfo
@@ -186,6 +187,11 @@ class FocusScreenshotTest {
     // a see-through one: play focused, subtitles on in solid blue with a dark
     // icon, audio at rest, one disabled.
     @Test fun playerControlsOverPicture() = shot("player_controls_solid", focus = 0) { PlayerButtons(it) }
+
+    // The seek row and the buttons on the solid band below the picture,
+    // never on it: an opaque track, what is loaded ahead, the played part in
+    // cloud-blue as the volume's level, the time labels whole.
+    @Test fun playerSeekRow() = shot("player_seek_row") { SeekRow() }
 
     // The library, as any screen whose content did not load: its way on, try
     // again, at rest and focused - it takes the focus first. At rest without
@@ -354,6 +360,29 @@ class FocusScreenshotTest {
                 ControlIconButton(icon = Lucide.Gauge, contentDescription = "Playback speed", onClick = {})
                 ControlIconButton(icon = Lucide.Info, contentDescription = "Playback info", onClick = {}, enabled = false)
             }
+        }
+    }
+
+    @Composable
+    private fun SeekRow() {
+        Column(Modifier.width(900.dp)) {
+            // The picture above the band: the painted artwork's blue and amber.
+            Box(
+                Modifier.width(900.dp).height(160.dp).background(
+                    androidx.compose.ui.graphics.Brush.horizontalGradient(
+                        listOf(androidx.compose.ui.graphics.Color(0xFF1E88E5), androidx.compose.ui.graphics.Color(0xFFE0A040)),
+                    ),
+                ),
+            )
+            PlayerBottomChrome(
+                isPlaying = true, positionMs = 112_000, durationMs = 887_000, bufferedMs = 300_000,
+                segments = listOf(cloud.nalet.chino.tv.data.api.Segment(kind = "intro", startMs = 20_000, endMs = 80_000)),
+                trickplayCues = emptyList(), trickplayBaseUrl = "", streamToken = "",
+                muted = false, volume = 0.6f, onPlayPause = {}, onToggleMute = {}, onVolumeChange = {},
+                onScrubberSeek = {}, onAudio = {}, onSubtitles = {}, onQuality = {}, onSpeed = {},
+                onInfo = {}, onPrevEpisode = null, onNextEpisode = null,
+                playPauseFocusRequester = FocusRequester(), onUserInteraction = {},
+            )
         }
     }
 

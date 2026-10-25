@@ -15,6 +15,7 @@ val ChinoSurface = Color(0xFF11161F)      // nalet.surface
 val ChinoSurfaceHi = Color(0xFF161B26)    // nalet.surface-2
 val ChinoBorder = Color(0xFF1F2633)       // nalet.border
 val ChinoBorderHi = Color(0xFF2A3142)     // nalet.border-2
+val ChinoBorderControl = Color(0xFF646C7A) // nalet.border-control — a control's boundary, 3:1 on every background
 val ChinoFg = Color(0xFFE6E6E6)           // fg
 val ChinoText = Color(0xFFC9D1D9)         // nalet.text / fg-2 — wordmark grey
 val ChinoMuted = Color(0xFFAEB8C2)        // nalet.muted / fg-muted

@@ -10,6 +10,10 @@ import cloud.nalet.chino.tv.ui.theme.ChinoAccent
 import cloud.nalet.chino.tv.ui.theme.ChinoDim
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import cloud.nalet.chino.tv.ui.theme.ChinoSurfaceHi
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderHi
+import cloud.nalet.chino.tv.ui.theme.ChinoBorderControl
+import cloud.nalet.chino.tv.ui.theme.ChinoFg
+import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.paintToScreenEdges
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.fadeIn
@@ -135,15 +139,11 @@ internal fun PlayerBottomChrome(
     Column(
         modifier = Modifier
             .fillMaxWidth()
-            // The band out to the screen's edges; the controls inside the
-            // safe area, with room for a focused one's ring.
-            .paintToScreenEdges(
-                Brush.verticalGradient(
-                    0f to Color.Transparent,
-                    1f to Color(0xCC000000),
-                ),
-                top = false,
-            )
+            // A solid band, out to the screen's edges, the seek row and the
+            // buttons on it - never on the picture, never see-through
+            // (docs/chino, playback); the controls inside the safe area, with
+            // room for a focused one's ring.
+            .paintToScreenEdges(ChinoBg, top = false)
             .padding(ChinoFocus.Room),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
@@ -310,7 +310,7 @@ private fun ScrubberRow(
     ) {
         Text(
             text = formatPositionMs(positionMs),
-            color = Color.White,
+            color = ChinoText,
             fontSize = 14.sp,
             modifier = Modifier.width(64.dp),
         )
@@ -333,19 +333,29 @@ private fun ScrubberRow(
         )
         Text(
             text = formatPositionMs(durationMs),
-            color = Color.White,
+            color = ChinoText,
             fontSize = 14.sp,
             modifier = Modifier.width(64.dp),
         )
     }
 }
 
+/** A segment's stripe on the seek bar, opaque like the bar. */
 private fun segmentColor(kind: String): Color = when (kind.lowercase()) {
-    "intro" -> Color(0xCCFFB454) // amber
-    "credits" -> Color(0xCC9E86FF) // violet
-    "recap" -> Color(0xCC58A6FF) // brand blue
-    "intermission" -> Color(0xCC8B949E) // grey
-    else -> Color(0xCC2EA043) // emerald — fallback for chapters etc.
+    "intro" -> Color(0xFFFFB454) // amber
+    "credits" -> Color(0xFF9E86FF) // violet
+    "recap" -> Color(0xFF79B8FF) // a lighter blue than the played part's
+    "intermission" -> Color(0xFF8B949E) // grey
+    else -> Color(0xFF2EA043) // emerald — fallback for chapters etc.
+}
+
+/** The seek bar's colours, all opaque: the track, what is loaded ahead, the
+ *  played part in cloud-blue as the volume's level, the thumb in fg. */
+internal object SeekBarLook {
+    val Track: Color = ChinoBorderHi
+    val Buffered: Color = ChinoBorderControl
+    val Played: Color = ChinoAccent
+    val Thumb: Color = ChinoFg
 }
 
 @Composable
@@ -392,21 +402,19 @@ private fun ScrubberBar(
             .focusable(),
         contentAlignment = Alignment.CenterStart,
     ) {
-        // Track background.
+        // The track, opaque.
         Box(
             modifier = Modifier
                 .fillMaxWidth()
                 .height(barHeight)
-                .clip(RectangleShape)
-                .background(Color(0x55FFFFFF)),
+                .background(SeekBarLook.Track),
         )
-        // Buffered portion — slightly brighter than the bg, behind playhead.
+        // What is loaded ahead, behind the playhead.
         Box(
             modifier = Modifier
                 .fillMaxWidth(bufferProgress)
                 .height(barHeight)
-                .clip(RectangleShape)
-                .background(Color(0x99FFFFFF)),
+                .background(SeekBarLook.Buffered),
         )
         // Segment markers (intro / credits / recap / etc.) rendered as
         // coloured stripes ON the scrubber, between buffered and playhead
@@ -433,13 +441,12 @@ private fun ScrubberBar(
                 }
             }
         }
-        // Played portion — accent colour.
+        // The played part, in cloud-blue, as the volume's level.
         Box(
             modifier = Modifier
                 .fillMaxWidth(playProgress)
                 .height(barHeight)
-                .clip(RectangleShape)
-                .background(Color(0xFFAACCFF)),
+                .background(SeekBarLook.Played),
         )
         // Thumb. Positioned by a horizontally-offset Box at the playProgress
         // fraction; we render it inside a fillMaxWidth wrapper so the parent's
@@ -448,8 +455,7 @@ private fun ScrubberBar(
             Box(
                 modifier = Modifier
                     .size(thumbSize)
-                    .clip(RectangleShape)
-                    .background(Color.White),
+                    .background(SeekBarLook.Thumb),
             )
         }
         // Trickplay preview — a sprite-cropped thumbnail floating above the bar
@@ -617,20 +623,18 @@ private fun VolumeControl(
             tint = Color.White,
             modifier = Modifier.size(20.dp),
         )
-        // Web's 96×16 track styling: #3B3B3B track + #58A6FF fill.
+        // The seek bar's look: its track, the level in cloud-blue.
         Box(
             modifier = Modifier
                 .width(80.dp)
                 .height(4.dp)
-                .clip(RectangleShape)
-                .background(Color(0xFF3B3B3B)),
+                .background(SeekBarLook.Track),
         ) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth(level.coerceIn(0f, 1f))
                     .fillMaxHeight()
-                    .clip(RectangleShape)
-                    .background(ChinoAccent),
+                    .background(SeekBarLook.Played),
             )
         }
     }
