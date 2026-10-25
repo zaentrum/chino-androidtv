@@ -11,7 +11,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.heightIn
+import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -60,7 +62,10 @@ import androidx.tv.material3.Text
  *   marks; every row keeps the square's column, picked or not, so the names
  *   line up;
  * - a row rests in fg-2 and turns fg on focus; its names stay in the body
- *   face, as they are names.
+ *   face, as they are names;
+ * - it is as wide as its widest row - the picked one's name with its mark,
+ *   "Auto · Medium (720p)" - from a menu's narrowest up to its widest, past
+ *   which a name wraps where its row lets it, rather than being cut.
  *
  * The focus stays inside while the menu is open: DOWN on its last row, UP on
  * its first, stay there.
@@ -77,16 +82,22 @@ private val FADE = 20.dp
 /** The picked mark's side: small, beside a 15 sp name. */
 private val PICKED_MARK = 8.dp
 
+/** How wide a menu of one choice gets at most, its rows' longest names
+ *  wrapping past it: well inside the safe area beside the picture's middle. */
+val CHOICE_MENU_MAX_WIDTH = 480.dp
+
 /**
- * A menu of one choice: [header] pinned above the rows [content] puts in,
- * [width] wide, at most [maxHeight] tall, the rows scrolling beyond that.
+ * A menu of one choice: [header] pinned above the rows [content] puts in, as
+ * wide as its widest row - never narrower than [minWidth], never wider than
+ * [maxWidth] - at most [maxHeight] tall, the rows scrolling beyond that.
  */
 @OptIn(ExperimentalComposeUiApi::class)
 @Composable
 fun ChoiceMenu(
     header: String,
-    width: Dp,
+    minWidth: Dp,
     modifier: Modifier = Modifier,
+    maxWidth: Dp = CHOICE_MENU_MAX_WIDTH,
     maxHeight: Dp = 460.dp,
     content: @Composable ColumnScope.() -> Unit,
 ) {
@@ -95,7 +106,8 @@ fun ChoiceMenu(
         modifier = modifier
             .focusProperties { exit = { FocusRequester.Cancel } }
             .focusGroup()
-            .width(width)
+            .widthIn(min = minWidth, max = maxOf(minWidth, maxWidth))
+            .width(IntrinsicSize.Max)
             .heightIn(max = maxHeight)
             .background(ChinoSurface)
             .border(1.dp, ChinoBorder, RectangleShape),

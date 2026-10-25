@@ -46,7 +46,7 @@ class ChoiceMenuTest {
                 val first = remember { FocusRequester() }
                 LaunchedEffect(Unit) { first.requestFocus() }
                 Box(Modifier.height(400.dp)) {
-                    ChoiceMenu(header = "subtitles", width = 300.dp, maxHeight = 300.dp) {
+                    ChoiceMenu(header = "subtitles", minWidth = 300.dp, maxHeight = 300.dp) {
                         names.forEachIndexed { i, name ->
                             ChoiceRow(
                                 label = name,

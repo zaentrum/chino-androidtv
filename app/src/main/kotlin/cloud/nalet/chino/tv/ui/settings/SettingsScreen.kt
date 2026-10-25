@@ -585,7 +585,7 @@ internal fun LanguageMenu(
         modifier = Modifier.fillMaxSize().scrim(),
         contentAlignment = Alignment.Center,
     ) {
-        ChoiceMenu(header = header, width = 360.dp, maxHeight = 440.dp) {
+        ChoiceMenu(header = header, minWidth = 360.dp, maxHeight = 440.dp) {
             choices.forEach { choice ->
                 ChoiceRow(
                     label = choice.name,

@@ -7,6 +7,7 @@ import androidx.compose.ui.text.TextLayoutResult
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily
 import cloud.nalet.chino.tv.ui.theme.ChinoTvTheme
+import cloud.nalet.chino.tv.ui.theme.UI_SCALE
 import com.composables.icons.lucide.Lucide
 import com.composables.icons.lucide.X
 import org.junit.Assert.assertEquals
@@ -107,9 +108,11 @@ class CardMenuTest {
             assertFalse("$label cut", text.hasVisualOverflow)
             assertFalse("$label cut", text.isLineEllipsized(0))
         }
-        // The longest label is wider than the old fixed 320 dp left it.
-        val row = compose.onNode(hasText(REMOVE_FROM_CONTINUE_WATCHING)).fetchSemanticsNode().boundsInRoot
-        assertTrue("its row is ${row.width / 2f} dp", row.width / 2f > 300f && row.width / 2f <= CARD_MENU_MAX_WIDTH.value)
+        // The menu grew past its narrowest for the longest label, the title
+        // wrapping at its widest. In the app's dp: 2 px to the TV's dp, the
+        // app's [UI_SCALE] of that.
+        val row = compose.onNode(hasText(REMOVE_FROM_CONTINUE_WATCHING)).fetchSemanticsNode().boundsInRoot.width / (2f * UI_SCALE) + 12f
+        assertTrue("the menu is $row dp", row > CARD_MENU_MIN_WIDTH.value && row <= CARD_MENU_MAX_WIDTH.value + 0.5f)
         val title = mutableListOf<TextLayoutResult>()
         compose.onNode(hasText("Lighthouse", substring = true)).fetchSemanticsNode().config[SemanticsActions.GetTextLayoutResult].action?.invoke(title)
         assertEquals("the title wraps", 2, title.single().lineCount)

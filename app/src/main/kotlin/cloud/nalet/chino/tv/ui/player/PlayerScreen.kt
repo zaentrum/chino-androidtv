@@ -1554,13 +1554,15 @@ private fun CornerPill(content: @Composable () -> Unit) {
     ) { content() }
 }
 
+/** A player's menu at the bottom-right of the safe area, above the control
+ *  bar: as wide as its widest row, [minWidth] at least (ChoiceMenu). */
 @Composable
-private fun MenuPopover(header: String, width: Dp, content: @Composable ColumnScope.() -> Unit) {
+private fun MenuPopover(header: String, minWidth: Dp, content: @Composable ColumnScope.() -> Unit) {
     Box(
         modifier = Modifier.fillMaxSize().padding(bottom = LocalMenuBottom.current),
         contentAlignment = Alignment.BottomEnd,
     ) {
-        cloud.nalet.chino.tv.ui.theme.ChoiceMenu(header = header, width = width, content = content)
+        cloud.nalet.chino.tv.ui.theme.ChoiceMenu(header = header, minWidth = minWidth, content = content)
     }
 }
 
@@ -1588,7 +1590,8 @@ internal fun QualityPanel(
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
     // It opens on the quality picked.
     val picked = rungs.indexOfFirst { it.name == active }.coerceAtLeast(0)
-    MenuPopover(header = "quality", width = 200.dp) {
+    // As wide as its picked row: "Auto · Medium (720p)" with its mark, whole.
+    MenuPopover(header = "quality", minWidth = 200.dp) {
         rungs.forEachIndexed { idx, rung ->
             ChoiceRow(
                 label = if (rung.name == AUTO && active == AUTO) autoLabel(rung.label, playing) else rung.label,
@@ -1613,7 +1616,7 @@ internal fun SpeedPanel(
     // It opens on the speed picked, as every menu of one choice does: an
     // OK at once changes nothing.
     val picked = SPEEDS.indexOf(current).takeIf { it >= 0 } ?: SPEEDS.indexOf(1.0f)
-    MenuPopover(header = "speed", width = 180.dp) {
+    MenuPopover(header = "speed", minWidth = 180.dp) {
         SPEEDS.forEachIndexed { idx, rate ->
             ChoiceRow(
                 label = speedLabel(rate),
@@ -1815,7 +1818,7 @@ internal fun SubtitlePanel(
     val focusOn = selected?.takeIf { id -> menu.all.any { it.id == id } }
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    MenuPopover(header = "subtitles", width = 380.dp) {
+    MenuPopover(header = "subtitles", minWidth = 380.dp) {
         ChoiceRow(
             label = SUBTITLES_OFF_NAME,
             selected = selected == null,
@@ -2026,7 +2029,7 @@ internal fun AudioPanel(
 ) {
     val focusRequester = remember { FocusRequester() }
     LaunchedEffect(Unit) { runCatching { focusRequester.requestFocus() } }
-    MenuPopover(header = "audio", width = 300.dp) {
+    MenuPopover(header = "audio", minWidth = 300.dp) {
         if (tracks.isEmpty()) {
             ChoiceNote("No audio tracks")
         } else {
