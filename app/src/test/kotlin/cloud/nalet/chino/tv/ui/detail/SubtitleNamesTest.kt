@@ -29,4 +29,18 @@ class SubtitleNamesTest {
         )
         assertNull(subtitleNames(emptyList()))
     }
+
+    @Test
+    fun `the names that fit are listed and the rest counted, none cut`() {
+        val names = listOf("Arabic", "Chinese", "English", "French", "German")
+        // Room for all of them.
+        assertEquals("Arabic, Chinese, English, French, German", namesThatFit(names) { true })
+        // Room for 30 letters: as many as fit beside the count of the rest.
+        assertEquals("Arabic, Chinese, +3 more", namesThatFit(names) { it.length <= 30 })
+        assertEquals("Arabic, Chinese, English, +2 more", namesThatFit(names) { it.length <= 33 })
+        // Room for none with the count: the count alone.
+        assertEquals("+5 more", namesThatFit(names) { it.length <= 10 })
+        // One name is never counted: it shows, cut by the line if it must.
+        assertEquals("Arabic", namesThatFit(listOf("Arabic")) { false })
+    }
 }

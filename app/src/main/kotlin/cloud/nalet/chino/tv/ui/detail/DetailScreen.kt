@@ -414,12 +414,15 @@ private fun DetailContent(
                     onPlayTrailer = onPlayTrailer,
                 )
                 }
+                // Four lines at most, ending in "…" where it is cut: never
+                // stopped mid-sentence as if that were its end.
                 s.item.overview?.let { o ->
                     Text(
                         text = o,
                         style = MaterialTheme.typography.bodyLarge,
                         color = MaterialTheme.colorScheme.onBackground,
-                        maxLines = 4,
+                        maxLines = OVERVIEW_LINES,
+                        overflow = TextOverflow.Ellipsis,
                     )
                 }
                 FooterGrid(s.item)
@@ -1275,37 +1278,80 @@ private val ALPHABETICAL: java.text.Collator = java.text.Collator.getInstance(ja
  *  "deu" would put German before English and "zho" Chinese last; null for
  *  none. */
 internal fun subtitleNames(subtitles: List<cloud.nalet.chino.tv.data.model.Subtitle>): String? =
+    subtitleNameList(subtitles).joinToString(", ").takeIf { it.isNotBlank() }
+
+/** [subtitleNames], one name each. */
+internal fun subtitleNameList(subtitles: List<cloud.nalet.chino.tv.data.model.Subtitle>): List<String> =
     subtitles
         .mapNotNull { languageOrLabel(it.lang, it.label) }
         .distinct()
         .sortedWith(ALPHABETICAL)
-        .joinToString(", ")
-        .takeIf { it.isNotBlank() }
 
-@Composable
-private fun FooterGrid(item: Item) {
-    val subtitleLabel = subtitleNames(item.subtitles)
-    // What the server found in the file - its intro, its credits - is the
-    // server's, for the player's skips, not something to read here.
-    if (subtitleLabel == null) return
-    Row(modifier = Modifier.padding(top = 16.dp)) {
-        FooterColumn("subtitles", subtitleLabel)
+/** The overview's lines at most: past them it ends in "…". */
+internal const val OVERVIEW_LINES = 4
+
+/** The subtitle languages' lines at most: past them the list says how many
+ *  more there are ([namesThatFit]). */
+internal const val SUBTITLE_LINES = 3
+
+/**
+ * [names] as a list that [fits]: all of them, "Chinese, English, German",
+ * else as many as fit with the count of the rest after them, "Arabic,
+ * Chinese, English, +12 more" - never a name cut, nor one left out without
+ * a word. With room for none, the count alone, "+15 more".
+ */
+internal fun namesThatFit(names: List<String>, fits: (String) -> Boolean): String {
+    val all = names.joinToString(", ")
+    if (names.size <= 1 || fits(all)) return all
+    for (shown in names.size - 1 downTo 1) {
+        val text = names.take(shown).joinToString(", ") + ", +${names.size - shown} more"
+        if (fits(text)) return text
     }
+    return "+${names.size} more"
 }
 
 @Composable
-private fun FooterColumn(header: String, value: String) {
+private fun FooterGrid(item: Item) {
+    val names = subtitleNameList(item.subtitles)
+    // What the server found in the file - its intro, its credits - is the
+    // server's, for the player's skips, not something to read here.
+    if (names.isEmpty()) return
+    Row(modifier = Modifier.padding(top = 16.dp)) {
+        FooterList("subtitles", names)
+    }
+}
+
+/** A footer's [header] over its [names]: they wrap, [SUBTITLE_LINES] lines
+ *  at most, the rest counted ([namesThatFit]) - no language hidden behind
+ *  a "…". */
+@Composable
+private fun FooterList(header: String, names: List<String>) {
     Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
         // A label: chrome, in the mono face, lowercase; what it names in
         // the body face.
         Text(text = header, color = ChinoMuted, fontSize = 14.sp, fontFamily = cloud.nalet.chino.tv.ui.theme.ChinoMonoFamily)
-        Text(
-            text = value,
-            color = ChinoText,
-            fontSize = 14.sp,
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-        )
+        androidx.compose.foundation.layout.BoxWithConstraints {
+            val measurer = androidx.compose.ui.text.rememberTextMeasurer()
+            val style = androidx.tv.material3.LocalTextStyle.current.merge(androidx.compose.ui.text.TextStyle(fontSize = 14.sp))
+            val width = constraints.maxWidth
+            val text = remember(names, width, style) {
+                namesThatFit(names) { candidate ->
+                    !measurer.measure(
+                        text = candidate,
+                        style = style,
+                        maxLines = SUBTITLE_LINES,
+                        constraints = androidx.compose.ui.unit.Constraints(maxWidth = width),
+                    ).hasVisualOverflow
+                }
+            }
+            Text(
+                text = text,
+                color = ChinoText,
+                fontSize = 14.sp,
+                maxLines = SUBTITLE_LINES,
+                overflow = TextOverflow.Ellipsis,
+            )
+        }
     }
 }
 
