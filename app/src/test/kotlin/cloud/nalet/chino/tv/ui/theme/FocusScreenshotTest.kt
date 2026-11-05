@@ -19,6 +19,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
@@ -60,10 +61,16 @@ import cloud.nalet.chino.tv.ui.player.subtitleMenu
 import cloud.nalet.chino.tv.ui.settings.LanguageMenu
 import cloud.nalet.chino.tv.ui.settings.LanguageSettingRow
 import cloud.nalet.chino.tv.ui.settings.Section
+import cloud.nalet.chino.tv.ui.settings.WatchlistSection
 import cloud.nalet.chino.tv.ui.settings.audioLanguageChoices
 import cloud.nalet.chino.tv.ui.settings.subtitleLanguageChoices
 import cloud.nalet.chino.tv.ui.watchlist.ConfirmDeleteListDialog
+import cloud.nalet.chino.tv.ui.watchlist.HubContent
+import cloud.nalet.chino.tv.ui.watchlist.KindRows
+import cloud.nalet.chino.tv.ui.watchlist.MoreContent
+import cloud.nalet.chino.tv.ui.watchlist.WatchlistUiState
 import cloud.nalet.chino.tv.data.api.Watchlist
+import cloud.nalet.chino.tv.data.api.WatchlistCounts
 import coil.Coil
 import coil.ImageLoader
 import coil.annotation.ExperimentalCoilApi
@@ -155,6 +162,31 @@ class FocusScreenshotTest {
         }
     }
 
+    // The hub with "Separate movies and shows" off and on, and a whole list's
+    // grid split by the same headings (docs/chino, watchlist).
+    @Test fun watchlistHubOff() = shot("watchlist_hub_off") { Hub(byKind = false) }
+    @Test fun watchlistHubByKind() = shot("watchlist_hub_by_kind") { Hub(byKind = true) }
+    @Test fun watchlistMoreByKind() = shot("watchlist_more_by_kind") {
+        Box(Modifier.width(1152.dp).height(600.dp)) {
+            MoreContent(
+                list = saved,
+                items = savedMovies + savedShows,
+                loading = false,
+                byKind = true,
+                openRow = null,
+                baseUrl = "https://media.test",
+                streamToken = "t",
+                savedItems = emptySet(),
+                onItemSelected = {},
+                onBack = {},
+                onRename = {},
+                onDelete = {},
+                renameFocus = remember { FocusRequester() },
+                deleteFocus = remember { FocusRequester() },
+            )
+        }
+    }
+
     @Test fun chipsAtRest() = shot("focus_chip_rest") { Chips(focus = null) }
     @Test fun chipFocused() = shot("focus_chip_focused", focus = 1) { Chips(focus = it) }
     @Test fun filledChipFocused() = shot("focus_chip_filled_focused", focus = 0) { Chips(focus = it) }
@@ -177,6 +209,15 @@ class FocusScreenshotTest {
                 onDismiss = {},
             )
         }
+    }
+
+    // The watchlist section: its switch focused, and what it says when a
+    // change couldn't be saved.
+    @Test fun watchlistSettingFocused() = shot("settings_watchlist_focused", focusLabel = "off") {
+        Box(Modifier.width(1100.dp)) { WatchlistSection(byKind = false, saveFailed = false, onChange = {}) }
+    }
+    @Test fun watchlistSettingNotSaved() = shot("settings_watchlist_not_saved") {
+        Box(Modifier.width(1100.dp)) { WatchlistSection(byKind = false, saveFailed = true, onChange = {}) }
     }
 
     // A label or an icon on a filled colour is the page's colour: the
@@ -244,6 +285,40 @@ class FocusScreenshotTest {
      * the ring and the growth have settled. [remote] false leaves the input in
      * touch mode, where nothing takes the focus by itself.
      */
+    private val saved = Watchlist(
+        id = "l1", name = "Watchlist", itemCount = 4, isDefault = true,
+        counts = WatchlistCounts(movie = 2, series = 2),
+    )
+    private val savedMovies = listOf(
+        Item(id = "m1", title = "Quiet Orchard", kind = "movie", year = 2021),
+        Item(id = "m2", title = "Paper Station", kind = "movie", year = 2019),
+    )
+    private val savedShows = listOf(
+        Item(id = "s1", title = "Harbour Lights", kind = "series", year = 2020),
+        Item(id = "e1", title = "The Long Tide", kind = "episode", seasonNumber = 1, episodeNumber = 3),
+    )
+
+    @Composable
+    private fun Hub(byKind: Boolean) {
+        Box(Modifier.width(1152.dp).height(600.dp)) {
+            HubContent(
+                s = WatchlistUiState.Ready(
+                    lists = listOf(saved),
+                    shelves = mapOf("l1" to savedMovies + savedShows),
+                    baseUrl = "https://media.test",
+                    streamToken = "t",
+                    byKind = byKind,
+                    kindRows = mapOf("l1" to KindRows(savedMovies, savedShows)),
+                ),
+                savedItems = emptySet(),
+                onItemSelected = {},
+                onOpenList = { _, _ -> },
+                onNewList = {},
+                newListFocus = remember { FocusRequester() },
+            )
+        }
+    }
+
     private fun shot(
         name: String,
         focus: Int? = null,

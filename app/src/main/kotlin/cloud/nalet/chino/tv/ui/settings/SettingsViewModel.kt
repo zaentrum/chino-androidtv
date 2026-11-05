@@ -5,7 +5,9 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.AppSettings
+import cloud.nalet.chino.tv.data.PreferencesRepository
 import cloud.nalet.chino.tv.data.SettingsStore
+import cloud.nalet.chino.tv.data.api.Preferences
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.feedback.BugReporter
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -36,6 +38,9 @@ class SettingsViewModel(
     private val takesReports: suspend () -> Boolean = { false },
     /** The server's subtitle languages ([cloud.nalet.chino.tv.data.SubtitleLanguages]). */
     private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
+    /** Whether the server can split a list ([cloud.nalet.chino.tv.data.ServerFeatures]). */
+    private val offersWatchlistByKind: suspend () -> Boolean = { false },
+    private val preferences: PreferencesRepository? = null,
 ) : ViewModel() {
     init { telemetry.event("screen_view", extra = mapOf("screen" to "settings")) }
 
@@ -59,6 +64,28 @@ class SettingsViewModel(
             _serverSubtitleLanguages.value = runCatching { subtitleLanguages() }.getOrDefault(emptyList())
         }
     }
+
+    private val _watchlistByKindOffered = MutableStateFlow(false)
+
+    /** Whether the server can split a list: the Watchlist section shows only
+     *  then. */
+    val watchlistByKindOffered: StateFlow<Boolean> = _watchlistByKindOffered.asStateFlow()
+
+    /** "Separate movies and shows", from the account; off until it answers. */
+    val watchlistPreferences: StateFlow<Preferences?> = preferences?.preferences ?: MutableStateFlow(null)
+
+    /** The last change couldn't be saved, and the setting went back. */
+    val watchlistSaveFailed: StateFlow<Boolean> = preferences?.saveFailed ?: MutableStateFlow(false)
+
+    init {
+        viewModelScope.launch {
+            if (offersWatchlistByKind()) {
+                _watchlistByKindOffered.value = true
+                preferences?.refresh()
+            }
+        }
+    }
+
     val state: StateFlow<AppSettings> = store.flow.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -132,6 +159,11 @@ class SettingsViewModel(
         viewModelScope.launch { store.setPreferredAudioLang(v) }
     }
 
+    fun setWatchlistByKind(v: Boolean) {
+        telemetry.event("setting_change", extra = mapOf("key" to "watchlistByKind", "value" to v.toString()))
+        preferences?.setWatchlistByKind(v)
+    }
+
     companion object {
         fun factory(container: AppContainer) = object : ViewModelProvider.Factory {
             @Suppress("UNCHECKED_CAST")
@@ -147,6 +179,8 @@ class SettingsViewModel(
                         .takeIf { it.isNotBlank() },
                     takesReports = container.serverFeatures::feedback,
                     subtitleLanguages = container.subtitleLanguages::get,
+                    offersWatchlistByKind = container.serverFeatures::watchlistByKind,
+                    preferences = container.preferences,
                 ) as T
         }
     }

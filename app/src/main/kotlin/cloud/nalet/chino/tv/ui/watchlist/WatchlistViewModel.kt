@@ -4,15 +4,21 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import cloud.nalet.chino.tv.data.AppContainer
+import cloud.nalet.chino.tv.data.PreferencesRepository
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
+import kotlinx.coroutines.CancellationException
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -37,6 +43,11 @@ sealed interface WatchlistUiState {
         val shelves: Map<String, List<Item>>,
         val baseUrl: String,
         val streamToken: String,
+        /** "Separate movies and shows" is on and the server can fill the
+         *  rows: each list draws [kindRows] in place of its shelf. */
+        val byKind: Boolean = false,
+        /** listId → its rows, each its first [HUB_SHELF_CAP] Items. */
+        val kindRows: Map<String, KindRows> = emptyMap(),
     ) : WatchlistUiState
 
     /** What failed, for the error screen: what it says, and the reason. */
@@ -52,6 +63,9 @@ sealed interface WatchlistUiState {
  * loads its complete item set for the MORE grid. Create / rename / delete
  * go through the shared [UserFlagsRepository] so every other surface
  * (detail add-to-list picker, card badges) stays in sync.
+ *
+ * With "Separate movies and shows" on, each list fans out one request per row
+ * instead: a list gives only ids, so the server sorts them by kind.
  */
 class WatchlistViewModel(
     private val api: ChinoApi,
@@ -59,6 +73,9 @@ class WatchlistViewModel(
     private val userFlags: UserFlagsRepository,
     private val telemetry: Telemetry,
     private val baseUrl: String,
+    /** Whether the server can split a list ([cloud.nalet.chino.tv.data.ServerFeatures]). */
+    private val offersByKind: suspend () -> Boolean,
+    private val preferences: PreferencesRepository,
 ) : ViewModel() {
     init {
         telemetry.event("screen_view", extra = mapOf("screen" to "watchlist"))
@@ -84,43 +101,84 @@ class WatchlistViewModel(
     private val _openItemsLoading = MutableStateFlow(false)
     val openItemsLoading: StateFlow<Boolean> = _openItemsLoading.asStateFlow()
 
-    init { refresh() }
+    /** The row "see all" opened the MORE view at (null = its top). */
+    private val _openRow = MutableStateFlow<KindRow?>(null)
+    val openRow: StateFlow<KindRow?> = _openRow.asStateFlow()
+
+    private var hubLoad: Job? = null
+
+    /** Whether the hub loaded is split; null until a load has decided. */
+    private var loadedByKind: Boolean? = null
+
+    init {
+        refresh()
+        // This ViewModel survives a trip to Settings: a hub split the other
+        // way loads again. While a load hasn't decided, it will read the
+        // setting itself.
+        viewModelScope.launch {
+            preferences.preferences
+                .map { it?.watchlistByKind == true }
+                .distinctUntilChanged()
+                .collect { on ->
+                    val loaded = loadedByKind ?: return@collect
+                    if (on != loaded && offersByKind()) refresh(showSpinner = false)
+                }
+        }
+    }
 
     /** (Re)loads the hub. [showSpinner]=false reconciles silently — used when
      *  returning from the MORE view so the hub doesn't flash to Loading. */
     fun refresh(showSpinner: Boolean = true) {
         if (showSpinner) _state.value = WatchlistUiState.Loading
-        viewModelScope.launch {
+        loadedByKind = null
+        hubLoad?.cancel()
+        hubLoad = viewModelScope.launch {
             try {
-                val lists = api.getWatchlists().lists
+                val offered = offersByKind()
+                if (offered) preferences.refresh()
+                val byKind = offered && preferences.preferences.value?.watchlistByKind == true
+                loadedByKind = byKind
+                val lists = api.getWatchlists(include = if (byKind) "counts" else null).lists
                 // Per-list shelf loads fan out in parallel so the slowest
                 // list gates the hub, not the sum.
-                val shelves = coroutineScope {
+                val shelves = if (byKind) emptyMap() else coroutineScope {
                     lists.map { list ->
                         async { list.id to loadItems(list.id, limit = HUB_SHELF_CAP) }
                     }.awaitAll().toMap()
                 }
+                val kindRows = if (byKind) coroutineScope {
+                    lists.map { list -> async { list.id to loadKindRows(list.id) } }.awaitAll().toMap()
+                } else emptyMap()
+                val streamToken = streamTokens.valid()
+                ensureActive()
                 _state.value = WatchlistUiState.Ready(
                     lists = lists,
                     shelves = shelves,
                     baseUrl = baseUrl,
-                    streamToken = streamTokens.valid(),
+                    streamToken = streamToken,
+                    byKind = byKind,
+                    kindRows = kindRows,
                 )
                 // The open list vanished (deleted in another client) — drop
                 // the user back on the hub instead of stranding them.
                 if (_openListId.value != null && lists.none { it.id == _openListId.value }) {
                     _openListId.value = null
                     _openItems.value = emptyList()
+                    _openRow.value = null
                 }
+            } catch (e: CancellationException) {
+                throw e
             } catch (e: Exception) {
                 _state.value = WatchlistUiState.Error(loadFailureOf(e))
             }
         }
     }
 
-    /** Opens [listId]'s MORE view (full grid) and loads its complete items. */
-    fun openList(listId: String) {
+    /** Opens [listId]'s MORE view (full grid), at [row] if one is given, and
+     *  loads its complete items. */
+    fun openList(listId: String, row: KindRow? = null) {
         _openListId.value = listId
+        _openRow.value = row
         viewModelScope.launch {
             _openItemsLoading.value = true
             _openItems.value = emptyList()
@@ -135,6 +193,7 @@ class WatchlistViewModel(
     fun closeList() {
         _openListId.value = null
         _openItems.value = emptyList()
+        _openRow.value = null
         refresh(showSpinner = false)
     }
 
@@ -142,8 +201,8 @@ class WatchlistViewModel(
      *  capped at [limit] when non-null. chino-api has no batched
      *  /v1/items?ids=… endpoint, so getItem() fans out in parallel; order
      *  is preserved by re-indexing against the id list, failures drop. */
-    private suspend fun loadItems(listId: String, limit: Int?): List<Item> {
-        val all = runCatching { api.getWatchlistDetail(listId).items }.getOrDefault(emptyList())
+    private suspend fun loadItems(listId: String, limit: Int?, kind: String? = null): List<Item> {
+        val all = runCatching { api.getWatchlistDetail(listId, kind).items }.getOrDefault(emptyList())
         val ids = if (limit != null) all.take(limit) else all
         if (ids.isEmpty()) return emptyList()
         val byId = coroutineScope {
@@ -151,6 +210,13 @@ class WatchlistViewModel(
                 .awaitAll()
         }.filterNotNull().associateBy { it.id }
         return ids.mapNotNull { byId[it] }
+    }
+
+    /** A list's two rows, each asked for by kind and capped as a shelf is. */
+    private suspend fun loadKindRows(listId: String): KindRows = coroutineScope {
+        val movies = async { loadItems(listId, HUB_SHELF_CAP, KindRow.Movies.query) }
+        val shows = async { loadItems(listId, HUB_SHELF_CAP, KindRow.Shows.query) }
+        KindRows(movies.await(), shows.await())
     }
 
     fun createList(name: String) {
@@ -179,6 +245,7 @@ class WatchlistViewModel(
             if (ok && _openListId.value == listId) {
                 _openListId.value = null
                 _openItems.value = emptyList()
+                _openRow.value = null
             }
             refresh(showSpinner = false)
         }
@@ -194,6 +261,8 @@ class WatchlistViewModel(
                     userFlags = container.userFlags,
                     telemetry = container.telemetry,
                     baseUrl = container.baseUrl,
+                    offersByKind = container.serverFeatures::watchlistByKind,
+                    preferences = container.preferences,
                 ) as T
         }
     }

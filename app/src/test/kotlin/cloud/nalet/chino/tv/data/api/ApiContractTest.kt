@@ -304,4 +304,37 @@ class ApiContractTest {
     fun `me is the subject alone`() {
         assertEquals("u-1", decode(Me.serializer(), """{"sub":"u-1"}""").sub)
     }
+
+    @Test
+    fun `preferences read as the server writes them, a missing key its default`() {
+        assertTrue(decode(Preferences.serializer(), """{"watchlist_by_kind":true}""").watchlistByKind)
+        assertFalse(decode(Preferences.serializer(), """{"watchlist_by_kind":false,"later":1}""").watchlistByKind)
+        assertFalse(decode(Preferences.serializer(), "{}").watchlistByKind)
+    }
+
+    @Test
+    fun `turning the setting off sends false, not an empty body`() {
+        // The server changes only the fields in the body: {} would leave it on.
+        assertEquals(
+            """{"watchlist_by_kind":false}""",
+            RetrofitFactory.json.encodeToString(PreferencesPatch.serializer(), PreferencesPatch(watchlistByKind = false)),
+        )
+        assertEquals(
+            """{"watchlist_by_kind":true}""",
+            RetrofitFactory.json.encodeToString(PreferencesPatch.serializer(), PreferencesPatch(watchlistByKind = true)),
+        )
+    }
+
+    @Test
+    fun `a list says its counts only when asked`() {
+        val lists = decode(
+            WatchlistsResponse.serializer(),
+            """{"lists":[
+                {"id":"l1","name":"Watchlist","itemCount":7,"isDefault":true,"counts":{"movie":4,"series":2}},
+                {"id":"l2","name":"Weekend","itemCount":0}
+            ]}""",
+        ).lists
+        assertEquals(WatchlistCounts(movie = 4, series = 2), lists[0].counts)
+        assertNull(lists[1].counts)
+    }
 }

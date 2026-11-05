@@ -4,6 +4,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import cloud.nalet.chino.tv.data.AccountDeletion
 import cloud.nalet.chino.tv.data.AppContainer
+import cloud.nalet.chino.tv.data.PreferencesRepository
 import cloud.nalet.chino.tv.data.NoticesRepository
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
@@ -33,7 +34,7 @@ sealed interface DeleteAccountState {
  * Delete Account: asks chino-api to delete the account that was active when
  * the screen opened ([account]) and, once the server says it is gone — and
  * only then — signs it out on this TV: its tokens leave [AccountStore], and
- * the stream token and the lists, likes and notices cached for it go. Any
+ * the stream token and the lists, likes, notices and settings cached for it go. Any
  * other answer leaves it signed in, with the reason.
  *
  * The request and the sign-out run on the app's scope, not this screen's: a
@@ -46,6 +47,7 @@ class DeleteAccountViewModel(
     private val streamTokens: StreamTokenManager,
     private val userFlags: UserFlagsRepository,
     private val notices: NoticesRepository,
+    private val preferences: PreferencesRepository,
     private val appScope: CoroutineScope,
     /** The account to delete: the active one when the screen opened. */
     val account: Account?,
@@ -76,6 +78,7 @@ class DeleteAccountViewModel(
                     streamTokens.clear()
                     userFlags.clear()
                     notices.clear()
+                    preferences.clear()
                 }
             }
             _state.value = if (answer == AccountDeletion.Deleted) {
@@ -96,6 +99,7 @@ class DeleteAccountViewModel(
                     streamTokens = container.streamTokenManager,
                     userFlags = container.userFlags,
                     notices = container.notices,
+                    preferences = container.preferences,
                     appScope = container.appScope,
                     account = container.accountStore.snapshotBlocking().activeAccount,
                     // Same host derivation the NavHost uses for the Server row.

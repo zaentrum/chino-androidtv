@@ -103,6 +103,9 @@ fun SettingsScreen(
 ) {
     val s by viewModel.state.collectAsState()
     val reportsTaken by viewModel.reportsTaken.collectAsState()
+    val watchlistOffered by viewModel.watchlistByKindOffered.collectAsState()
+    val watchlistPreferences by viewModel.watchlistPreferences.collectAsState()
+    val watchlistSaveFailed by viewModel.watchlistSaveFailed.collectAsState()
     val bugReport by viewModel.bugReport.collectAsState()
     var showReportPanel by remember { mutableStateOf(false) }
     // The languages each setting offers (LanguageChoices.kt): the server's
@@ -129,6 +132,7 @@ fun SettingsScreen(
     val back = rememberReturnFocus()
     val keys = listOfNotNull(
         "intro", "credits", "next", "fewer", "more", "audio", "subtitles",
+        "watchlist".takeIf { watchlistOffered },
         "profile".takeIf { onProfile != null },
         "switch".takeIf { onSwitchAccount != null },
         "delete".takeIf { onDeleteAccount != null },
@@ -270,6 +274,16 @@ fun SettingsScreen(
                     modifier = Modifier.inReadingOrder(order, "subtitles"),
                 )
             }
+            // Only where the server keeps the setting and can fill the rows
+            // (docs/chino, watchlist).
+            if (watchlistOffered) {
+                WatchlistSection(
+                    byKind = watchlistPreferences?.watchlistByKind == true,
+                    saveFailed = watchlistSaveFailed,
+                    onChange = viewModel::setWatchlistByKind,
+                    modifier = Modifier.inReadingOrder(order, "watchlist"),
+                )
+            }
             if (onSwitchAccount != null || onProfile != null || onDeleteAccount != null) {
                 Section(
                     title = "account",
@@ -386,6 +400,39 @@ fun SettingsScreen(
         }
     }
 }
+
+/** "Separate movies and shows", and the line that says it couldn't be saved
+ *  until the switch is used again. */
+@Composable
+internal fun WatchlistSection(
+    byKind: Boolean,
+    saveFailed: Boolean,
+    onChange: (Boolean) -> Unit,
+    /** On its on/off button. */
+    modifier: Modifier = Modifier,
+) {
+    Section(
+        title = "watchlist",
+        subtitle = "Each list shows its movies in one row and its shows in another.",
+    ) {
+        ToggleRow(
+            label = "Separate movies and shows",
+            value = byKind,
+            onChange = onChange,
+            modifier = modifier,
+        )
+        if (saveFailed) {
+            Text(
+                text = WATCHLIST_NOT_SAVED,
+                color = ChinoError,
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+            )
+        }
+    }
+}
+
+/** What the watchlist section says when its setting couldn't be saved. */
+internal const val WATCHLIST_NOT_SAVED = "Couldn't save this. Check the connection and try again."
 
 /** What a filed report says under its number: where it went. */
 internal const val REPORT_SENT = "Sent to the people who run this server."
@@ -675,7 +722,8 @@ internal fun Section(
 @Composable
 private fun ToggleRow(
     label: String,
-    help: String,
+    /** Its line under the label, where the section's text doesn't say it. */
+    help: String? = null,
     value: Boolean,
     onChange: (Boolean) -> Unit,
     /** On its on/off button. */
@@ -690,11 +738,13 @@ private fun ToggleRow(
     ) {
         Column(modifier = Modifier.weight(1f)) {
             Text(text = label, color = MaterialTheme.colorScheme.onSurface, fontWeight = FontWeight.Medium)
-            Text(
-                text = help,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                style = MaterialTheme.typography.bodySmall,
-            )
+            if (help != null) {
+                Text(
+                    text = help,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    style = MaterialTheme.typography.bodySmall,
+                )
+            }
         }
         // A two-state pill: ON/OFF. Inactive uses surface tint, active uses
         // primary fill so the chip clearly reads as enabled; a filled one keeps

@@ -23,8 +23,10 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
+import androidx.compose.foundation.lazy.grid.LazyGridScope
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -36,14 +38,17 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -79,6 +84,7 @@ import cloud.nalet.chino.tv.ui.theme.FocusKind
 import cloud.nalet.chino.tv.ui.theme.focusStyle
 import cloud.nalet.chino.tv.ui.theme.rememberItemFocus
 import cloud.nalet.chino.tv.ui.theme.LoadError
+import cloud.nalet.chino.tv.ui.theme.requestSoon
 import cloud.nalet.chino.tv.ui.theme.Shell
 import com.composables.icons.lucide.ArrowLeft
 import com.composables.icons.lucide.Lucide
@@ -113,6 +119,7 @@ fun WatchlistScreen(
     val openListId by viewModel.openListId.collectAsState()
     val openItems by viewModel.openItems.collectAsState()
     val openItemsLoading by viewModel.openItemsLoading.collectAsState()
+    val openRow by viewModel.openRow.collectAsState()
     // Modal overlay: the create / rename name field, the delete question.
     // BACK dismisses.
     var overlay by remember { mutableStateOf<ListOverlay?>(null) }
@@ -181,6 +188,8 @@ fun WatchlistScreen(
                                     list = openList,
                                     items = openItems,
                                     loading = openItemsLoading,
+                                    byKind = s.byKind,
+                                    openRow = openRow,
                                     baseUrl = s.baseUrl,
                                     streamToken = s.streamToken,
                                     savedItems = savedItems,
@@ -243,15 +252,17 @@ private sealed interface ListOverlay {
     data class Delete(val list: Watchlist) : ListOverlay
 }
 
-/** Hub: title + New-list chip, then one shelf per list. The whole column
- *  scrolls with focus (the Settings screen idiom). */
+/** Hub: title + New-list chip, then one shelf per list, or with the setting on
+ *  a heading and up to two rows per list. The whole column scrolls with focus
+ *  (the Settings screen idiom). */
 @Composable
-private fun HubContent(
+internal fun HubContent(
     s: WatchlistUiState.Ready,
     /** The Watchlist's ids: a card's bookmark. */
     savedItems: Set<String>,
     onItemSelected: (String) -> Unit,
-    onOpenList: (String) -> Unit,
+    /** Opens a list, at a row if one is given. */
+    onOpenList: (String, KindRow?) -> Unit,
     onNewList: () -> Unit,
     newListFocus: FocusRequester,
 ) {
@@ -281,48 +292,110 @@ private fun HubContent(
             NewListChip(onClick = onNewList, modifier = Modifier.focusRequester(newListFocus))
         }
         s.lists.forEach { list ->
-            ShelfHeader(list = list, onOpen = { onOpenList(list.id) })
+            ShelfHeader(list = list, count = list.headingCount(s.byKind), onOpen = { onOpenList(list.id, null) })
             val shelf = s.shelves[list.id]
+            val rows = s.kindRows[list.id]
+            val hint = if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
+            else "Add titles with the arrow beside the bookmark on a movie's or a show's page."
             when {
-                shelf == null -> ShelfHint("Loading…")
-                shelf.isEmpty() -> ShelfHint(
-                    if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
-                    else "Add titles with the arrow beside the bookmark on a movie's or a show's page.",
-                )
-                else -> LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    contentPadding = PaddingValues(horizontal = Shell.Gutter),
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {
-                    items(shelf, key = { it.id }) { item ->
-                        PosterGridCard(
-                            item = item,
-                            posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
-                            onClick = { onItemSelected(item.id) },
-                            // The bookmark is the Watchlist's, on any list's shelf.
-                            saved = item.id in savedItems,
-                            // Saved EPISODES get the SxxEyy line under the title
-                            // (Library CW card parity) so they don't read as the
-                            // whole series.
-                            episodeBadge = episodeBadgeFor(item),
-                            // Fixed shelf-card width (matches the home-rail PosterCard);
-                            // a LazyRow gives no width bound, so the grid card's
-                            // fillMaxWidth would otherwise blow up to full screen.
-                            modifier = Modifier.width(180.dp),
-                        )
-                    }
-                    item(key = "__see_all__") {
-                        SeeAllCard(onClick = { onOpenList(list.id) })
+                s.byKind -> when {
+                    rows == null -> ShelfHint("Loading…")
+                    rows.isEmpty() -> ShelfHint(hint)
+                    else -> KindRow.entries.filter { rows[it].isNotEmpty() }.forEach { row ->
+                        key(list.id, row) {
+                            RowLabel("${row.word} · ${list.countOf(row, rows)}")
+                            KindShelf(
+                                items = rows[row],
+                                s = s,
+                                savedItems = savedItems,
+                                onItemSelected = onItemSelected,
+                                onSeeAll = { onOpenList(list.id, row) },
+                            )
+                        }
                     }
                 }
+                shelf == null -> ShelfHint("Loading…")
+                shelf.isEmpty() -> ShelfHint(hint)
+                else -> ShelfCards(
+                    items = shelf,
+                    s = s,
+                    savedItems = savedItems,
+                    onItemSelected = onItemSelected,
+                    onSeeAll = { onOpenList(list.id, null) },
+                )
             }
         }
     }
 }
 
+/** A list's row by kind: DOWN and UP come back to the card it was left on, so
+ *  moving past a row doesn't lose the place in it. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun KindShelf(
+    items: List<Item>,
+    s: WatchlistUiState.Ready,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onSeeAll: () -> Unit,
+) {
+    ShelfCards(items, s, savedItems, onItemSelected, onSeeAll, Modifier.focusRestorer())
+}
+
+/** A hub row: its cards, then the card that opens the whole list. */
+@Composable
+private fun ShelfCards(
+    items: List<Item>,
+    s: WatchlistUiState.Ready,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(horizontal = Shell.Gutter),
+        modifier = modifier.padding(bottom = 12.dp),
+    ) {
+        items(items, key = { it.id }) { item ->
+            PosterGridCard(
+                item = item,
+                posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
+                onClick = { onItemSelected(item.id) },
+                // The bookmark is the Watchlist's, on any list's shelf.
+                saved = item.id in savedItems,
+                // Saved EPISODES get the SxxEyy line under the title
+                // (Library CW card parity) so they don't read as the
+                // whole series.
+                episodeBadge = episodeBadgeFor(item),
+                // Fixed shelf-card width (matches the home-rail PosterCard);
+                // a LazyRow gives no width bound, so the grid card's
+                // fillMaxWidth would otherwise blow up to full screen.
+                modifier = Modifier.width(180.dp),
+            )
+        }
+        item(key = "__see_all__") {
+            SeeAllCard(onClick = onSeeAll)
+        }
+    }
+}
+
+/** "movies · 4": names a row. Not a focus stop; the list's heading is. */
+@Composable
+private fun RowLabel(text: String, modifier: Modifier = Modifier) {
+    Text(
+        text = text,
+        color = ChinoText,
+        fontSize = 16.sp,
+        fontWeight = FontWeight.SemiBold,
+        // Under the list's name: the gutter and the header's own 10.
+        modifier = modifier.padding(start = Shell.Gutter + 10.dp, top = 4.dp, bottom = 8.dp),
+    )
+}
+
 /** Focusable shelf header — "Name · count". OK opens the list's MORE view. */
 @Composable
-private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
+private fun ShelfHeader(list: Watchlist, count: Int, onOpen: () -> Unit) {
     // A plain button that names the list.
     val focus = rememberItemFocus()
     Row(
@@ -349,7 +422,7 @@ private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
             fontWeight = FontWeight.SemiBold,
         )
         Text(
-            text = "· ${list.itemCount}",
+            text = "· $count",
             color = ChinoFocus.text(ChinoMuted, focus.focused),
             fontSize = 16.sp,
         )
@@ -368,12 +441,17 @@ private fun ShelfHint(text: String) {
 }
 
 /** MORE view — the full grid for one list, with rename/delete (non-default)
- *  and BACK returning to the hub. */
+ *  and BACK returning to the hub. With the setting on, a heading goes over each
+ *  kind; opened from a row's see all, the grid starts at that row's heading with
+ *  the focus on its first card, or the remote's first press would go back to the
+ *  top. */
 @Composable
-private fun MoreContent(
+internal fun MoreContent(
     list: Watchlist,
     items: List<Item>,
     loading: Boolean,
+    byKind: Boolean,
+    openRow: KindRow?,
     baseUrl: String,
     streamToken: String,
     savedItems: Set<String>,
@@ -385,6 +463,31 @@ private fun MoreContent(
     deleteFocus: FocusRequester,
 ) {
     BackHandler(onBack = onBack)
+    val rows = remember(items) { splitByKind(items) }
+    val grid = rememberLazyGridState()
+    val rowStart = remember { FocusRequester() }
+    val target = openRow?.takeIf { byKind && rows[it].isNotEmpty() }
+    LaunchedEffect(target, rows) {
+        if (target != null) {
+            grid.scrollToItem(sectionStart(rows, target))
+            requestSoon(rowStart)
+        }
+    }
+    val cards: LazyGridScope.(List<Item>, Modifier) -> Unit = { cardItems, first ->
+        items(cardItems, key = { it.id }) { item ->
+            PosterGridCard(
+                item = item,
+                posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
+                onClick = { onItemSelected(item.id) },
+                saved = item.id in savedItems,
+                // Saved EPISODES get the SxxEyy line under the title
+                // (Library CW card parity) so they don't read as the
+                // whole series.
+                episodeBadge = episodeBadgeFor(item),
+                modifier = if (item === cardItems.first()) first else Modifier,
+            )
+        }
+    }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -402,7 +505,7 @@ private fun MoreContent(
                 fontWeight = FontWeight.Bold,
             )
             Text(
-                text = "· ${list.itemCount}",
+                text = "· ${list.headingCount(byKind)}",
                 color = ChinoMuted,
                 fontSize = 18.sp,
             )
@@ -427,6 +530,7 @@ private fun MoreContent(
             loading -> Centered("Loading…")
             items.isEmpty() -> Centered("“${list.name}” is empty. Save titles with the + button on any movie or show.")
             else -> LazyVerticalGrid(
+                state = grid,
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.fillMaxSize(),
                 // Room above the first row for a focused card's growth and ring.
@@ -434,17 +538,20 @@ private fun MoreContent(
                 horizontalArrangement = Arrangement.spacedBy(20.dp),
                 verticalArrangement = Arrangement.spacedBy(24.dp),
             ) {
-                items(items, key = { it.id }) { item ->
-                    PosterGridCard(
-                        item = item,
-                        posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
-                        onClick = { onItemSelected(item.id) },
-                        saved = item.id in savedItems,
-                        // Saved EPISODES get the SxxEyy line under the title
-                        // (Library CW card parity) so they don't read as the
-                        // whole series.
-                        episodeBadge = episodeBadgeFor(item),
-                    )
+                if (byKind) {
+                    KindRow.entries.filter { rows[it].isNotEmpty() }.forEach { row ->
+                        item(key = "__heading_${row.query}__", span = { GridItemSpan(maxLineSpan) }) {
+                            Text(
+                                text = "${row.word} · ${rows[row].size}",
+                                color = ChinoText,
+                                fontSize = 18.sp,
+                                fontWeight = FontWeight.SemiBold,
+                            )
+                        }
+                        cards(rows[row], if (row == target) Modifier.focusRequester(rowStart) else Modifier)
+                    }
+                } else {
+                    cards(items, Modifier)
                 }
                 item(span = { GridItemSpan(maxLineSpan) }) {
                     Text(

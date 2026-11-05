@@ -141,9 +141,19 @@ class AppContainer(context: Context) {
     }
 
     /** What the server offers that the app shows only where it does - bug
-     *  reports - asked once a session. */
+     *  reports, a watchlist split by kind - asked once a session. */
     val serverFeatures: ServerFeatures by lazy {
-        ServerFeatures { chinoApi.serverConfig().features.feedback }
+        ServerFeatures { chinoApi.serverConfig().features }
+    }
+
+    /** What the person has set for their account, shared by the screens that
+     *  read it and the one that changes it. */
+    val preferences: PreferencesRepository by lazy {
+        PreferencesRepository(
+            load = { chinoApi.getPreferences() },
+            save = { chinoApi.patchPreferences(it) },
+            scope = appScope,
+        )
     }
 
     /** Sends the actions addons put in a UI slot: a POST with the bearer that

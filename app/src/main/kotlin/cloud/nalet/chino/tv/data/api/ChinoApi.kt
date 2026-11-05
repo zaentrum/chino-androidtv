@@ -218,7 +218,10 @@ interface ChinoApi {
 
     /** All of the user's lists — default first, then others by createdAt asc. */
     @GET("v1/me/watchlists")
-    suspend fun getWatchlists(): WatchlistsResponse
+    suspend fun getWatchlists(
+        /** "counts" adds each list's titles by row, which asks the catalog. */
+        @Query("include") include: String? = null,
+    ): WatchlistsResponse
 
     /** Creates a new named list. 409 on duplicate name / too many lists,
      *  400 on empty name (trimmed; 1..60 chars). */
@@ -238,7 +241,19 @@ interface ChinoApi {
 
     /** A single list with its item ids (newest-added first). */
     @GET("v1/me/watchlists/{listId}")
-    suspend fun getWatchlistDetail(@Path("listId") listId: String): WatchlistDetail
+    suspend fun getWatchlistDetail(
+        @Path("listId") listId: String,
+        /** One row of the list: "movie", or "series" with everything else. */
+        @Query("kind") kind: String? = null,
+    ): WatchlistDetail
+
+    /** What the person has set for their account. */
+    @GET("v1/me/preferences")
+    suspend fun getPreferences(): Preferences
+
+    /** Changes the fields in [body]; the answer is the whole document. */
+    @PATCH("v1/me/preferences")
+    suspend fun patchPreferences(@Body body: PreferencesPatch): Preferences
 
     /** Idempotent add of an item to a specific list. */
     @PUT("v1/me/watchlists/{listId}/items/{itemId}")
@@ -510,6 +525,10 @@ data class ServerConfigResponse(val features: Features = Features()) {
     data class Features(
         /** POST /v1/feedback files bug reports (it answers 503 without). */
         val feedback: Boolean = false,
+        /** /v1/me/preferences keeps a person's settings. */
+        val preferences: Boolean = false,
+        /** A list can be asked for by kind, and for its counts by kind. */
+        @SerialName("watchlist_kinds") val watchlistKinds: Boolean = false,
     )
 }
 
@@ -595,6 +614,24 @@ data class Watchlist(
     @SerialName("itemCount") val itemCount: Int = 0,
     @SerialName("isDefault") val isDefault: Boolean = false,
     @SerialName("createdAt") val createdAt: String? = null,
+    /** Its titles by row, only when asked for with include=counts. */
+    val counts: WatchlistCounts? = null,
+)
+
+@Serializable
+data class WatchlistCounts(val movie: Int = 0, val series: Int = 0)
+
+/** GET /v1/me/preferences: a key an older server leaves out is its default. */
+@Serializable
+data class Preferences(
+    @SerialName("watchlist_by_kind") val watchlistByKind: Boolean = false,
+)
+
+/** PATCH /v1/me/preferences. The field has no default so that false is sent:
+ *  the JSON leaves out a value equal to its default. */
+@Serializable
+data class PreferencesPatch(
+    @SerialName("watchlist_by_kind") val watchlistByKind: Boolean,
 )
 
 @Serializable
