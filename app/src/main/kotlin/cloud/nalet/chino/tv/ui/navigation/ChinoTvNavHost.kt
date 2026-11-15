@@ -18,14 +18,11 @@ import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavType
-import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import cloud.nalet.chino.tv.data.AppContainer
-import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
-import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
 import cloud.nalet.chino.tv.ui.theme.LogoMark
 import cloud.nalet.chino.tv.ui.theme.ChinoBg
 import cloud.nalet.chino.tv.ui.theme.LocalSignIn
@@ -116,15 +113,6 @@ private data class BootState(
     val accounts: AccountStore.Snapshot,
     val serverConfigured: Boolean,
 )
-
-/** Heuristic for "this account needs a fresh device-flow sign-in". True when
- *  the access token has already expired AND there's no refresh token to
- *  swap (legacy migration accounts, revoked sessions, or post-`offline_session_idle`). */
-private fun Account.needsReauth(): Boolean {
-    val expired = System.currentTimeMillis() >= expiresAtEpochMillis
-    val noRefresh = refreshToken.isNullOrBlank()
-    return expired && noRefresh
-}
 
 @Composable
 fun ChinoTvNavHost(container: AppContainer) {
@@ -264,37 +252,24 @@ fun ChinoTvNavHost(container: AppContainer) {
         else -> Routes.LIBRARY
     }
 
-    // Mid-session re-auth trigger: if the active account becomes unusable
-    // while the user is somewhere in the navigation stack (token revoked
-    // server-side, offline session idle, refresh failed), bounce them to
-    // AUTH so they can re-sign-in to the same Keycloak user. Without this
-    // they'd hit a wall of API 401s and a black library.
-    LaunchedEffect(activeAccount?.id, activeAccount?.expiresAtEpochMillis) {
-        val acct = activeAccount ?: return@LaunchedEffect
-        if (acct.needsReauth()) {
-            navController.navigate(Routes.AUTH) {
-                popUpTo(0) // wipe the entire backstack
-                launchSingleTop = true
-            }
-        }
-    }
-
     // A sign-in that no longer holds after the silent refresh (SignInLapses):
     // no error screen - straight to sign-in, for the account chosen. The
     // error screens' own "sign in" (LocalSignIn, where a screen could not be
     // spared) goes the same way.
-    val goToSignIn: () -> Unit = {
-        navController.navigate(Routes.AUTH) {
-            popUpTo(0) // wipe the entire backstack
-            launchSingleTop = true
-        }
-    }
+    val goToSignIn: () -> Unit = { navController.startOverAt(Routes.AUTH, forAccount = null) }
     LaunchedEffect(Unit) {
         container.signInLapses.lapses.collect { goToSignIn() }
     }
 
     CompositionLocalProvider(LocalSignIn provides goToSignIn) {
-        NavHost(navController = navController, startDestination = start) {
+        // Another account active - chosen, added, or the active one removed -
+        // starts over, whichever screen changed it and even where that screen
+        // is gone by then; and where the active account becomes unusable while
+        // the user is somewhere in the navigation stack (token revoked
+        // server-side, offline session idle, refresh failed), sign-in, for the
+        // same user. Without the latter they'd hit a wall of API 401s and a
+        // black library. Who's watching is among AccountNavHost's own routes.
+        AccountNavHost(navController, container.accountStore, snapshot, start) {
             screen(Routes.SERVER) {
                 val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
@@ -346,30 +321,13 @@ fun ChinoTvNavHost(container: AppContainer) {
                 val vm: AuthViewModel = viewModel(factory = AuthViewModel.factory(container))
                 DeviceCodeScreen(
                     viewModel = vm,
-                    onAuthenticated = {
-                        navController.navigate(Routes.LIBRARY) {
-                            popUpTo(0) // clear AUTH + any stale screens
-                        }
-                    },
-                )
-            }
-            screen(Routes.PICKER) {
-                AccountPickerScreen(
-                    accountStore = container.accountStore,
-                    onPicked = {
-                        navController.navigate(Routes.LIBRARY) {
-                            popUpTo(Routes.PICKER) { inclusive = true }
-                        }
-                    },
-                    onAddAccount = {
-                        navController.navigate(Routes.AUTH)
-                    },
+                    onAuthenticated = { accountId -> navController.startOverAt(Routes.LIBRARY, accountId) },
                 )
             }
             screen(Routes.LIBRARY) {
                 val vm: LibraryViewModel = viewModel(factory = LibraryViewModel.factory(container))
                 // APP-START warm: prefetch the first upcoming Zap card so opening
-                // Zap is instant. Idempotent per process (guarded inside the
+                // Zap is instant. Once per account (guarded inside the
                 // container) and fully off the main thread — a cold home never
                 // waits on it.
                 LaunchedEffect(Unit) { container.warmFirstZapCard() }
@@ -546,10 +504,7 @@ fun ChinoTvNavHost(container: AppContainer) {
                     // gone with the account — who's watching when others are
                     // signed in on this TV, else sign-in.
                     onSignedOut = { othersRemain ->
-                        navController.navigate(if (othersRemain) Routes.PICKER else Routes.AUTH) {
-                            popUpTo(0)
-                            launchSingleTop = true
-                        }
+                        navController.startOverAt(if (othersRemain) Routes.PICKER else Routes.AUTH, forAccount = null)
                     },
                 )
             }

@@ -25,19 +25,21 @@ import kotlinx.serialization.json.Json
  * fetched — the next refresh will replace the synthetic id with the real
  * sub), and clears the old store.
  */
-class AccountStore(context: Context) {
-    private val app = context.applicationContext
-    private val masterKey: MasterKey = MasterKey.Builder(app)
-        .setKeyScheme(MasterKey.KeyScheme.AES256_GCM)
-        .build()
-    private val prefs: SharedPreferences = EncryptedSharedPreferences.create(
-        app,
-        "chino_accounts_enc",
-        masterKey,
-        EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
-        EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
-    )
+class AccountStore internal constructor(
+    /** The app's are the encrypted ones; a test's may be plain. */
+    private val prefs: SharedPreferences,
+) {
+    constructor(context: Context) : this(encryptedPrefs(context.applicationContext))
+
     private val json = Json { ignoreUnknownKeys = true; encodeDefaults = true }
+
+    /** Every read-modify-write of the blob holds it: a token refresh landing
+     *  from an OkHttp thread while an account is chosen must not write the
+     *  account before back as the active one. */
+    private val lock = Any()
+
+    /** How often the active account has changed in this process; held by [lock]. */
+    private var activeChanges = 0L
 
     private fun read(): AccountStoreBlob {
         val raw = prefs.getString(KEY_BLOB, null) ?: return AccountStoreBlob()
@@ -45,7 +47,9 @@ class AccountStore(context: Context) {
             .getOrElse { AccountStoreBlob() }
     }
 
-    private fun write(blob: AccountStoreBlob) {
+    /** Writes [blob] over [before], the blob it was made from. Must hold [lock]. */
+    private fun write(before: AccountStoreBlob, blob: AccountStoreBlob) {
+        if (blob.activeId != before.activeId) activeChanges += 1
         prefs.edit()
             .putString(KEY_BLOB, json.encodeToString(AccountStoreBlob.serializer(), blob))
             .apply()
@@ -64,35 +68,44 @@ class AccountStore(context: Context) {
     val activeAccountId: Flow<String?> = state.map { it.activeId }
     val activeAccount: Flow<Account?> = state.map { b -> b.accounts.firstOrNull { it.id == b.activeId } }
 
+    /** The accounts and the active one, as one value for each change. */
+    val snapshots: Flow<Snapshot> = state.map { b -> Snapshot(b.accounts, b.accounts.firstOrNull { it.id == b.activeId }) }
+
     /** Append a new account or update tokens of an existing one (matched by id).
      *  Sets [setActive] = true to make it the picker default after add. */
     suspend fun addOrUpdate(account: Account, setActive: Boolean = false) {
-        val blob = read()
-        val without = blob.accounts.filter { it.id != account.id }
-        val updated = (without + account).sortedByDescending { it.lastUsedAt }
-        write(blob.copy(accounts = updated, activeId = if (setActive) account.id else blob.activeId))
+        synchronized(lock) {
+            val blob = read()
+            val without = blob.accounts.filter { it.id != account.id }
+            val updated = (without + account).sortedByDescending { it.lastUsedAt }
+            write(blob, blob.copy(accounts = updated, activeId = if (setActive) account.id else blob.activeId))
+        }
     }
 
     suspend fun remove(id: String) {
-        val blob = read()
-        val updated = blob.accounts.filter { it.id != id }
-        val newActive = if (blob.activeId == id) updated.firstOrNull()?.id else blob.activeId
-        write(blob.copy(accounts = updated, activeId = newActive))
+        synchronized(lock) {
+            val blob = read()
+            val updated = blob.accounts.filter { it.id != id }
+            val newActive = if (blob.activeId == id) updated.firstOrNull()?.id else blob.activeId
+            write(blob, blob.copy(accounts = updated, activeId = newActive))
+        }
     }
 
     suspend fun setActive(id: String) {
-        val blob = read()
-        if (blob.accounts.none { it.id == id }) return
-        // Bump lastUsedAt AND re-sort so the just-activated account moves to
-        // the front — the picker focuses index 0, so this makes the last
-        // logged-in person the preselected avatar next time. (Without the
-        // re-sort the list kept its old order and index 0 wasn't the last
-        // user.)
-        val now = System.currentTimeMillis()
-        val updated = blob.accounts
-            .map { if (it.id == id) it.copy(lastUsedAt = now) else it }
-            .sortedByDescending { it.lastUsedAt }
-        write(blob.copy(accounts = updated, activeId = id))
+        synchronized(lock) {
+            val blob = read()
+            if (blob.accounts.none { it.id == id }) return
+            // Bump lastUsedAt AND re-sort so the just-activated account moves to
+            // the front — the picker focuses index 0, so this makes the last
+            // logged-in person the preselected avatar next time. (Without the
+            // re-sort the list kept its old order and index 0 wasn't the last
+            // user.)
+            val now = System.currentTimeMillis()
+            val updated = blob.accounts
+                .map { if (it.id == id) it.copy(lastUsedAt = now) else it }
+                .sortedByDescending { it.lastUsedAt }
+            write(blob, blob.copy(accounts = updated, activeId = id))
+        }
     }
 
     /** OkHttp interceptor entrypoint — runs on dispatcher threads, blocking is fine. */
@@ -114,6 +127,13 @@ class AccountStore(context: Context) {
 
     data class Snapshot(val accounts: List<Account>, val activeAccount: Account?)
 
+    /** Who is active, read in one step with how often the active account has
+     *  changed: two reads that agree saw the same choice, with no other in
+     *  between - even one that was undone again. Blocking, like [snapshotBlocking]. */
+    fun activeChoiceBlocking(): ActiveChoice = synchronized(lock) {
+        ActiveChoice(read().activeId, activeChanges)
+    }
+
     /** Replaces just the token fields on the named account; preserves
      *  displayName / email / id. Called by TokenManager after a refresh —
      *  important to scope by accountId rather than "active" because the
@@ -121,17 +141,19 @@ class AccountStore(context: Context) {
      *  blind "write to active" would corrupt the new account's tokens with
      *  the old account's refreshed values. */
     fun updateTokensForBlocking(accountId: String, tokens: Tokens) {
-        val blob = read()
-        val updated = blob.accounts.map {
-            if (it.id == accountId) {
-                it.copy(
-                    accessToken = tokens.accessToken,
-                    refreshToken = tokens.refreshToken ?: it.refreshToken,
-                    expiresAtEpochMillis = tokens.expiresAtEpochMillis,
-                )
-            } else it
+        synchronized(lock) {
+            val blob = read()
+            val updated = blob.accounts.map {
+                if (it.id == accountId) {
+                    it.copy(
+                        accessToken = tokens.accessToken,
+                        refreshToken = tokens.refreshToken ?: it.refreshToken,
+                        expiresAtEpochMillis = tokens.expiresAtEpochMillis,
+                    )
+                } else it
+            }
+            write(blob, blob.copy(accounts = updated))
         }
-        write(blob.copy(accounts = updated))
     }
 
     /** One-shot migration from the legacy single-account [TokenStore]. Reads
@@ -140,25 +162,44 @@ class AccountStore(context: Context) {
      *  legacy tokens exist or accounts are already populated, this is a
      *  no-op. */
     fun migrateFromTokenStoreIfPresent(legacyStore: TokenStore) {
-        val blob = read()
-        if (blob.accounts.isNotEmpty()) return // already migrated
-        val legacy = legacyStore.currentAccessTokenBlocking() ?: return
-        val placeholderId = "legacy-${System.currentTimeMillis()}"
-        val account = Account(
-            id = placeholderId,
-            displayName = "Account",
-            email = "",
-            accessToken = legacy,
-            refreshToken = null, // TokenStore.tokens flow has it but the
-            // sync read doesn't expose refresh; the user will hit a 401
-            // when the token expires and re-auth via picker.
-            expiresAtEpochMillis = 0L, // forces immediate refresh attempt
-            lastUsedAt = System.currentTimeMillis(),
-        )
-        write(AccountStoreBlob(accounts = listOf(account), activeId = placeholderId))
+        synchronized(lock) {
+            val blob = read()
+            if (blob.accounts.isNotEmpty()) return // already migrated
+            val legacy = legacyStore.currentAccessTokenBlocking() ?: return
+            val placeholderId = "legacy-${System.currentTimeMillis()}"
+            val account = Account(
+                id = placeholderId,
+                displayName = "Account",
+                email = "",
+                accessToken = legacy,
+                refreshToken = null, // TokenStore.tokens flow has it but the
+                // sync read doesn't expose refresh; the user will hit a 401
+                // when the token expires and re-auth via picker.
+                expiresAtEpochMillis = 0L, // forces immediate refresh attempt
+                lastUsedAt = System.currentTimeMillis(),
+            )
+            write(blob, AccountStoreBlob(accounts = listOf(account), activeId = placeholderId))
+        }
     }
 
     private companion object {
         const val KEY_BLOB = "v1"
+
+        fun encryptedPrefs(app: Context): SharedPreferences = EncryptedSharedPreferences.create(
+            app,
+            "chino_accounts_enc",
+            MasterKey.Builder(app).setKeyScheme(MasterKey.KeyScheme.AES256_GCM).build(),
+            EncryptedSharedPreferences.PrefKeyEncryptionScheme.AES256_SIV,
+            EncryptedSharedPreferences.PrefValueEncryptionScheme.AES256_GCM,
+        )
     }
 }
+
+/**
+ * The active account as one choice of it: [accountId] (null while nobody is
+ * active) and [changes], how often the active account had changed in this
+ * process when it was read. What is asked for one account and kept for it is
+ * kept for the choice: when another account was chosen in between, even if
+ * the first was chosen again, the choice is another.
+ */
+data class ActiveChoice(val accountId: String?, val changes: Long)

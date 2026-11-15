@@ -2,6 +2,7 @@ package cloud.nalet.chino.tv.data
 
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.Watchlist
+import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -11,6 +12,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withContext
 
 /**
  * In-memory cache of the user's named watchlists + likes shared across the
@@ -29,10 +31,29 @@ import kotlinx.coroutines.sync.withLock
  *
  * Lives in [AppContainer] so DetailScreen, library cards, and the watchlist
  * tab all see the same StateFlows.
+ *
+ * The cache holds one account's lists and likes: those of the choice of the
+ * account that was active when they were loaded. Another account chosen on
+ * who's watching starts it from nothing (change P.C16 of the specification),
+ * and nothing read for one choice is shown under another: what is read is
+ * published only once the choice is known to be the same.
  */
-class UserFlagsRepository(private val api: ChinoApi) {
-    private val scope = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+class UserFlagsRepository(
+    private val api: ChinoApi,
+    /** Where the toggles' requests run. */
+    private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
+    /** Who is active now, and which choice of them; blocking, so it is read
+     *  off the main thread. */
+    private val activeChoice: () -> ActiveChoice,
+) {
     private val mutex = Mutex()
+
+    /** The choice the cache holds, or null while it holds nothing. Written
+     *  under [mutex]. */
+    @Volatile
+    private var cachedFor: ActiveChoice? = null
+
+    private suspend fun choiceNow(): ActiveChoice = withContext(Dispatchers.IO) { activeChoice() }
 
     /** All of the user's lists — default first, then others by createdAt asc. */
     private val _lists = MutableStateFlow<List<Watchlist>>(emptyList())
@@ -61,32 +82,48 @@ class UserFlagsRepository(private val api: ChinoApi) {
     /** Idempotent — call from screens that need the flags. Returns when cache is warm. */
     suspend fun warm() {
         mutex.withLock {
+            val choice = choiceNow()
+            if (cachedFor != choice) {
+                resetLocked()
+                cachedFor = choice
+            }
+            // Read into locals: nothing is shown before the choice is checked.
+            var lists: Lists? = null
+            var flatWatchlist: Set<String>? = null
+            var likes: Set<String>? = null
             if (!watchlistLoaded) {
                 // The named-lists overview gives us the default list + its
                 // item ids in one place; the flat /watchlist GET stays the
                 // back-compat fallback if the lists endpoint isn't reachable.
-                val loaded = runCatching { loadListsLocked() }.isSuccess
-                if (!loaded) {
-                    runCatching { api.getWatchlist().items }.onSuccess { ids ->
-                        _watchlist.value = ids.toSet()
-                        _savedItems.value = ids.toSet()
-                        watchlistLoaded = true
-                    }
-                }
+                lists = runCatching { fetchLists() }.getOrNull()
+                if (lists == null) flatWatchlist = runCatching { api.getWatchlist().items.toSet() }.getOrNull()
             }
-            if (!likesLoaded) {
-                runCatching { api.getLikes().items }.onSuccess {
-                    _likes.value = it.toSet()
-                    likesLoaded = true
-                }
+            if (!likesLoaded) likes = runCatching { api.getLikes().items.toSet() }.getOrNull()
+            // Chosen anew while they were read: they are another choice's, and
+            // none of it is shown.
+            if (choiceNow() != choice) {
+                resetLocked()
+                return@withLock
+            }
+            lists?.let(::publishLocked)
+            flatWatchlist?.let { ids ->
+                _watchlist.value = ids
+                _savedItems.value = ids
+                watchlistLoaded = true
+            }
+            likes?.let {
+                _likes.value = it
+                likesLoaded = true
             }
         }
     }
 
-    /** Re-pull the lists overview + their contents. Must hold [mutex]. */
-    private suspend fun loadListsLocked() {
+    /** The lists overview with what each list holds. */
+    private class Lists(val lists: List<Watchlist>, val memberships: Map<String, Set<String>>, val defaultIds: Set<String>)
+
+    /** Reads the lists overview + their contents; shows nothing. */
+    private suspend fun fetchLists(): Lists {
         val lists = api.getWatchlists().lists
-        _lists.value = lists
         // Fan out the per-list contents so we can rebuild the membership map +
         // the default/saved sets. Lists are bounded (<=50) and each is a small
         // id array, so the serial walk stays cheap.
@@ -97,30 +134,73 @@ class UserFlagsRepository(private val api: ChinoApi) {
             if (list.isDefault) defaultIds = detail.items.toSet()
             for (id in detail.items) membership.getOrPut(id) { mutableSetOf() }.add(list.id)
         }
-        _memberships.value = membership.mapValues { it.value.toSet() }
-        _savedItems.value = membership.keys.toSet()
-        _watchlist.value = defaultIds
+        return Lists(lists, membership.mapValues { it.value.toSet() }, defaultIds)
+    }
+
+    /** Shows [l]. Must hold [mutex]. */
+    private fun publishLocked(l: Lists) {
+        _lists.value = l.lists
+        _memberships.value = l.memberships
+        _savedItems.value = l.memberships.keys
+        _watchlist.value = l.defaultIds
         watchlistLoaded = true
     }
 
+    /** Reads the lists again and shows them, where the cache still holds the
+     *  choice that is active once they are read. Must hold [mutex]. */
+    private suspend fun reloadListsLocked() {
+        val choice = cachedFor ?: return
+        val lists = runCatching { fetchLists() }.getOrNull() ?: return
+        if (cachedFor == choice && choiceNow() == choice) publishLocked(lists)
+    }
+
     /** Forgets the cached lists and likes: the account they belong to is
-     *  signed out. The next [warm] loads them for whoever is signed in then. */
+     *  signed out, or another account is chosen. The next [warm] loads them
+     *  for whoever is active then. */
     suspend fun clear() {
-        mutex.withLock {
-            _lists.value = emptyList()
-            _memberships.value = emptyMap()
-            _savedItems.value = emptySet()
-            _watchlist.value = emptySet()
-            _likes.value = emptySet()
-            watchlistLoaded = false
-            likesLoaded = false
+        mutex.withLock { resetLocked() }
+    }
+
+    /** [accountId] is the active account now: lists and likes of another are
+     *  gone from the screens at once, before any screen of the new one asks,
+     *  and forgotten once a read in flight for them has let go of the cache.
+     *  Waits for nothing. */
+    fun activeIs(accountId: String?) {
+        val held = cachedFor ?: return
+        if (held.accountId == accountId) return
+        emptyFlows()
+        scope.launch {
+            mutex.withLock { if (cachedFor?.accountId != accountId) resetLocked() }
         }
+    }
+
+    /** Undoes an optimistic change whose request failed, where the cache still
+     *  holds the choice the change was made under: never into another's. */
+    private suspend fun revertUnder(choice: ActiveChoice?, undo: () -> Unit) {
+        mutex.withLock { if (cachedFor == choice) undo() }
+    }
+
+    /** Shows nothing. */
+    private fun emptyFlows() {
+        _lists.value = emptyList()
+        _memberships.value = emptyMap()
+        _savedItems.value = emptySet()
+        _watchlist.value = emptySet()
+        _likes.value = emptySet()
+    }
+
+    /** Holds nothing again. Must hold [mutex]. */
+    private fun resetLocked() {
+        emptyFlows()
+        watchlistLoaded = false
+        likesLoaded = false
+        cachedFor = null
     }
 
     /** Force a refresh of the lists + memberships (e.g. after the watchlist
      *  surface mutates lists out-of-band). Safe to call off any screen. */
     fun refreshLists() {
-        scope.launch { mutex.withLock { runCatching { loadListsLocked() } } }
+        scope.launch { mutex.withLock { reloadListsLocked() } }
     }
 
     /** The bookmark's press: add [itemId] to the Watchlist (the default
@@ -130,14 +210,17 @@ class UserFlagsRepository(private val api: ChinoApi) {
         val defId = defaultListId
         if (defId == null) {
             // Lists not warm yet — fall back to the legacy default-list route.
+            val choice = cachedFor
             applyMembership(itemId, listId = LEGACY_DEFAULT, present = present)
             _watchlist.value = if (present) _watchlist.value + itemId else _watchlist.value - itemId
             scope.launch {
                 runCatching {
                     if (present) api.addToWatchlist(itemId) else api.removeFromWatchlist(itemId)
                 }.onFailure {
-                    _watchlist.value = if (present) _watchlist.value - itemId else _watchlist.value + itemId
-                    applyMembership(itemId, listId = LEGACY_DEFAULT, present = !present)
+                    revertUnder(choice) {
+                        _watchlist.value = if (present) _watchlist.value - itemId else _watchlist.value + itemId
+                        applyMembership(itemId, listId = LEGACY_DEFAULT, present = !present)
+                    }
                 }
             }
             return
@@ -148,13 +231,14 @@ class UserFlagsRepository(private val api: ChinoApi) {
     /** Toggle an item's membership in a specific named list. Optimistic, with
      *  best-effort revert on failure. */
     fun setItemInList(listId: String, itemId: String, present: Boolean) {
+        val choice = cachedFor
         applyMembership(itemId, listId, present)
         scope.launch {
             runCatching {
                 if (present) api.addItemToWatchlist(listId, itemId)
                 else api.removeItemFromWatchlist(listId, itemId)
             }.onFailure {
-                applyMembership(itemId, listId, !present)
+                revertUnder(choice) { applyMembership(itemId, listId, !present) }
             }
         }
     }
@@ -188,7 +272,7 @@ class UserFlagsRepository(private val api: ChinoApi) {
         val created = runCatching {
             api.createWatchlist(cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()))
         }.getOrNull() ?: return null
-        mutex.withLock { runCatching { loadListsLocked() } }
+        mutex.withLock { reloadListsLocked() }
         return created
     }
 
@@ -197,24 +281,25 @@ class UserFlagsRepository(private val api: ChinoApi) {
         val ok = runCatching {
             api.renameWatchlist(listId, cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()))
         }.isSuccess
-        if (ok) mutex.withLock { runCatching { loadListsLocked() } }
+        if (ok) mutex.withLock { reloadListsLocked() }
         return ok
     }
 
     /** Delete a list (cannot delete the default), then refresh. */
     suspend fun deleteList(listId: String): Boolean {
         val ok = runCatching { api.deleteWatchlist(listId) }.isSuccess
-        if (ok) mutex.withLock { runCatching { loadListsLocked() } }
+        if (ok) mutex.withLock { reloadListsLocked() }
         return ok
     }
 
     fun setLike(itemId: String, present: Boolean) {
+        val choice = cachedFor
         _likes.value = if (present) _likes.value + itemId else _likes.value - itemId
         scope.launch {
             runCatching {
                 if (present) api.addLike(itemId) else api.removeLike(itemId)
             }.onFailure {
-                _likes.value = if (present) _likes.value - itemId else _likes.value + itemId
+                revertUnder(choice) { _likes.value = if (present) _likes.value - itemId else _likes.value + itemId }
             }
         }
     }

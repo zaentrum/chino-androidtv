@@ -104,7 +104,6 @@ class BrowseViewModel(
         telemetry.event("screen_view", extra = mapOf("screen" to "browse", "type" to type))
         viewModelScope.launch {
             genres = runCatching { api.listGenres().genres }.getOrDefault(emptyList())
-            token = withContext(Dispatchers.IO) { streamTokens.valid() }
             reload(filters)
         }
         // Warm the shared lists/memberships cache so the "saved" badge reflects
@@ -118,15 +117,9 @@ class BrowseViewModel(
         reload(next)
     }
 
-    /** Try again after a load that failed: the stream token again if the
-     *  first try had none, then the page. */
+    /** Try again after a load that failed. */
     fun retry() {
-        viewModelScope.launch {
-            if (token.isEmpty()) {
-                token = runCatching { withContext(Dispatchers.IO) { streamTokens.valid() } }.getOrDefault("")
-            }
-            reload(filters)
-        }
+        reload(filters)
     }
 
     private fun reload(f: BrowseFilters) {
@@ -142,6 +135,12 @@ class BrowseViewModel(
         val p = pagerFor(f)
         pager = p
         loadJob = viewModelScope.launch {
+            // No stream token yet (it could not be had): every load asks again
+            // - the first, a chip's and a try again - until one has it, so the
+            // posters don't go on being asked without one.
+            if (token.isEmpty()) {
+                token = runCatching { withContext(Dispatchers.IO) { streamTokens.valid() } }.getOrDefault("")
+            }
             try {
                 val items = p.next()
                 _state.value = BrowseUiState.Ready(

@@ -17,6 +17,7 @@ import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performKeyInput
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
+import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.ui.library.BrowseFilter
 import cloud.nalet.chino.tv.ui.library.LibraryContent
@@ -150,8 +151,8 @@ class PageEdgesTest {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = cloud.nalet.chino.tv.ui.detail.DetailViewModel(
             api = api,
-            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api),
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api),
+            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             itemId = "m0",
@@ -213,9 +214,9 @@ class PageEdgesTest {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = cloud.nalet.chino.tv.ui.browse.BrowseViewModel(
             api = api,
-            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api),
+            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api),
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
             baseUrl = "https://media.test/api",
             type = "movie",
         )
@@ -301,11 +302,11 @@ class PageEdgesTest {
         val ctx = androidx.test.core.app.ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = cloud.nalet.chino.tv.ui.person.PersonViewModel(
             api = api,
-            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api),
+            streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             personId = "p1",
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api),
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
         )
         compose.setContent {
             ChinoTvTheme {

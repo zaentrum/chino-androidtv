@@ -33,6 +33,7 @@ import cloud.nalet.chino.tv.data.api.Season
 import cloud.nalet.chino.tv.data.api.SeriesEpisodes
 import cloud.nalet.chino.tv.data.api.ProgressResponse
 import cloud.nalet.chino.tv.data.api.StreamTokenResponse
+import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.CastMember
 import cloud.nalet.chino.tv.data.model.Item
@@ -109,8 +110,8 @@ class TitleShelvesTest {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = DetailViewModel(
             api = api,
-            streamTokens = StreamTokenManager(api),
-            userFlags = UserFlagsRepository(api),
+            streamTokens = StreamTokenManager(api) { ActiveChoice("viewer", 0) },
+            userFlags = UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
             telemetry = Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             itemId = id,

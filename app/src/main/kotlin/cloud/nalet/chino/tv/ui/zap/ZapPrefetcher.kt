@@ -16,6 +16,7 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -112,7 +113,10 @@ class ZapPrefetcher(
 
     private suspend fun warmCard(target: ZapPrefetchTarget) = coroutineScope {
         // 1. master.m3u8 → multivariant playlist (also caches the manifest bytes).
+        // Each read blocks and does not see a cancel: stopped (cancelAll) before
+        // it, nothing more is asked with the card's token.
         val masterUri = Uri.parse(target.masterUrl)
+        ensureActive()
         val master = readPlaylist(masterUri) as? HlsMultivariantPlaylist ?: return@coroutineScope
 
         // 2. The playlists the card starts on. The master already encodes the
@@ -145,6 +149,7 @@ class ZapPrefetcher(
         //        mid-scene seek, written into the shared cache, bounded by the
         //        global semaphore.
         for (url in listOfNotNull(start.videoUrl, start.audioUrl)) {
+            ensureActive()
             val media = readPlaylist(Uri.parse(url)) as? HlsMediaPlaylist ?: continue
             for (spec in windowSpecs(media, target.seekSec)) {
                 launch { gate.withPermit { cacheSpec(spec) } }

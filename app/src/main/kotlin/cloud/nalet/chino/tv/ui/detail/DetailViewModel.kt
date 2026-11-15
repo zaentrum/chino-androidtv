@@ -183,7 +183,7 @@ class DetailViewModel(
                     item = item,
                     resumeSec = resumeSec,
                     baseUrl = baseUrl,
-                    streamToken = streamTokens.valid(),
+                    streamToken = withContext(Dispatchers.IO) { streamTokens.valid() },
                     seasons = seasons,
                     episodeResume = episodeResume,
                     similar = similarDef.await(),

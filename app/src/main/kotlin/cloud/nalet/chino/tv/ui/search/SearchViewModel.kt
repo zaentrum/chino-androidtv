@@ -16,6 +16,8 @@ import cloud.nalet.chino.tv.data.serverOrigin
 import cloud.nalet.chino.tv.data.slotButtons
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.ui.slots.SlotActionState
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Job
@@ -132,7 +134,7 @@ class SearchViewModel(
                         items = titles,
                         people = people,
                         baseUrl = baseUrl,
-                        streamToken = streamTokens.valid(),
+                        streamToken = withContext(Dispatchers.IO) { streamTokens.valid() },
                     )
                 }
                 // Nothing found: what addons offer instead, under "No

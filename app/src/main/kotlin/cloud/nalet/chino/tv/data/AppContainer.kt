@@ -10,6 +10,7 @@ import cloud.nalet.chino.tv.data.auth.SignInLapses
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.auth.TokenManager
 import cloud.nalet.chino.tv.data.auth.TokenStore
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.launch
 
 /**
@@ -125,14 +126,40 @@ class AppContainer(context: Context) {
     val chinoApi: ChinoApi by lazy { retrofit.create(ChinoApi::class.java) }
 
     /**
-     * One stream token shared by every poster/backdrop/play URL. The token survives
-     * Keycloak silent renews so <img src> and <video src> URLs don't churn — the
-     * same URL stays valid for 6 h, then [StreamTokenManager] refreshes transparently.
+     * One stream token, the active account's, for every poster/backdrop/play URL.
+     * It outlives the sign-in's silent renewals, so <img src> and <video src> URLs
+     * don't churn while the account stays active: the same URL stays valid for 6 h,
+     * then [StreamTokenManager] mints anew. Another account chosen on who's
+     * watching gets a token of its own on the next URL built.
      */
-    val streamTokenManager: StreamTokenManager by lazy { StreamTokenManager(chinoApi) }
+    val streamTokenManager: StreamTokenManager by lazy {
+        StreamTokenManager(chinoApi) { accountStore.activeChoiceBlocking() }
+    }
 
-    /** Shared watchlist + likes cache across DetailScreen and any future surfaces. */
-    val userFlags: UserFlagsRepository by lazy { UserFlagsRepository(chinoApi) }
+    private val userFlagsLazy = lazy {
+        UserFlagsRepository(chinoApi) { accountStore.activeChoiceBlocking() }.also { followActiveAccount }
+    }
+
+    /** Shared watchlist + likes cache across DetailScreen and any future surfaces:
+     *  the active account's, and nobody else's. */
+    val userFlags: UserFlagsRepository by userFlagsLazy
+
+    /**
+     * Another account chosen, added or removed: what was kept or started for
+     * the one before goes at once, before any screen of the new one asks - its
+     * lists and likes, and the Zap warm with its downloads. Started by the
+     * first of them, so nothing reads the account store before something
+     * needs it; each compares the account it holds with the active one, so
+     * the first value, the account active then, changes nothing.
+     */
+    private val followActiveAccount: kotlinx.coroutines.Job by lazy {
+        appScope.launch {
+            accountStore.activeAccountId.distinctUntilChanged().collect { id ->
+                zapWarm.activeIs(id)
+                if (userFlagsLazy.isInitialized()) userFlags.activeIs(id)
+            }
+        }
+    }
 
     /** The server's subtitle languages, asked once a session: the subtitle
      *  menu lists them first. Built by the player, once signed in. */
@@ -251,9 +278,8 @@ class AppContainer(context: Context) {
      * ZapScreen player reads from. Lazy so it only materialises when Zap (or
      * the app-start warm) first touches it.
      */
-    val zapPrefetcher: cloud.nalet.chino.tv.ui.zap.ZapPrefetcher by lazy {
-        cloud.nalet.chino.tv.ui.zap.ZapPrefetcher(appCtx, streamHttpClient)
-    }
+    private val zapPrefetcherLazy = lazy { cloud.nalet.chino.tv.ui.zap.ZapPrefetcher(appCtx, streamHttpClient) }
+    val zapPrefetcher: cloud.nalet.chino.tv.ui.zap.ZapPrefetcher by zapPrefetcherLazy
 
     /**
      * Eagerly materialise the shared Zap [SimpleCache][cloud.nalet.chino.tv.ui.zap.ZapCache]
@@ -271,9 +297,17 @@ class AppContainer(context: Context) {
         }
     }
 
-    // Run the app-start Zap warm at most once per process so re-entering home
-    // doesn't re-issue the lightweight feed fetch.
-    private val zapWarmStarted = java.util.concurrent.atomic.AtomicBoolean(false)
+    /**
+     * The app-start Zap warm, once per account. Another account active stops
+     * it, the prefetcher's downloads included; that also forgets which titles
+     * were warmed, so the next account's first card is warmed even where it is
+     * the same title.
+     */
+    private val zapWarm = AccountWarm(
+        scope = appScope,
+        activeAccount = { accountStore.snapshotBlocking().activeAccount?.id },
+        stopHandedOn = { if (zapPrefetcherLazy.isInitialized()) zapPrefetcher.cancelAll() },
+    )
 
     /**
      * APP-START warm: when home first loads, kick a lightweight prefetch of just
@@ -284,27 +318,29 @@ class AppContainer(context: Context) {
      * source + the same shared stream token, so the bytes warmed here are exactly
      * the master → variant → init → seek-window the screen plays first (no miss
      * from an independent random first card). Fire-and-forget and failure-
-     * tolerant — a cold home must never block on this. Idempotent per process.
+     * tolerant — a cold home must never block on this. Once per account: the
+     * card is handed to the prefetcher only while the account it was read for
+     * is still the active one.
      */
     fun warmFirstZapCard() {
-        if (!zapWarmStarted.compareAndSet(false, true)) return
-        appScope.launch {
-            runCatching {
-                val token = streamTokenManager.valid()
-                if (token.isEmpty()) return@launch
-                val feed = cloud.nalet.chino.tv.ui.zap.ZapFeed(api = chinoApi)
-                feed.load()
-                // DETERMINISTIC card[0]: top-ranked packaged candidate (not the
-                // shuffled/epsilon-sampled queue head) at the fixed seek ratio —
-                // identical to the Zap screen's first card.
-                val first = feed.topCandidate() ?: return@launch
-                val seekSec = cloud.nalet.chino.tv.ui.zap.deterministicFirstCardSeekSec(first.durationMs)
-                val caps = CodecCaps.zapQuery
-                val masterUrl = buildString {
-                    append("$baseUrl/v1/items/${first.id}/play/master.m3u8?stream=$token")
-                    if (caps.isNotEmpty()) append("&caps=$caps")
-                    append("&q=medium")
-                }
+        followActiveAccount
+        zapWarm.start { handOver ->
+            val token = streamTokenManager.valid()
+            if (token.isEmpty()) return@start
+            val feed = cloud.nalet.chino.tv.ui.zap.ZapFeed(api = chinoApi)
+            feed.load()
+            // DETERMINISTIC card[0]: top-ranked packaged candidate (not the
+            // shuffled/epsilon-sampled queue head) at the fixed seek ratio —
+            // identical to the Zap screen's first card.
+            val first = feed.topCandidate() ?: return@start
+            val seekSec = cloud.nalet.chino.tv.ui.zap.deterministicFirstCardSeekSec(first.durationMs)
+            val caps = CodecCaps.zapQuery
+            val masterUrl = buildString {
+                append("$baseUrl/v1/items/${first.id}/play/master.m3u8?stream=$token")
+                if (caps.isNotEmpty()) append("&caps=$caps")
+                append("&q=medium")
+            }
+            handOver {
                 zapPrefetcher.prefetch(
                     listOf(
                         cloud.nalet.chino.tv.ui.zap.ZapPrefetchTarget(

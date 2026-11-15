@@ -22,6 +22,7 @@ import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.GenresResponse
 import cloud.nalet.chino.tv.data.api.StreamTokenResponse
+import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.model.ItemsPage
@@ -73,9 +74,9 @@ class BrowseFocusTest {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         val vm = BrowseViewModel(
             api = api,
-            streamTokens = StreamTokenManager(api),
+            streamTokens = StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = Telemetry(ctx) { null },
-            userFlags = UserFlagsRepository(api),
+            userFlags = UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
             baseUrl = "https://media.test/api",
             type = type,
         )

@@ -10,6 +10,8 @@ import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
+import kotlinx.coroutines.withContext
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
 import kotlinx.coroutines.awaitAll
 import kotlinx.coroutines.coroutineScope
@@ -104,7 +106,7 @@ class WatchlistViewModel(
                     lists = lists,
                     shelves = shelves,
                     baseUrl = baseUrl,
-                    streamToken = streamTokens.valid(),
+                    streamToken = withContext(Dispatchers.IO) { streamTokens.valid() },
                 )
                 // The open list vanished (deleted in another client) — drop
                 // the user back on the hub instead of stranding them.

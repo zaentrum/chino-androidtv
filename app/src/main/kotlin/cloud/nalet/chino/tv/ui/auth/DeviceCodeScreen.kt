@@ -37,7 +37,8 @@ import cloud.nalet.chino.tv.R
 @Composable
 fun DeviceCodeScreen(
     viewModel: AuthViewModel,
-    onAuthenticated: () -> Unit,
+    /** Signed in: the account that is active now. */
+    onAuthenticated: (accountId: String) -> Unit,
 ) {
     val state by viewModel.state.collectAsState()
 
@@ -52,7 +53,7 @@ fun DeviceCodeScreen(
         viewModel.start()
     }
     LaunchedEffect(state) {
-        if (state is AuthUiState.Authenticated) onAuthenticated()
+        (state as? AuthUiState.Authenticated)?.let { onAuthenticated(it.accountId) }
     }
 
     ChinoPage {
@@ -164,7 +165,7 @@ fun DeviceCodeScreen(
                             )
                         }
                     }
-                    AuthUiState.Authenticated -> {
+                    is AuthUiState.Authenticated -> {
                         // nav handled in LaunchedEffect; render an empty box
                         // so the Crossfade has something to dissolve into
                         // while navigation completes.

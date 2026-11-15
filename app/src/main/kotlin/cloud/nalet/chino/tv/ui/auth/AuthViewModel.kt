@@ -20,7 +20,8 @@ sealed interface AuthUiState {
     data object Idle : AuthUiState
     data object Starting : AuthUiState
     data class WaitingForUser(val authorization: DeviceAuthorization) : AuthUiState
-    data object Authenticated : AuthUiState
+    /** Signed in as [accountId], now the active account. */
+    data class Authenticated(val accountId: String) : AuthUiState
     data class Error(
         /** The reason, in the reader's words: "try again" is the button
          *  beside it. */
@@ -84,7 +85,7 @@ class AuthViewModel(
                     lastUsedAt = System.currentTimeMillis(),
                 )
                 accounts.addOrUpdate(account, setActive = true)
-                _state.value = AuthUiState.Authenticated
+                _state.value = AuthUiState.Authenticated(account.id)
                 telemetry.event(
                     "auth_device_flow_completed",
                     extra = mapOf("account_sub" to account.id),
