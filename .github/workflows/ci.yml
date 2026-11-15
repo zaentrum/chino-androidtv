@@ -115,7 +115,8 @@ jobs:
   # ---------------------------------------------------------------------------
   release:
     name: Build signed release AAB
-    needs: [neutrality, check-secrets]
+    # A signed release is built only once the tests have passed.
+    needs: [neutrality, check-secrets, build]
     if: ${{ needs.check-secrets.outputs.has_keystore == 'true' }}
     runs-on: ubuntu-latest
     steps:
