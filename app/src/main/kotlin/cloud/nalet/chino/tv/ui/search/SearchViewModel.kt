@@ -9,6 +9,7 @@ import cloud.nalet.chino.tv.data.SlotActions
 import cloud.nalet.chino.tv.data.SlotButton
 import cloud.nalet.chino.tv.data.SlotKind
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.OpenedFor
 import cloud.nalet.chino.tv.data.api.Person
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.model.Item
@@ -61,7 +62,16 @@ class SearchViewModel(
     /** Where a slot action is sent from: the app's scope, so leaving the
      *  screen right after a press never drops the POST on its way out. */
     private val appScope: CoroutineScope,
+    /** Who is active as the screen opens: the account a slot action pressed
+     *  on it goes out under. Blocking, so it is read off the main thread. */
+    openedFor: () -> String?,
 ) : ViewModel() {
+    /** The account the screen was opened for: a slot action goes out under
+     *  it, with its bearer, also where it is sent after another account was
+     *  chosen (change P.C16 of the specification). Read on the app's scope,
+     *  as the action is sent. */
+    private val writesUnder = OpenedFor(appScope, openedFor)
+
     init {
         telemetry.event("screen_view", extra = mapOf("screen" to "search"))
         viewModelScope.launch { userFlags.warm() }
@@ -175,7 +185,7 @@ class SearchViewModel(
         val shown = _emptySlot.value
         _slotActionStates.update { it + (button.key to SlotActionState.Sending) }
         appScope.launch {
-            val sent = slotActions.send(button.url)
+            val sent = writesUnder.account()?.let { slotActions.send(button.url, it) } ?: false
             // A new query replaced the buttons: theirs start afresh.
             if (_emptySlot.value !== shown) return@launch
             _slotActionStates.update {
@@ -196,6 +206,7 @@ class SearchViewModel(
                     slotActions = container.slotActions,
                     userFlags = container.userFlags,
                     appScope = container.appScope,
+                    openedFor = { container.accountStore.snapshotBlocking().activeAccount?.id },
                 ) as T
         }
     }

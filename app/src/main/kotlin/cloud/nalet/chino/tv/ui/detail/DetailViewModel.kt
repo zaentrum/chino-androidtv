@@ -77,7 +77,18 @@ class DetailViewModel(
     /** The player's progress saves on their way: back from the player the
      *  page reads the position once they are answered. */
     private val progressSaves: ProgressSaves = ProgressSaves(),
+    /** Who is active as the screen opens: the account what a person does on
+     *  it goes out under ([RequestAccount]). Blocking, so it is read off the
+     *  main thread. */
+    openedFor: () -> String?,
 ) : ViewModel() {
+
+    /** The account the screen was opened for, read once off the main thread:
+     *  a watched mark set here goes out under it, with its bearer, also where
+     *  it is sent after another account was chosen (change P.C16 of the
+     *  specification); where it could not be read then, the account active
+     *  as the mark is made. */
+    private val writesUnder = cloud.nalet.chino.tv.data.api.OpenedFor(viewModelScope, openedFor)
     private val _state = MutableStateFlow<DetailUiState>(DetailUiState.Loading)
     val state: StateFlow<DetailUiState> = _state.asStateFlow()
 
@@ -448,7 +459,10 @@ class DetailViewModel(
         )
         _state.value = ready.copy(item = ready.item.copy(watchedAt = if (next) "now" else null))
         viewModelScope.launch {
-            runCatching { if (next) api.postWatched(id) else api.deleteWatched(id) }
+            runCatching {
+                val account = writesUnder.account() ?: return@runCatching
+                if (next) api.postWatched(id, account) else api.deleteWatched(id, account)
+            }
         }
     }
 
@@ -477,7 +491,10 @@ class DetailViewModel(
         }
         _state.value = ready.copy(seasons = newSeasons)
         viewModelScope.launch {
-            runCatching { if (watched) api.postWatched(holder) else api.deleteWatched(holder) }
+            runCatching {
+                val account = writesUnder.account() ?: return@runCatching
+                if (watched) api.postWatched(holder, account) else api.deleteWatched(holder, account)
+            }
         }
     }
 
@@ -497,6 +514,7 @@ class DetailViewModel(
                     itemId = itemId,
                     playCaps = container::playCaps,
                     progressSaves = container.progressSaves,
+                    openedFor = { container.accountStore.snapshotBlocking().activeAccount?.id },
                 ) as T
         }
     }

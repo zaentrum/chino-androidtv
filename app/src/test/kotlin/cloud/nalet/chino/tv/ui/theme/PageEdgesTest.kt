@@ -153,6 +153,7 @@ class PageEdgesTest {
             api = api,
             streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            openedFor = { "viewer" },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             itemId = "m0",
@@ -217,6 +218,7 @@ class PageEdgesTest {
             streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            openedFor = { "viewer" },
             baseUrl = "https://media.test/api",
             type = "movie",
         )

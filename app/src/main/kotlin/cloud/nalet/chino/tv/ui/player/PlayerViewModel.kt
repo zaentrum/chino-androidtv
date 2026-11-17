@@ -14,6 +14,7 @@ import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.PlayInfo
 import cloud.nalet.chino.tv.data.api.ProgressBody
 import cloud.nalet.chino.tv.data.api.QualityRung
+import cloud.nalet.chino.tv.data.api.OpenedFor
 import cloud.nalet.chino.tv.data.api.Segment
 import cloud.nalet.chino.tv.data.api.SidecarSubtitle
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
@@ -161,9 +162,19 @@ class PlayerViewModel(
     private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
     /** Whether the server takes bug reports ([cloud.nalet.chino.tv.data.ServerFeatures]). */
     private val takesReports: suspend () -> Boolean = { false },
+    /** Who is active as the player opens: the account the title plays for.
+     *  Blocking, so it is read off the main thread. */
+    playsFor: () -> String?,
 ) : ViewModel() {
 
     private val itemId: String = mode.itemId
+
+    /** The account the title plays for, read once as the player opens: its
+     *  progress and its watched mark go out under it, with its bearer, also
+     *  where they are sent after another account was chosen (change P.C16 of
+     *  the specification); where it could not be read then, the account
+     *  active as each is sent. */
+    private val playsForAccount = OpenedFor(appScope, playsFor)
 
     /** What the mode asks the server for: nothing is asked that it does not. */
     val requests: PlayRequests = mode.requests
@@ -767,7 +778,8 @@ class PlayerViewModel(
         if (!requests.progress || positionSec <= 0) return null
         return progressSaves.send(appScope) {
             runCatching {
-                api.postProgress(itemId, ProgressBody(positionSec = positionSec, durationSec = durationSec))
+                val account = playsForAccount.account() ?: return@runCatching
+                api.postProgress(itemId, ProgressBody(positionSec = positionSec, durationSec = durationSec), account)
             }
         }
     }
@@ -787,7 +799,10 @@ class PlayerViewModel(
     fun reportWatched() {
         if (!requests.watched) return
         appScope.launch {
-            runCatching { api.postWatched(itemId) }
+            runCatching {
+                val account = playsForAccount.account() ?: return@runCatching
+                api.postWatched(itemId, account)
+            }
         }
     }
 
@@ -915,6 +930,7 @@ class PlayerViewModel(
                     playCaps = container::playCaps,
                     subtitleLanguages = container.subtitleLanguages::get,
                     takesReports = container.serverFeatures::feedback,
+                    playsFor = { container.accountStore.snapshotBlocking().activeAccount?.id },
                 )
             }
         }

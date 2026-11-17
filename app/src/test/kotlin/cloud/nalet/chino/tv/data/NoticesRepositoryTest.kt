@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.runBlocking
@@ -22,7 +23,8 @@ import java.io.IOException
  * answers in place of the network, as chino-api's notices.go answers.
  */
 class NoticesRepositoryTest {
-    private class FakeChino {
+    /** [activeNow]: whose bearer a request that carries no account takes. */
+    private class FakeChino(activeNow: () -> String?) {
         var list = LIST
         var changeStatus = 200
         var unreachable = false
@@ -30,7 +32,14 @@ class NoticesRepositoryTest {
 
         val api: ChinoApi = RetrofitFactory.retrofit(
             BASE_URL,
-            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null })
+            RetrofitFactory.httpClient(
+                tokenProvider = { TOKENS[activeNow()] },
+                forceRefresh = { null },
+                accounts = object : AccountBearers {
+                    override fun tokenOf(accountId: String): String? = TOKENS[accountId]
+                    override fun forceRefreshOf(accountId: String): String? = null
+                },
+            )
                 .addInterceptor { chain ->
                     val request = chain.request()
                     requests += request
@@ -59,16 +68,19 @@ class NoticesRepositoryTest {
     /** The repository as the container builds it: the API only once a
      *  server is connected ([server]), the account active now ([active]). */
     private class Board {
-        val chino = FakeChino()
-        var server = true
         var active: String? = "u-1"
+        val chino = FakeChino { active }
+        var server = true
         var clock = 1_000_000L
         var apiAsked = 0
         var accountAsked = 0
 
+        /** Runs each time the active account has been asked for. */
+        var afterAsked: () -> Unit = {}
+
         val notices = NoticesRepository(
             api = { apiAsked++; if (server) chino.api else null },
-            activeAccount = { accountAsked++; active },
+            activeAccount = { accountAsked++; active.also { afterAsked() } },
             now = { clock },
         )
 
@@ -257,6 +269,28 @@ class NoticesRepositoryTest {
     }
 
     @Test
+    fun `P_C16 a change of one person's notices goes out with their bearer, also where another is chosen as it is sent`() {
+        for (change in listOf("read", "read-all", "delete")) {
+            val board = Board()
+            board.refresh()
+            val notice = board.first()
+            // The check before the send finds u-1 active; u-2 is chosen right after it.
+            board.afterAsked = { board.active = "u-2" }
+            val made = runBlocking {
+                when (change) {
+                    "read" -> board.notices.read("u-1", notice)
+                    "read-all" -> board.notices.readAll("u-1")
+                    else -> board.notices.delete("u-1", notice)
+                }
+            }
+            assertTrue(change, made)
+            val sent = board.chino.requests.last()
+            assertTrue(change, sent.method != "GET")
+            assertEquals(change, "Bearer tok-1", sent.header("Authorization"))
+        }
+    }
+
+    @Test
     fun `an id chino-api would not forward is not sent`() {
         val board = Board()
         board.refresh()
@@ -291,5 +325,8 @@ class NoticesRepositoryTest {
              "createdAt":"2026-10-04T07:58:00Z","readAt":"2026-10-04T08:00:00Z"}
           ],"unread":1,"available":true}"""
         const val UNAVAILABLE = """{"notices":[],"unread":0,"available":false}"""
+
+        /** The accounts signed in, by id, with their access tokens. */
+        val TOKENS = mapOf("u-1" to "tok-1", "u-2" to "tok-2")
     }
 }

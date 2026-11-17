@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.search
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.runBlocking
@@ -37,7 +38,7 @@ class CatalogSearchTest {
 
         val api: ChinoApi = RetrofitFactory.retrofit(
             BASE_URL,
-            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null })
+            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null }, accounts = AccountBearers.None)
                 .addInterceptor { chain ->
                     val request = chain.request()
                     requests += request

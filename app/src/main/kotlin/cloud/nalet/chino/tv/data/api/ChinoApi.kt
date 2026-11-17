@@ -23,6 +23,7 @@ import retrofit2.http.Part
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Streaming
+import retrofit2.http.Tag
 
 /**
  * Mirrors chino-api/internal/http/router.go. Keep methods in lock-step with that file —
@@ -138,15 +139,28 @@ interface ChinoApi {
      *  it was first read. 404 for a notice they do not have; 502 or 503 when
      *  portal-api did not change it. */
     @POST("v1/notices/{noticeId}/read")
-    suspend fun readNotice(@Path("noticeId") noticeId: String): retrofit2.Response<Unit>
+    suspend fun readNotice(
+        @Path("noticeId") noticeId: String,
+        /** Whose notice it is: the change is sent under that account
+         *  ([RequestAccount]). */
+        @Tag account: RequestAccount,
+    ): retrofit2.Response<Unit>
 
-    /** Every notice of the person, read. */
+    /** Every notice of the person, read: the person is the one whose bearer
+     *  it carries, the account it is marked with. */
     @POST("v1/notices/read-all")
-    suspend fun readAllNotices(): retrofit2.Response<Unit>
+    suspend fun readAllNotices(
+        /** As [readNotice]'s. */
+        @Tag account: RequestAccount,
+    ): retrofit2.Response<Unit>
 
     /** One of the person's notices, deleted: 204. */
     @DELETE("v1/notices/{noticeId}")
-    suspend fun deleteNotice(@Path("noticeId") noticeId: String): retrofit2.Response<Unit>
+    suspend fun deleteNotice(
+        @Path("noticeId") noticeId: String,
+        /** As [readNotice]'s. */
+        @Tag account: RequestAccount,
+    ): retrofit2.Response<Unit>
 
     /**
      * Deletes the signed-in person's data and their account — the app stores
@@ -177,14 +191,24 @@ interface ChinoApi {
 
     /** Upserts resume position. Called every ~10s + once on player dispose. */
     @POST("v1/items/{id}/progress")
-    suspend fun postProgress(@Path("id") id: String, @Body body: ProgressBody)
+    suspend fun postProgress(
+        @Path("id") id: String,
+        @Body body: ProgressBody,
+        /** The account the title plays for, or the screen was opened for:
+         *  the save is sent under it ([RequestAccount]). */
+        @Tag account: RequestAccount,
+    )
 
     /** Marks the item as fully watched. Drives the green "watched" badge on
      *  posters + lets continue-watching substitute the next episode. Player
      *  calls this when the user enters credits OR crosses 95 % of duration,
      *  whichever fires first. Idempotent — re-firing just bumps watched_at. */
     @POST("v1/me/items/{id}/watched")
-    suspend fun postWatched(@Path("id") id: String)
+    suspend fun postWatched(
+        @Path("id") id: String,
+        /** As [postProgress]'s. */
+        @Tag account: RequestAccount,
+    )
 
     /** Un-marks the item as watched — clears the server-side watched_history
      *  row so watched_at becomes null again. Mirrors web's useWatchedToggle
@@ -192,7 +216,11 @@ interface ChinoApi {
      *  per-episode un-watch. Idempotent — DELETE on an already-unwatched item
      *  is a no-op server-side. */
     @DELETE("v1/me/items/{id}/watched")
-    suspend fun deleteWatched(@Path("id") id: String)
+    suspend fun deleteWatched(
+        @Path("id") id: String,
+        /** As [postProgress]'s. */
+        @Tag account: RequestAccount,
+    )
 
     /** Batched playback telemetry — chino-api logs each event for observability. */
     @POST("v1/play/events")
@@ -205,11 +233,11 @@ interface ChinoApi {
 
     /** Adds to the DEFAULT list (back-compat). */
     @PUT("v1/me/watchlist/{id}")
-    suspend fun addToWatchlist(@Path("id") id: String)
+    suspend fun addToWatchlist(@Path("id") id: String, @Tag account: RequestAccount)
 
     /** Removes from the DEFAULT list (back-compat). */
     @DELETE("v1/me/watchlist/{id}")
-    suspend fun removeFromWatchlist(@Path("id") id: String)
+    suspend fun removeFromWatchlist(@Path("id") id: String, @Tag account: RequestAccount)
 
     // ── Named watchlists ────────────────────────────────────────────────
     // Mirrors chino-api's /me/watchlists routes. Every user has exactly one
@@ -245,6 +273,8 @@ interface ChinoApi {
     suspend fun addItemToWatchlist(
         @Path("listId") listId: String,
         @Path("itemId") itemId: String,
+        /** The account the press was made under ([RequestAccount]). */
+        @Tag account: RequestAccount,
     )
 
     /** Idempotent remove of an item from a specific list. */
@@ -252,6 +282,8 @@ interface ChinoApi {
     suspend fun removeItemFromWatchlist(
         @Path("listId") listId: String,
         @Path("itemId") itemId: String,
+        /** The account the press was made under ([RequestAccount]). */
+        @Tag account: RequestAccount,
     )
 
     /** Per-item → which of the caller's lists contain it. Powers the add-to-
@@ -265,10 +297,10 @@ interface ChinoApi {
     suspend fun getLikes(): UserFlagList
 
     @PUT("v1/me/likes/{id}")
-    suspend fun addLike(@Path("id") id: String)
+    suspend fun addLike(@Path("id") id: String, @Tag account: RequestAccount)
 
     @DELETE("v1/me/likes/{id}")
-    suspend fun removeLike(@Path("id") id: String)
+    suspend fun removeLike(@Path("id") id: String, @Tag account: RequestAccount)
 
     /** Returns seasons + episodes for a series. Empty seasons list for non-series. */
     @GET("v1/series/{id}/episodes")

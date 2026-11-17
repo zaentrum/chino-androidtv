@@ -11,6 +11,7 @@ import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.currentBackStackEntryAsState
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
@@ -74,13 +75,17 @@ internal fun startOverFor(before: String?, now: Account?, accounts: List<Account
  * value; [initial] the account active when the back stack was started.
  *
  * Not while Change server is on the screen: it removes every account, saves the
- * new server and restarts the app on it, and its screen stays until then.
+ * new server and restarts the app on it, and its screen stays until then. Left
+ * without that restart (BACK, or a removal that failed part-way), the app
+ * starts over then.
  */
 @Composable
-internal fun StartOverOnAccountChange(nav: NavController, now: AccountStore.Snapshot, initial: String?) {
+internal fun StartOverOnAccountChange(nav: NavHostController, now: AccountStore.Snapshot, initial: String?) {
     val shownFor = remember { mutableStateOf(initial) }
-    LaunchedEffect(now.activeAccount?.id, now.activeAccount?.expiresAtEpochMillis) {
-        if (nav.currentDestination?.route == Routes.SERVER_CHANGE) return@LaunchedEffect
+    val entry by nav.currentBackStackEntryAsState()
+    val onServerChange = entry?.destination?.route == Routes.SERVER_CHANGE
+    LaunchedEffect(now.activeAccount?.id, now.activeAccount?.expiresAtEpochMillis, onServerChange) {
+        if (onServerChange) return@LaunchedEffect
         val route = startOverFor(shownFor.value, now.activeAccount, now.accounts) ?: return@LaunchedEffect
         shownFor.value = now.activeAccount?.id
         nav.startOverAt(route, now.activeAccount?.id)

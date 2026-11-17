@@ -134,6 +134,9 @@ class AccountStore internal constructor(
         ActiveChoice(read().activeId, activeChanges)
     }
 
+    /** The account [id], while it is signed in on this device. Blocking. */
+    fun accountBlocking(id: String): Account? = read().accounts.firstOrNull { it.id == id }
+
     /** Replaces just the token fields on the named account; preserves
      *  displayName / email / id. Called by TokenManager after a refresh —
      *  important to scope by accountId rather than "active" because the

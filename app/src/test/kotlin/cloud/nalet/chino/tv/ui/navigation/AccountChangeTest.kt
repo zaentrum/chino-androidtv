@@ -236,6 +236,23 @@ class AccountChangeTest {
     }
 
     @Test
+    fun `Change server left with BACK after every account was removed starts over at sign-in`() {
+        host("parent", "child")
+        compose.runOnIdle {
+            nav.navigate(Routes.SETTINGS)
+            nav.navigate(Routes.SERVER_CHANGE)
+        }
+        compose.waitForIdle()
+        runBlocking {
+            store.remove("parent")
+            store.remove("child")
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { nav.popBackStack() }
+        assertAloneAt(Routes.AUTH)
+    }
+
+    @Test
     fun `where the app starts over, from the account before to the active one`() {
         val parent = account("parent")
         val child = account("child")

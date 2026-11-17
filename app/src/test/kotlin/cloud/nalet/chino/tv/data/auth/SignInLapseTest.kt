@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data.auth
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -64,6 +65,7 @@ class SignInLapseTest {
         val client = RetrofitFactory.httpClient(
             tokenProvider = { "old" },
             forceRefresh = { fresh },
+            accounts = AccountBearers.None,
             onRefusedAfterRefresh = onRefused,
         ).build()
         return client.newCall(Request.Builder().url(server.url).build()).execute().use { it.code }

@@ -25,13 +25,17 @@ object RetrofitFactory {
      * @param tokenProvider returns the current valid access token (auto-refreshed when close to expiry).
      * @param forceRefresh called by the Authenticator on a 401 — returns a freshly minted token, or
      *        null if the refresh failed (server returns 401, the caller drops to AUTH).
+     * @param accounts the bearer of the account a request carries ([RequestAccount]), in place
+     *        of the active account's. Always given: a client without it sends no such request
+     *        ([AccountBearers.None], for one that never makes any).
      */
     fun create(
         baseUrl: String,
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
+        accounts: AccountBearers,
         onRefusedAfterRefresh: () -> Unit = {},
-    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh, onRefusedAfterRefresh).build())
+    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh, accounts, onRefusedAfterRefresh).build())
 
     /** Retrofit over [client], decoding as every chino-api response is decoded. */
     internal fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
@@ -43,23 +47,28 @@ object RetrofitFactory {
 
     /** The client an addon's slot action is sent with
      *  ([cloud.nalet.chino.tv.data.SlotActions]): the bearer and the refresh
-     *  of every call, but it follows no redirect — one could carry the bearer
-     *  somewhere the URL check never saw. */
+     *  of every call - an action carries the account it was pressed under
+     *  ([RequestAccount]) and goes out with that account's - but it follows
+     *  no redirect: one could carry the bearer somewhere the URL check never
+     *  saw. */
     fun actionClient(
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
-    ): OkHttpClient = httpClient(tokenProvider, forceRefresh)
+        accounts: AccountBearers,
+    ): OkHttpClient = httpClient(tokenProvider, forceRefresh, accounts)
         .followRedirects(false)
         .followSslRedirects(false)
         .build()
 
     /** The client every chino-api call goes through: the bearer on every
-     *  request, one refresh-and-retry on a 401, and [onRefusedAfterRefresh]
+     *  request - of the account it carries ([accounts]), else the active
+     *  account's - one refresh-and-retry on a 401, and [onRefusedAfterRefresh]
      *  where chino-api refuses the fresh token too. Internal: tests answer
      *  on top of exactly this client. */
     internal fun httpClient(
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
+        accounts: AccountBearers,
         onRefusedAfterRefresh: () -> Unit = {},
     ): OkHttpClient.Builder {
         val logging = HttpLoggingInterceptor().apply {
@@ -69,8 +78,17 @@ object RetrofitFactory {
             .connectTimeout(10, TimeUnit.SECONDS)
             .readTimeout(20, TimeUnit.SECONDS)
             .addInterceptor { chain ->
+                // A request that carries its account goes out with that
+                // account's bearer, whoever is active now; every other with
+                // the active account's.
+                val account = chain.request().tag(RequestAccount::class.java)
+                val bearer = if (account != null) {
+                    accounts.tokenOf(account.accountId) ?: throw AccountSignedOutException(account.accountId)
+                } else {
+                    tokenProvider()
+                }
                 val req = chain.request().newBuilder().apply {
-                    tokenProvider()?.let { header("Authorization", "Bearer $it") }
+                    bearer?.let { header("Authorization", "Bearer $it") }
                     header("Accept", "application/json")
                 }.build()
                 chain.proceed(req)
@@ -83,11 +101,13 @@ object RetrofitFactory {
             // does a fresh token chino-api refuses too (onRefusedAfterRefresh).
             .authenticator(object : Authenticator {
                 override fun authenticate(route: Route?, response: Response): Request? {
+                    val account = response.request.tag(RequestAccount::class.java)
                     if (response.request.header("X-Auth-Retry") != null) {
-                        onRefusedAfterRefresh()
+                        if (account != null) accounts.refusedAfterRefresh(account.accountId) else onRefusedAfterRefresh()
                         return null
                     }
-                    val fresh = forceRefresh() ?: return null
+                    val fresh = (if (account != null) accounts.forceRefreshOf(account.accountId) else forceRefresh())
+                        ?: return null
                     return response.request.newBuilder()
                         .header("Authorization", "Bearer $fresh")
                         .header("X-Auth-Retry", "1")

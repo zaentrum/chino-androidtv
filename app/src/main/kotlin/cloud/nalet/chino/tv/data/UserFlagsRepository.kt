@@ -1,6 +1,8 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.AccountSignedOutException
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import kotlinx.coroutines.CoroutineScope
@@ -52,6 +54,12 @@ class UserFlagsRepository(
      *  under [mutex]. */
     @Volatile
     private var cachedFor: ActiveChoice? = null
+
+    /** How often the active account had changed in the newest choice
+     *  [activeIs] found active: a press is made under the choice the cache
+     *  holds only where that one is as new, never under one gone by then. */
+    @Volatile
+    private var newestChoice: Long = Long.MIN_VALUE
 
     private suspend fun choiceNow(): ActiveChoice = withContext(Dispatchers.IO) { activeChoice() }
 
@@ -163,15 +171,45 @@ class UserFlagsRepository(
 
     /** [accountId] is the active account now: lists and likes of another are
      *  gone from the screens at once, before any screen of the new one asks,
-     *  and forgotten once a read in flight for them has let go of the cache.
-     *  Waits for nothing. */
+     *  and forgotten once a read in flight for them has let go of the cache;
+     *  a press from then on goes out under the account active as its request
+     *  is made, not under theirs.
+     *  Where the cache is the active choice's already - a change that came
+     *  late, after the account was chosen again and loaded anew - nothing
+     *  goes. Waits for nothing; reads the account store, so it is called off
+     *  the main thread. */
     fun activeIs(accountId: String?) {
-        val held = cachedFor ?: return
-        if (held.accountId == accountId) return
+        val held = cachedFor
+        val now = runCatching(activeChoice).getOrNull()
+        // From here on a press is not made under a choice before the active
+        // one, though the cache still holds it while a read for it holds the
+        // cache - the reset below waits for that read.
+        val newest = now?.changes ?: held?.takeIf { it.accountId != accountId }?.let { it.changes + 1 }
+        if (newest != null && newest > newestChoice) newestChoice = newest
+        val current = held != null && (if (now != null) held == now else held.accountId == accountId)
+        if (current) return
+        // Also where the cache holds nothing: a toggle made before any warm
+        // shows in the flows all the same.
         emptyFlows()
+        if (held == null) return
         scope.launch {
-            mutex.withLock { if (cachedFor?.accountId != accountId) resetLocked() }
+            // Whoever is active when this runs: a cache loaded anew for the
+            // active choice in between stays.
+            mutex.withLock { if (cachedFor.let { it != null && it != choiceNow() }) resetLocked() }
         }
+    }
+
+    /** The choice a press is made under: the one the cache holds, unless
+     *  another was found active since ([activeIs]) - the cache may still hold
+     *  the one before while a read for it runs - and then none. */
+    private fun pressedUnder(): ActiveChoice? = cachedFor?.takeIf { it.changes >= newestChoice }
+
+    /** The account a press was made under: the one of the choice it was
+     *  made under ([pressedUnder]), or, without one, the one active as its
+     *  request is made. Its request goes out with that account's bearer. */
+    private fun madeUnder(choice: ActiveChoice?): RequestAccount {
+        val id = (choice ?: activeChoice()).accountId ?: throw AccountSignedOutException("")
+        return RequestAccount(id)
     }
 
     /** Undoes an optimistic change whose request failed, where the cache still
@@ -210,12 +248,13 @@ class UserFlagsRepository(
         val defId = defaultListId
         if (defId == null) {
             // Lists not warm yet — fall back to the legacy default-list route.
-            val choice = cachedFor
+            val choice = pressedUnder()
             applyMembership(itemId, listId = LEGACY_DEFAULT, present = present)
             _watchlist.value = if (present) _watchlist.value + itemId else _watchlist.value - itemId
             scope.launch {
                 runCatching {
-                    if (present) api.addToWatchlist(itemId) else api.removeFromWatchlist(itemId)
+                    val account = madeUnder(choice)
+                    if (present) api.addToWatchlist(itemId, account) else api.removeFromWatchlist(itemId, account)
                 }.onFailure {
                     revertUnder(choice) {
                         _watchlist.value = if (present) _watchlist.value - itemId else _watchlist.value + itemId
@@ -231,12 +270,13 @@ class UserFlagsRepository(
     /** Toggle an item's membership in a specific named list. Optimistic, with
      *  best-effort revert on failure. */
     fun setItemInList(listId: String, itemId: String, present: Boolean) {
-        val choice = cachedFor
+        val choice = pressedUnder()
         applyMembership(itemId, listId, present)
         scope.launch {
             runCatching {
-                if (present) api.addItemToWatchlist(listId, itemId)
-                else api.removeItemFromWatchlist(listId, itemId)
+                val account = madeUnder(choice)
+                if (present) api.addItemToWatchlist(listId, itemId, account)
+                else api.removeItemFromWatchlist(listId, itemId, account)
             }.onFailure {
                 revertUnder(choice) { applyMembership(itemId, listId, !present) }
             }
@@ -293,11 +333,12 @@ class UserFlagsRepository(
     }
 
     fun setLike(itemId: String, present: Boolean) {
-        val choice = cachedFor
+        val choice = pressedUnder()
         _likes.value = if (present) _likes.value + itemId else _likes.value - itemId
         scope.launch {
             runCatching {
-                if (present) api.addLike(itemId) else api.removeLike(itemId)
+                val account = madeUnder(choice)
+                if (present) api.addLike(itemId, account) else api.removeLike(itemId, account)
             }.onFailure {
                 revertUnder(choice) { _likes.value = if (present) _likes.value - itemId else _likes.value + itemId }
             }

@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.runBlocking
@@ -32,7 +33,7 @@ class AccountDeletionTest {
 
         val api: ChinoApi = RetrofitFactory.retrofit(
             BASE_URL,
-            RetrofitFactory.httpClient(tokenProvider = { token }, forceRefresh = { null })
+            RetrofitFactory.httpClient(tokenProvider = { token }, forceRefresh = { null }, accounts = AccountBearers.None)
                 .addInterceptor { chain ->
                     val request = chain.request()
                     requests += request

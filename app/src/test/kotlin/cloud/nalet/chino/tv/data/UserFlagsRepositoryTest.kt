@@ -1,6 +1,7 @@
 package cloud.nalet.chino.tv.data
 
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.UserFlagList
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.api.WatchlistDetail
@@ -39,6 +40,15 @@ class UserFlagsRepositoryTest {
     /** Runs as a request of [name] goes out, before it is answered. */
     private var onRequest: (name: String) -> Unit = {}
 
+    /** The account each like request was made under, as it carries it. */
+    private val sentUnder = java.util.concurrent.CopyOnWriteArrayList<String>()
+
+    /** The account each write of the Watchlist was made under, as it carries it. */
+    private val bookmarkedUnder = java.util.concurrent.CopyOnWriteArrayList<String>()
+
+    /** Runs as the active choice is read, once it is read. */
+    private var onChoice: () -> Unit = {}
+
     /** Holds the like requests until released; they fail then where [likeFails]. */
     private var likeGate: CountDownLatch? = null
     private var likeFails = false
@@ -56,8 +66,13 @@ class UserFlagsRepositoryTest {
             )
             "getLikes" -> UserFlagList(listOf("liked-by-$who"))
             "addLike", "removeLike" -> {
+                sentUnder += (args!![1] as RequestAccount).accountId
                 likeGate?.await(5, TimeUnit.SECONDS)
                 if (likeFails) throw IOException("the server can't be reached")
+                Unit
+            }
+            "addToWatchlist", "removeFromWatchlist" -> {
+                bookmarkedUnder += (args!![1] as RequestAccount).accountId
                 Unit
             }
             "hashCode" -> 0
@@ -68,7 +83,9 @@ class UserFlagsRepositoryTest {
     } as ChinoApi
 
     private val job = SupervisorJob()
-    private val repo = UserFlagsRepository(api, CoroutineScope(job + Dispatchers.IO)) { ActiveChoice(active, changes) }
+    private val repo = UserFlagsRepository(api, CoroutineScope(job + Dispatchers.IO)) {
+        ActiveChoice(active, changes).also { onChoice() }
+    }
 
     private fun warm() = runBlocking { repo.warm() }
 
@@ -193,6 +210,98 @@ class UserFlagsRepositoryTest {
         likeGate!!.countDown()
         settle()
         assertEquals(setOf("liked-by-child"), repo.likes.value)
+    }
+
+    @Test
+    fun `P_C16 a like pressed as the parent goes out as the parent's after the child is chosen`() {
+        warm()
+        repo.setLike("liked-on-parent", present = true)
+        choose("child")
+        repo.activeIs("child")
+        settle()
+        assertEquals(listOf("parent"), sentUnder.toList())
+    }
+
+    @Test
+    fun `P_C16 a like and a bookmark pressed as the child while a read for the parent holds the cache go out as the child's`() {
+        warm()
+        // A reload for the parent waits in the server, holding the cache.
+        val inRead = CountDownLatch(1)
+        val answer = CountDownLatch(1)
+        onRequest = { name ->
+            if (name == "getWatchlists") {
+                inRead.countDown()
+                answer.await(5, TimeUnit.SECONDS)
+            }
+        }
+        repo.refreshLists()
+        assertTrue(inRead.await(5, TimeUnit.SECONDS))
+        choose("child")
+        repo.activeIs("child")
+        // The child's home shows, the parent's read still going on: the child presses.
+        repo.setLike("liked-on-child", present = true)
+        repo.setWatchlist("saved-on-child", present = true)
+        val until = System.currentTimeMillis() + 5_000
+        while (sentUnder.isEmpty() || bookmarkedUnder.isEmpty()) {
+            check(System.currentTimeMillis() < until) { "the presses never went out" }
+            Thread.sleep(10)
+        }
+        answer.countDown()
+        settle()
+        assertEquals(listOf("child"), sentUnder.toList())
+        assertEquals(listOf("child"), bookmarkedUnder.toList())
+    }
+
+    @Test
+    fun `P_C16 a like pressed as the child while a warm begun for the parent reads goes out as the child's`() {
+        // The warm reads the parent as active; the child is chosen right after.
+        var once = true
+        onChoice = {
+            if (once) {
+                once = false
+                choose("child")
+                repo.activeIs("child")
+            }
+        }
+        var pressed = false
+        onRequest = { name ->
+            if (name == "getWatchlists" && !pressed) {
+                pressed = true
+                repo.setLike("liked-on-child", present = true)
+            }
+        }
+        warm()
+        settle()
+        assertEquals(listOf("child"), sentUnder.toList())
+    }
+
+    @Test
+    fun `a like pressed before the lists and likes were loaded goes out as the account active then`() {
+        repo.setLike("liked-early", present = true)
+        settle()
+        assertEquals(listOf("parent"), sentUnder.toList())
+    }
+
+    @Test
+    fun `P_C16 a change that comes late, after the account was chosen again and loaded anew, keeps what it loaded`() {
+        warm()
+        choose("child")
+        choose("parent")
+        warm()
+        // The child's change arrives only now.
+        repo.activeIs("child")
+        settle()
+        assertEquals(setOf("liked-by-parent"), repo.likes.value)
+        assertEquals(setOf("saved-by-parent"), repo.watchlist.value)
+    }
+
+    @Test
+    fun `P_C16 a like made before any warm goes from the screens when another account is chosen`() {
+        repo.setLike("liked-early", present = true)
+        settle()
+        choose("child")
+        repo.activeIs("child")
+        assertShowsNothing()
     }
 
     @Test

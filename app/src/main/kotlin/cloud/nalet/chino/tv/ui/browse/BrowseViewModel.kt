@@ -86,7 +86,18 @@ class BrowseViewModel(
     private val baseUrl: String,
     /** "movie" or "series" — fixed for the lifetime of this page. */
     private val type: String,
+    /** Who is active as the screen opens: the account what a person does on
+     *  it goes out under ([RequestAccount]). Blocking, so it is read off the
+     *  main thread. */
+    openedFor: () -> String?,
 ) : ViewModel() {
+
+    /** The account the screen was opened for, read once off the main thread:
+     *  a watched mark set here goes out under it, with its bearer, also where
+     *  it is sent after another account was chosen (change P.C16 of the
+     *  specification); where it could not be read then, the account active
+     *  as the mark is made. */
+    private val writesUnder = cloud.nalet.chino.tv.data.api.OpenedFor(viewModelScope, openedFor)
     private val _state = MutableStateFlow<BrowseUiState>(BrowseUiState.Loading)
     val state: StateFlow<BrowseUiState> = _state.asStateFlow()
 
@@ -197,7 +208,10 @@ class BrowseViewModel(
             },
         )
         viewModelScope.launch {
-            runCatching { if (markWatched) api.postWatched(itemId) else api.deleteWatched(itemId) }
+            runCatching {
+                val account = writesUnder.account() ?: return@runCatching
+                if (markWatched) api.postWatched(itemId, account) else api.deleteWatched(itemId, account)
+            }
         }
     }
 
@@ -239,6 +253,7 @@ class BrowseViewModel(
                     userFlags = container.userFlags,
                     baseUrl = container.baseUrl,
                     type = type,
+                    openedFor = { container.accountStore.snapshotBlocking().activeAccount?.id },
                 ) as T
         }
     }

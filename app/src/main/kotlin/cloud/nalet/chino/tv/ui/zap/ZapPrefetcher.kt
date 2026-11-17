@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.ensureActive
+import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Semaphore
 import kotlinx.coroutines.sync.withPermit
@@ -100,14 +101,16 @@ class ZapPrefetcher(
     /** Cancel all in-flight prefetch when leaving Zap. The cache (and its bytes)
      *  survives — only the pending downloads stop. Idempotent. */
     fun cancelAll() {
+        // Cancel the children but keep the scope usable if Zap is re-entered
+        // on the SAME prefetcher (the ViewModel re-creates one per session, so
+        // this is mostly belt-and-braces). First: a writer added after this
+        // finds its coroutine cancelled and downloads nothing ([cacheSpec]),
+        // and one added before is in [inFlight] for the sweep below.
+        scope.coroutineContext[kotlinx.coroutines.Job]?.children?.forEach { it.cancel() }
         synchronized(inFlight) {
             for (w in inFlight) w.cancel()
             inFlight.clear()
         }
-        // Cancel the children but keep the scope usable if Zap is re-entered
-        // on the SAME prefetcher (the ViewModel re-creates one per session, so
-        // this is mostly belt-and-braces).
-        scope.coroutineContext[kotlinx.coroutines.Job]?.children?.forEach { it.cancel() }
         warmed.clear()
     }
 
@@ -152,7 +155,7 @@ class ZapPrefetcher(
             ensureActive()
             val media = readPlaylist(Uri.parse(url)) as? HlsMediaPlaylist ?: continue
             for (spec in windowSpecs(media, target.seekSec)) {
-                launch { gate.withPermit { cacheSpec(spec) } }
+                launch { gate.withPermit { cacheSpec(spec) { isActive } } }
             }
         }
     }
@@ -205,11 +208,15 @@ class ZapPrefetcher(
         return builder.build()
     }
 
-    private fun cacheSpec(spec: DataSpec) {
+    /** Writes [spec] into the cache unless it is no longer [wanted]: checked
+     *  once the writer is in [inFlight], so a writer made just after
+     *  cancelAll's sweep downloads nothing. */
+    private fun cacheSpec(spec: DataSpec, wanted: () -> Boolean) {
         val ds = cacheFactory.createDataSource()
         val writer = CacheWriter(ds, spec, null, null)
         inFlight.add(writer)
         try {
+            if (!wanted()) return
             writer.cache() // blocks; reads cache-or-network, writes into the cache
         } catch (_: Throwable) {
             // Cancelled (leaving Zap), a dead channel (404 segment), or evicted

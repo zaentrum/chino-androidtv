@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data.auth
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import org.junit.After
@@ -85,6 +86,7 @@ class StreamTokenWiringTest {
             active
         },
         forceRefresh = { null },
+        accounts = AccountBearers.None,
     ).create(ChinoApi::class.java)
 
     private val manager = StreamTokenManager(api) { ActiveChoice(active, changes) }

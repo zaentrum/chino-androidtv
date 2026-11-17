@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.ui.player
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import cloud.nalet.chino.tv.data.model.Trailer
@@ -28,7 +29,7 @@ class ExtraLoadTest {
 
         val api: ChinoApi = RetrofitFactory.retrofit(
             "https://media.example.org/api/",
-            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null })
+            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null }, accounts = AccountBearers.None)
                 .addInterceptor { chain ->
                     val request = chain.request()
                     requests += request

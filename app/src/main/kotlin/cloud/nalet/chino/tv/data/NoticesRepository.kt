@@ -1,6 +1,7 @@
 package cloud.nalet.chino.tv.data
 
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -41,9 +42,12 @@ data class NoticesState(
  * change shows once chino-api says it is made, so one portal-api could not
  * make (502) leaves the notice as it was; the list is then asked for again.
  *
- * The bearer is the active account's, so the state says whose notices it
- * holds: a refresh for another account starts from nothing, and nothing is
- * asked or changed for an account no longer active. Before a server is
+ * The bearer of a refresh is the active account's, so the state says whose
+ * notices it holds: a refresh for another account starts from nothing, and
+ * nothing is asked or changed for an account no longer active. A change
+ * carries the account whose notice it changes and goes out with that
+ * account's bearer, also where another is chosen while it is on its way
+ * (change P.C16 of the specification). Before a server is
  * connected [api] is null and nothing is asked: building this, or calling it
  * then, never builds the API client — which cannot exist without a server's
  * address (Telemetry's rule). Never throws but for cancellation.
@@ -102,17 +106,17 @@ class NoticesRepository(
      *  one. True once chino-api says it is read. */
     suspend fun read(account: String, notice: Notice): Boolean {
         if (!notice.isUnread || !isNoticeId(notice.id)) return false
-        return change(account, { it.readNotice(notice.id) }) { markRead(it, notice.id, stamp()) }
+        return change(account, { api, under -> api.readNotice(notice.id, under) }) { markRead(it, notice.id, stamp()) }
     }
 
     /** Every notice read: POST /v1/notices/read-all. */
     suspend fun readAll(account: String): Boolean =
-        change(account, { it.readAllNotices() }) { markAllRead(it, stamp()) }
+        change(account, { api, under -> api.readAllNotices(under) }) { markAllRead(it, stamp()) }
 
     /** A notice deleted: DELETE /v1/notices/{id}. */
     suspend fun delete(account: String, notice: Notice): Boolean {
         if (!isNoticeId(notice.id)) return false
-        return change(account, { it.deleteNotice(notice.id) }) { removeNotice(it, notice.id) }
+        return change(account, { api, under -> api.deleteNotice(notice.id, under) }) { removeNotice(it, notice.id) }
     }
 
     /** Forgets the notices: the account they belong to is signed out. */
@@ -120,19 +124,21 @@ class NoticesRepository(
         _state.value = NoticesState()
     }
 
-    /** Sends a change of [account]'s notices and, once chino-api says it is
-     *  made, applies it to the list; otherwise asks for the list again. */
+    /** Sends a change of [account]'s notices, under [account] with its
+     *  bearer, and, once chino-api says it is made, applies it to the list;
+     *  otherwise asks for the list again. */
     private suspend fun change(
         account: String,
-        send: suspend (ChinoApi) -> retrofit2.Response<Unit>,
+        send: suspend (ChinoApi, RequestAccount) -> retrofit2.Response<Unit>,
         apply: (NoticeList) -> NoticeList,
     ): Boolean = withContext(Dispatchers.IO) {
         val api = api() ?: return@withContext false
-        // The bearer is the active account's: never send a change of one
-        // person's notices with another's.
+        // Nothing is changed for an account no longer active; what is sent
+        // carries the account, so another chosen from here on does not lend
+        // it their bearer.
         if (!_state.value.isFor(account) || activeAccount() != account) return@withContext false
         val made = try {
-            send(api).let { response ->
+            send(api, RequestAccount(account)).let { response ->
                 response.errorBody()?.close()
                 response.isSuccessful
             }

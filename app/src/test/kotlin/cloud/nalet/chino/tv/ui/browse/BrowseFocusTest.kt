@@ -77,6 +77,7 @@ class BrowseFocusTest {
             streamTokens = StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = Telemetry(ctx) { null },
             userFlags = UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            openedFor = { "viewer" },
             baseUrl = "https://media.test/api",
             type = type,
         )

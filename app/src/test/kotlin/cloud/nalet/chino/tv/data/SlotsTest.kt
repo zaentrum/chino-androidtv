@@ -1,6 +1,8 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.runBlocking
 import kotlinx.serialization.json.Json
@@ -208,7 +210,7 @@ class SlotsTest {
         val seen = mutableListOf<Request>()
         val api = RetrofitFactory.retrofit(
             "https://media.example/api/",
-            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null })
+            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null }, accounts = AccountBearers.None)
                 .addInterceptor { chain ->
                     seen += chain.request()
                     answer(chain.request(), 200, """[{"key":"k","kind":"link","label":"L","url":"/portal/app/x","enabled":true}]""")
@@ -224,11 +226,22 @@ class SlotsTest {
         assertEquals("Bearer tok-1", request.header("Authorization"))
     }
 
-    /** An addon behind the portal's proxy, answering in place of the network. */
+    /** An addon behind the portal's proxy, answering in place of the
+     *  network, through the client the app sends actions with. */
     private class FakeAddon(private val status: Int, private val unreachable: Boolean = false) {
         val requests = mutableListOf<Request>()
+
+        /** Who is active as the action is sent. */
+        var active = "u-1"
         val actions = SlotActions(
-            RetrofitFactory.httpClient(tokenProvider = { "tok-1" }, forceRefresh = { null })
+            RetrofitFactory.actionClient(
+                tokenProvider = { TOKENS[active] },
+                forceRefresh = { null },
+                accounts = object : AccountBearers {
+                    override fun tokenOf(accountId: String): String? = TOKENS[accountId]
+                    override fun forceRefreshOf(accountId: String): String? = null
+                },
+            ).newBuilder()
                 .addInterceptor { chain ->
                     requests += chain.request()
                     if (unreachable) throw IOException("connect timed out")
@@ -237,7 +250,9 @@ class SlotsTest {
                 .build(),
         )
 
-        fun send(url: String = "https://media.example/api/portal/apps/sim/notify?q=zz") = runBlocking { actions.send(url) }
+        /** An action pressed under [account]. */
+        fun send(url: String = "https://media.example/api/portal/apps/sim/notify?q=zz", account: String = "u-1") =
+            runBlocking { actions.send(url, RequestAccount(account)) }
     }
 
     @Test
@@ -262,13 +277,31 @@ class SlotsTest {
     }
 
     @Test
+    fun `P_C16 an action pressed under one account goes out with that account's bearer while another is active`() {
+        val addon = FakeAddon(204)
+        addon.active = "u-2"
+        assertTrue(addon.send(account = "u-1"))
+        assertEquals("Bearer tok-1", addon.requests.single().header("Authorization"))
+    }
+
+    @Test
+    fun `P_C16 an action pressed under an account signed out since is not sent`() {
+        val addon = FakeAddon(204)
+        assertFalse(addon.send(account = "signed-out"))
+        assertTrue(addon.requests.isEmpty())
+    }
+
+    @Test
     fun `the action client follows no redirect`() {
-        val client = RetrofitFactory.actionClient(tokenProvider = { null }, forceRefresh = { null })
+        val client = RetrofitFactory.actionClient(tokenProvider = { null }, forceRefresh = { null }, accounts = AccountBearers.None)
         assertFalse(client.followRedirects)
         assertFalse(client.followSslRedirects)
     }
 
     private companion object {
+        /** The accounts signed in, by id, with their access tokens. */
+        val TOKENS = mapOf("u-1" to "tok-1", "u-2" to "tok-2")
+
         fun answer(request: Request, status: Int, body: String): Response = Response.Builder()
             .request(request)
             .protocol(Protocol.HTTP_1_1)

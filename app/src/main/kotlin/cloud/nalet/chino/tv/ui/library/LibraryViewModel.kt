@@ -68,7 +68,18 @@ class LibraryViewModel(
     /** The player's progress saves on their way: back from the player,
      *  continue watching is read once they are answered. */
     private val progressSaves: ProgressSaves = ProgressSaves(),
+    /** Who is active as the screen opens: the account what a person does on
+     *  it goes out under ([RequestAccount]). Blocking, so it is read off the
+     *  main thread. */
+    openedFor: () -> String?,
 ) : ViewModel() {
+
+    /** The account the screen was opened for, read once off the main thread:
+     *  a watched mark set here goes out under it, with its bearer, also where
+     *  it is sent after another account was chosen (change P.C16 of the
+     *  specification); where it could not be read then, the account active
+     *  as the mark is made. */
+    private val writesUnder = cloud.nalet.chino.tv.data.api.OpenedFor(viewModelScope, openedFor)
     private val _state = MutableStateFlow<LibraryUiState>(LibraryUiState.Loading)
     val state: StateFlow<LibraryUiState> = _state.asStateFlow()
 
@@ -327,8 +338,9 @@ class LibraryViewModel(
             // green badge + drop it from Zap. Fall back to postWatched only when
             // the duration is unknown (can't compute the end position).
             runCatching {
-                if (dur > 0) api.postProgress(itemId, ProgressBody(positionSec = dur, durationSec = dur, dismiss = true))
-                else api.postWatched(itemId)
+                val account = writesUnder.account() ?: return@runCatching
+                if (dur > 0) api.postProgress(itemId, ProgressBody(positionSec = dur, durationSec = dur, dismiss = true), account)
+                else api.postWatched(itemId, account)
             }
             // Reconcile from server truth — chino-api may surface a substituted
             // "Next Up" episode once the in-progress row leaves.
@@ -375,7 +387,10 @@ class LibraryViewModel(
             )
         }
         viewModelScope.launch {
-            runCatching { if (markWatched) api.postWatched(itemId) else api.deleteWatched(itemId) }
+            runCatching {
+                val account = writesUnder.account() ?: return@runCatching
+                if (markWatched) api.postWatched(itemId, account) else api.deleteWatched(itemId, account)
+            }
         }
     }
 
@@ -417,6 +432,7 @@ class LibraryViewModel(
                 LibraryViewModel(
                     container.chinoApi, container.streamTokenManager, container.telemetry, container.baseUrl, container.userFlags,
                     progressSaves = container.progressSaves,
+                    openedFor = { container.accountStore.snapshotBlocking().activeAccount?.id },
                 ) as T
         }
     }

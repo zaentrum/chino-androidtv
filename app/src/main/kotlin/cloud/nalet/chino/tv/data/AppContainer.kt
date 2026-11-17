@@ -120,6 +120,9 @@ class AppContainer(context: Context) {
             onRefusedAfterRefresh = {
                 accountStore.snapshotBlocking().activeAccount?.id?.let(signInLapses::lapsed)
             },
+            // A request made under an account (a press, the player's saves)
+            // goes out with that account's bearer.
+            accounts = tokenManager,
         )
     }
 
@@ -181,6 +184,9 @@ class AppContainer(context: Context) {
             RetrofitFactory.actionClient(
                 tokenProvider = tokenManager::validAccessTokenBlocking,
                 forceRefresh = tokenManager::forceRefreshBlocking,
+                // An action goes out with the bearer of the account it was
+                // pressed under.
+                accounts = tokenManager,
             ),
         )
     }

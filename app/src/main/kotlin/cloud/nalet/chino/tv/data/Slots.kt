@@ -1,5 +1,6 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
@@ -139,17 +140,24 @@ fun slotButtons(rows: JsonElement?, origin: HttpUrl, vars: Map<String, String> =
 }
 
 /**
- * Sends a slot `action` row: a POST with an empty body and the signed-in
- * person's bearer to a URL [slotActionUrl] passed. [client] follows no
- * redirect ([cloud.nalet.chino.tv.data.api.RetrofitFactory.actionClient]): a
- * redirect could carry the bearer somewhere the URL check never saw, so it
+ * Sends a slot `action` row: a POST with an empty body and the bearer of the
+ * account it was pressed under to a URL [slotActionUrl] passed. [client]
+ * follows no redirect ([cloud.nalet.chino.tv.data.api.RetrofitFactory.actionClient]):
+ * a redirect could carry the bearer somewhere the URL check never saw, so it
  * counts as a failure, as on chino-web (redirect: 'error').
  */
 class SlotActions(private val client: OkHttpClient) {
-    /** True when the addon took it (a 2xx). Never throws but for cancellation. */
-    suspend fun send(url: String): Boolean = withContext(Dispatchers.IO) {
+    /** True when the addon took it (a 2xx). Sent under [account], with its
+     *  bearer, whoever is active by then (change P.C16 of the
+     *  specification); not sent where it is no longer signed in. Never
+     *  throws but for cancellation. */
+    suspend fun send(url: String, account: RequestAccount): Boolean = withContext(Dispatchers.IO) {
         try {
-            val request = Request.Builder().url(url).post(ByteArray(0).toRequestBody()).build()
+            val request = Request.Builder()
+                .url(url)
+                .post(ByteArray(0).toRequestBody())
+                .tag(RequestAccount::class.java, account)
+                .build()
             client.newCall(request).execute().use { it.isSuccessful }
         } catch (e: CancellationException) {
             throw e

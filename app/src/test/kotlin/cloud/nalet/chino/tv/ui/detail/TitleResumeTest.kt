@@ -117,6 +117,7 @@ class TitleResumeTest {
             api = api,
             streamTokens = StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             userFlags = UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            openedFor = { "viewer" },
             telemetry = Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             itemId = id,
