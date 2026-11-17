@@ -14,9 +14,15 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.test.core.app.ApplicationProvider
+import cloud.nalet.chino.tv.data.AccountSettings
+import cloud.nalet.chino.tv.data.LastKnownInMemory
+import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.ui.theme.ChinoTvTheme
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -45,6 +51,18 @@ class AccountChangeTest {
         .also { it.edit().clear().commit() }
     private val store = AccountStore(prefs)
 
+    /** Each account's Separate movies and shows as last known on this TV,
+     *  through the account settings an account removed is forgotten by. */
+    private val lastKnown = LastKnownInMemory()
+    private val settings = AccountSettings(
+        java.lang.reflect.Proxy.newProxyInstance(ChinoApi::class.java.classLoader, arrayOf(ChinoApi::class.java)) { _, _, _ ->
+            throw IllegalStateException("no server")
+        } as ChinoApi,
+        CoroutineScope(SupervisorJob() + Dispatchers.IO),
+        activeChanges = { store.activeChangesNow() },
+        lastKnown = lastKnown,
+    ) { store.activeChoiceBlocking() }
+
     private lateinit var nav: NavHostController
 
     private fun account(id: String, expired: Boolean = false) = Account(
@@ -63,7 +81,7 @@ class AccountChangeTest {
         compose.setContent {
             nav = rememberNavController()
             ChinoTvTheme {
-                AccountNavHost(nav, store, boot, startDestination = Routes.LIBRARY) {
+                AccountNavHost(nav, store, boot, startDestination = Routes.LIBRARY, forgetAccount = settings::forget) {
                     composable(Routes.LIBRARY) {}
                     composable(Routes.AUTH) {}
                     composable(Routes.SETTINGS) {}
@@ -135,6 +153,19 @@ class AccountChangeTest {
         tile("Parent").performTouchInput { longClick() }
         removeButton().performSemanticsAction(SemanticsActions.OnClick)
         assertAloneAt(Routes.PICKER)
+    }
+
+    @Test
+    fun `16_4_7 an account removed on who's watching takes the choice last known for it, and only its own`() {
+        host("parent", "child")
+        lastKnown.keep("parent", true)
+        lastKnown.keep("child", false)
+        openPickerFromHome()
+        tile("Child").performTouchInput { longClick() }
+        removeButton().performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitUntil(5_000) { lastKnown.of("child") == null }
+        assertEquals(listOf("parent"), store.snapshotBlocking().accounts.map { it.id })
+        assertEquals(true, lastKnown.of("parent"))
     }
 
     @Test

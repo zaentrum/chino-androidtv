@@ -33,8 +33,9 @@ sealed interface DeleteAccountState {
  * Delete Account: asks chino-api to delete the account that was active when
  * the screen opened ([account]) and, once the server says it is gone — and
  * only then — signs it out on this TV: its tokens leave [AccountStore], and
- * the stream token and the lists, likes and notices cached for it go. Any
- * other answer leaves it signed in, with the reason.
+ * the stream token, the lists, likes and notices cached for it, and the
+ * settings choices the TV keeps for it go. Any other answer leaves it signed
+ * in, with the reason.
  *
  * The request and the sign-out run on the app's scope, not this screen's: a
  * deleted account is signed out even should the screen be gone by the time
@@ -46,6 +47,9 @@ class DeleteAccountViewModel(
     private val streamTokens: StreamTokenManager,
     private val userFlags: UserFlagsRepository,
     private val notices: NoticesRepository,
+    /** What the TV keeps of an account's settings, for an account that has
+     *  left it. */
+    private val forgetAccount: (accountId: String) -> Unit,
     private val appScope: CoroutineScope,
     /** The account to delete: the active one when the screen opened. */
     val account: Account?,
@@ -73,6 +77,7 @@ class DeleteAccountViewModel(
             } else {
                 api.deleteAccountThenSignOut {
                     accounts.remove(target.id)
+                    forgetAccount(target.id)
                     streamTokens.clear()
                     userFlags.clear()
                     notices.clear()
@@ -96,6 +101,7 @@ class DeleteAccountViewModel(
                     streamTokens = container.streamTokenManager,
                     userFlags = container.userFlags,
                     notices = container.notices,
+                    forgetAccount = container::forgetAccount,
                     appScope = container.appScope,
                     account = container.accountStore.snapshotBlocking().activeAccount,
                     // Same host derivation the NavHost uses for the Server row.

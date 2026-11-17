@@ -25,7 +25,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.BasicTextField
@@ -36,14 +37,26 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
+import androidx.compose.ui.ExperimentalComposeUiApi
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.focus.focusRestorer
+import androidx.compose.ui.focus.onFocusChanged
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.withStyle
+import cloud.nalet.chino.tv.R
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.ui.theme.causeSentence
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.graphics.SolidColor
@@ -113,6 +126,7 @@ fun WatchlistScreen(
     val openListId by viewModel.openListId.collectAsState()
     val openItems by viewModel.openItems.collectAsState()
     val openItemsLoading by viewModel.openItemsLoading.collectAsState()
+    val openKinds by viewModel.openKinds.collectAsState()
     // Modal overlay: the create / rename name field, the delete question.
     // BACK dismisses.
     var overlay by remember { mutableStateOf<ListOverlay?>(null) }
@@ -167,6 +181,7 @@ fun WatchlistScreen(
                                     savedItems = savedItems,
                                     onItemSelected = onItemSelected,
                                     onOpenList = viewModel::openList,
+                                    onRetryRow = viewModel::retryRow,
                                     onNewList = { opener = newListButton; overlay = ListOverlay.Create },
                                     newListFocus = newListButton,
                                 )
@@ -180,6 +195,8 @@ fun WatchlistScreen(
                                 MoreContent(
                                     list = openList,
                                     items = openItems,
+                                    kinds = openKinds,
+                                    onRetryPart = { kind -> viewModel.retryRow(openList.id, kind) },
                                     loading = openItemsLoading,
                                     baseUrl = s.baseUrl,
                                     streamToken = s.streamToken,
@@ -252,6 +269,8 @@ private fun HubContent(
     savedItems: Set<String>,
     onItemSelected: (String) -> Unit,
     onOpenList: (String) -> Unit,
+    /** try again on a row by kind that couldn't load. */
+    onRetryRow: (listId: String, kind: TitleKind) -> Unit,
     onNewList: () -> Unit,
     newListFocus: FocusRequester,
 ) {
@@ -281,53 +300,228 @@ private fun HubContent(
             NewListChip(onClick = onNewList, modifier = Modifier.focusRequester(newListFocus))
         }
         s.lists.forEach { list ->
-            ShelfHeader(list = list, onOpen = { onOpenList(list.id) })
-            val shelf = s.shelves[list.id]
-            when {
-                shelf == null -> ShelfHint("Loading…")
-                shelf.isEmpty() -> ShelfHint(
-                    if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
-                    else "Add titles with the arrow beside the bookmark on a movie's or a show's page.",
+            if (s.byKind != null) key(list.id) {
+                ListByKind(
+                    list = list,
+                    rows = s.byKind[list.id],
+                    baseUrl = s.baseUrl,
+                    streamToken = s.streamToken,
+                    savedItems = savedItems,
+                    onItemSelected = onItemSelected,
+                    onOpen = { onOpenList(list.id) },
+                    onRetry = { kind -> onRetryRow(list.id, kind) },
                 )
-                else -> LazyRow(
-                    horizontalArrangement = Arrangement.spacedBy(20.dp),
-                    contentPadding = PaddingValues(horizontal = Shell.Gutter),
-                    modifier = Modifier.padding(bottom = 12.dp),
-                ) {
-                    items(shelf, key = { it.id }) { item ->
-                        PosterGridCard(
-                            item = item,
-                            posterUrl = "${s.baseUrl}/v1/items/${item.id}/poster?stream=${s.streamToken}",
-                            onClick = { onItemSelected(item.id) },
-                            // The bookmark is the Watchlist's, on any list's shelf.
-                            saved = item.id in savedItems,
-                            // Saved EPISODES get the SxxEyy line under the title
-                            // (Library CW card parity) so they don't read as the
-                            // whole series.
-                            episodeBadge = episodeBadgeFor(item),
-                            // Fixed shelf-card width (matches the home-rail PosterCard);
-                            // a LazyRow gives no width bound, so the grid card's
-                            // fillMaxWidth would otherwise blow up to full screen.
-                            modifier = Modifier.width(180.dp),
-                        )
-                    }
-                    item(key = "__see_all__") {
-                        SeeAllCard(onClick = { onOpenList(list.id) })
-                    }
+            } else {
+                ShelfHeader(list = list, onOpen = { onOpenList(list.id) })
+                val shelf = s.shelves[list.id]
+                when {
+                    shelf == null -> ShelfHint("Loading…")
+                    shelf.isEmpty() -> ShelfHint(emptyShelfHint(list))
+                    else -> Shelf(
+                        items = shelf,
+                        baseUrl = s.baseUrl,
+                        streamToken = s.streamToken,
+                        savedItems = savedItems,
+                        onItemSelected = onItemSelected,
+                        onSeeAll = { onOpenList(list.id) },
+                    )
                 }
             }
         }
     }
 }
 
+/** Where a list's titles come from, in its empty row. */
+private fun emptyShelfHint(list: Watchlist): String =
+    if (list.isDefault) "Add titles with the bookmark on a movie's or a show's page."
+    else "Add titles with the arrow beside the bookmark on a movie's or a show's page."
+
+/** A row of a list's cards, and see all at its end, which opens the list.
+ *  [focusFirst]: its first card takes the focus as it is drawn, and
+ *  [onFirstFocused] follows. */
+@Composable
+private fun Shelf(
+    items: List<Item>,
+    baseUrl: String,
+    streamToken: String,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onSeeAll: () -> Unit,
+    modifier: Modifier = Modifier,
+    focusFirst: Boolean = false,
+    onFirstFocused: () -> Unit = {},
+) {
+    val firstCard = remember { FocusRequester() }
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        contentPadding = PaddingValues(horizontal = Shell.Gutter),
+        modifier = modifier.padding(bottom = 12.dp),
+    ) {
+        itemsIndexed(items, key = { _, it -> it.id }) { index, item ->
+            if (index == 0 && focusFirst) FocusOnce(firstCard, onFirstFocused)
+            PosterGridCard(
+                item = item,
+                posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
+                onClick = { onItemSelected(item.id) },
+                // The bookmark is the Watchlist's, on any list's shelf.
+                saved = item.id in savedItems,
+                // Saved EPISODES get the SxxEyy line under the title
+                // (Library CW card parity) so they don't read as the
+                // whole series.
+                episodeBadge = episodeBadgeFor(item),
+                // Fixed shelf-card width (matches the home-rail PosterCard);
+                // a LazyRow gives no width bound, so the grid card's
+                // fillMaxWidth would otherwise blow up to full screen.
+                modifier = Modifier.width(180.dp).then(if (index == 0) Modifier.focusRequester(firstCard) else Modifier),
+            )
+        }
+        item(key = "__see_all__") {
+            SeeAllCard(onClick = onSeeAll)
+        }
+    }
+}
+
+/** [target] takes the focus once, as this is drawn; then [done]. */
+@Composable
+private fun FocusOnce(target: FocusRequester, done: () -> Unit) {
+    LaunchedEffect(target) {
+        runCatching { target.requestFocus() }
+        done()
+    }
+}
+
+/**
+ * A list on the watchlist with Separate movies and shows on (section 8.8.1):
+ * under its heading, the row of its movies, then the row of its shows, each
+ * as its own answer came - a title may stand in both, or in neither, until
+ * the list is loaded again. A row with nothing in it is left out, and so is
+ * one with no card to draw; a list with neither row shows its empty line, as
+ * with the setting off; a row that couldn't load keeps its name and says so
+ * in its cards' place. Each row keeps the card it was left on, and its name
+ * takes no focus: the heading, the list's name and count as without the
+ * setting, does. try again that loads the row sends the focus, which was on
+ * the button gone with the failed row, to the row's first card, or to the
+ * heading where the row has none to draw.
+ */
+@Composable
+internal fun ListByKind(
+    list: Watchlist,
+    rows: KindRows?,
+    baseUrl: String,
+    streamToken: String,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onOpen: () -> Unit,
+    onRetry: (TitleKind) -> Unit,
+) {
+    val heading = remember { FocusRequester() }
+    ShelfHeader(list = list, onOpen = onOpen, focusRequester = heading)
+    KindShelves(list, rows, baseUrl, streamToken, savedItems, onItemSelected, onOpen, onRetry, heading)
+}
+
+/** [ListByKind]'s rows, under its heading. */
+@OptIn(ExperimentalComposeUiApi::class)
+@Composable
+private fun KindShelves(
+    list: Watchlist,
+    rows: KindRows?,
+    baseUrl: String,
+    streamToken: String,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onOpen: () -> Unit,
+    onRetry: (TitleKind) -> Unit,
+    heading: FocusRequester,
+) {
+    // The row whose try again was pressed, until its answer has placed the
+    // focus; dropped where the focus left the button before.
+    var retried by remember { mutableStateOf<TitleKind?>(null) }
+    val latest by rememberUpdatedState(rows)
+    when {
+        rows == null -> ShelfHint("Loading…")
+        rows.empty -> {
+            ShelfHint(emptyShelfHint(list))
+            if (retried != null) FocusOnce(heading) { retried = null }
+        }
+        else -> TitleKind.entries.forEach { kind ->
+            when (val row = rows[kind]) {
+                is KindRow.Loaded -> if (row.items.isNotEmpty()) {
+                    KindName(kind, row.count, modifier = Modifier.padding(start = Shell.Gutter + 10.dp, end = Shell.Gutter))
+                    Shelf(
+                        items = row.items,
+                        baseUrl = baseUrl,
+                        streamToken = streamToken,
+                        savedItems = savedItems,
+                        onItemSelected = onItemSelected,
+                        onSeeAll = onOpen,
+                        modifier = Modifier.focusRestorer(),
+                        focusFirst = retried == kind,
+                        onFirstFocused = { retried = null },
+                    )
+                } else if (retried == kind) {
+                    FocusOnce(heading) { retried = null }
+                }
+                is KindRow.Failed -> {
+                    KindName(kind, count = null, modifier = Modifier.padding(start = Shell.Gutter + 10.dp, end = Shell.Gutter))
+                    RowCouldntLoad(
+                        failure = row.failure,
+                        onRetry = { retried = kind; onRetry(kind) },
+                        onFocusLeft = { if (retried == kind && latest?.get(kind) is KindRow.Failed) retried = null },
+                        modifier = Modifier.padding(start = Shell.Gutter + 10.dp, end = Shell.Gutter, bottom = 16.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** A row's name by kind - "movies · 4", "shows · 3"; the name alone where
+ *  its answer failed. It takes no focus: the list's heading does. */
+@Composable
+private fun KindName(kind: TitleKind, count: Int?, modifier: Modifier = Modifier) {
+    Text(
+        text = buildAnnotatedString {
+            append(kind.label)
+            if (count != null) withStyle(SpanStyle(color = ChinoMuted)) { append(" · $count") }
+        },
+        color = ChinoText,
+        fontSize = 15.sp,
+        fontWeight = FontWeight.Medium,
+        modifier = modifier.padding(top = 4.dp, bottom = 8.dp),
+    )
+}
+
+/** In a row's place where its answer failed (section 8.10): "couldn't load
+ *  this list", the cause's sentence, and try again, which asks for that row
+ *  alone. [onFocusLeft]: the focus has left try again. */
+@Composable
+private fun RowCouldntLoad(
+    failure: LoadFailure,
+    onRetry: () -> Unit,
+    onFocusLeft: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Column(modifier = modifier, verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(text = "couldn't load this list", color = ChinoFg, fontSize = 15.sp, fontWeight = FontWeight.SemiBold)
+        causeSentence(failure)?.let { Text(text = it, color = ChinoMuted, fontSize = 14.sp) }
+        ChinoButton(
+            onClick = onRetry,
+            modifier = Modifier.padding(top = 4.dp).onFocusChanged { if (!it.isFocused) onFocusLeft() },
+        ) {
+            Text(text = stringResource(R.string.load_error_retry))
+        }
+    }
+}
+
 /** Focusable shelf header — "Name · count". OK opens the list's MORE view. */
 @Composable
-private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit) {
+private fun ShelfHeader(list: Watchlist, onOpen: () -> Unit, focusRequester: FocusRequester? = null) {
     // A plain button that names the list.
     val focus = rememberItemFocus()
     Row(
         modifier = Modifier
             .padding(start = Shell.Gutter, end = Shell.Gutter, top = 16.dp, bottom = 8.dp)
+            .then(if (focusRequester != null) Modifier.focusRequester(focusRequester) else Modifier)
             .focusStyle(focus, FocusKind.Control, surface = Color.Transparent)
             .focusable()
             .onKeyEvent { e ->
@@ -373,6 +567,10 @@ private fun ShelfHint(text: String) {
 private fun MoreContent(
     list: Watchlist,
     items: List<Item>,
+    /** With Separate movies and shows on, the list's two parts; null draws
+     *  [items] whole. */
+    kinds: KindRows?,
+    onRetryPart: (TitleKind) -> Unit,
     loading: Boolean,
     baseUrl: String,
     streamToken: String,
@@ -385,6 +583,10 @@ private fun MoreContent(
     deleteFocus: FocusRequester,
 ) {
     BackHandler(onBack = onBack)
+    // The part whose try again was pressed, until its answer has placed the
+    // focus (KindParts); back takes it where the list has no card left.
+    var retried by remember(list.id) { mutableStateOf<TitleKind?>(null) }
+    val backButton = remember { FocusRequester() }
     Column(modifier = Modifier.fillMaxSize()) {
         Row(
             modifier = Modifier
@@ -394,7 +596,7 @@ private fun MoreContent(
             // Room between the buttons for a focused one's grown ring.
             horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap),
         ) {
-            HeaderButton(icon = Lucide.ArrowLeft, label = "back", onClick = onBack)
+            HeaderButton(icon = Lucide.ArrowLeft, label = "back", onClick = onBack, modifier = Modifier.focusRequester(backButton))
             Text(
                 text = list.name,
                 color = ChinoFg,
@@ -425,7 +627,20 @@ private fun MoreContent(
         }
         when {
             loading -> Centered("Loading…")
-            items.isEmpty() -> Centered("“${list.name}” is empty. Save titles with the + button on any movie or show.")
+            kinds != null && !kinds.empty -> KindParts(
+                kinds = kinds,
+                baseUrl = baseUrl,
+                streamToken = streamToken,
+                savedItems = savedItems,
+                onItemSelected = onItemSelected,
+                onRetry = { kind -> retried = kind; onRetryPart(kind) },
+                retried = retried,
+                onRetryDone = { retried = null },
+            )
+            kinds != null || items.isEmpty() -> {
+                Centered("“${list.name}” is empty. Save titles with the + button on any movie or show.")
+                if (kinds != null && retried != null) FocusOnce(backButton) { retried = null }
+            }
             else -> LazyVerticalGrid(
                 columns = GridCells.Fixed(6),
                 modifier = Modifier.fillMaxSize(),
@@ -453,6 +668,83 @@ private fun MoreContent(
                         fontSize = 12.sp,
                         modifier = Modifier.padding(top = 16.dp),
                     )
+                }
+            }
+        }
+    }
+}
+
+/**
+ * An opened list with Separate movies and shows on (section 8.8.1): "movies
+ * · 4" over its movies, then "shows · 3" over its shows, each part as its own
+ * answer came - a title in both stands in both. A part with nothing in it is
+ * left out, and so is one with no card to draw; one that couldn't load keeps
+ * its name and says so in its place. Once the part whose try again was
+ * pressed ([retried]) is loaded, the focus, which was on the button gone with
+ * it, goes to its first card - to the other part's where it has none to draw
+ * - and [onRetryDone] follows; it is dropped where the focus left the button
+ * before.
+ */
+@Composable
+private fun KindParts(
+    kinds: KindRows,
+    baseUrl: String,
+    streamToken: String,
+    savedItems: Set<String>,
+    onItemSelected: (String) -> Unit,
+    onRetry: (TitleKind) -> Unit,
+    retried: TitleKind?,
+    onRetryDone: () -> Unit,
+) {
+    val firstCards = remember { TitleKind.entries.associateWith { FocusRequester() } }
+    val latest by rememberUpdatedState(kinds)
+    val retriedNow by rememberUpdatedState(retried)
+    fun drawn(kind: TitleKind) = (kinds[kind] as? KindRow.Loaded)?.items?.isNotEmpty() == true
+    // Where the focus goes once the part tried again has loaded.
+    val focusTo = when {
+        retried == null || kinds[retried] is KindRow.Failed -> null
+        drawn(retried) -> retried
+        else -> TitleKind.entries.firstOrNull(::drawn)
+    }
+    LazyVerticalGrid(
+        columns = GridCells.Fixed(6),
+        modifier = Modifier.fillMaxSize(),
+        // Room above the first row for a focused card's growth and ring.
+        contentPadding = PaddingValues(start = Shell.Gutter, end = Shell.Gutter, top = ChinoFocus.Room, bottom = Shell.Gutter),
+        horizontalArrangement = Arrangement.spacedBy(20.dp),
+        verticalArrangement = Arrangement.spacedBy(24.dp),
+    ) {
+        TitleKind.entries.forEach { kind ->
+            when (val part = kinds[kind]) {
+                is KindRow.Loaded -> if (part.items.isNotEmpty()) {
+                    item(key = "name/${kind.query}", span = { GridItemSpan(maxLineSpan) }) {
+                        KindName(kind, part.count)
+                    }
+                    // Keyed by part: a title both answers hold has a card in each.
+                    itemsIndexed(part.items, key = { _, it -> "${kind.query}/${it.id}" }) { index, item ->
+                        val first = firstCards.getValue(kind)
+                        if (index == 0 && focusTo == kind) FocusOnce(first, onRetryDone)
+                        PosterGridCard(
+                            item = item,
+                            posterUrl = "$baseUrl/v1/items/${item.id}/poster?stream=$streamToken",
+                            onClick = { onItemSelected(item.id) },
+                            saved = item.id in savedItems,
+                            episodeBadge = episodeBadgeFor(item),
+                            modifier = if (index == 0) Modifier.focusRequester(first) else Modifier,
+                        )
+                    }
+                }
+                is KindRow.Failed -> {
+                    item(key = "name/${kind.query}", span = { GridItemSpan(maxLineSpan) }) {
+                        KindName(kind, count = null)
+                    }
+                    item(key = "failed/${kind.query}", span = { GridItemSpan(maxLineSpan) }) {
+                        RowCouldntLoad(
+                            failure = part.failure,
+                            onRetry = { onRetry(kind) },
+                            onFocusLeft = { if (retriedNow == kind && latest[kind] is KindRow.Failed) onRetryDone() },
+                        )
+                    }
                 }
             }
         }

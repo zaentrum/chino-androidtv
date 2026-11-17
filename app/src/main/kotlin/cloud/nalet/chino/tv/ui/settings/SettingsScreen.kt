@@ -4,6 +4,8 @@ import cloud.nalet.chino.tv.ui.theme.ChinoFg
 import cloud.nalet.chino.tv.ui.theme.ChinoPage
 import cloud.nalet.chino.tv.ui.theme.ChinoBorder
 import cloud.nalet.chino.tv.ui.theme.ChinoError
+import cloud.nalet.chino.tv.ui.theme.ChinoErrorBg
+import cloud.nalet.chino.tv.ui.theme.causeSentence
 import cloud.nalet.chino.tv.ui.theme.ChinoMuted
 import cloud.nalet.chino.tv.ui.theme.ChinoSurface
 import androidx.activity.compose.BackHandler
@@ -68,6 +70,8 @@ import androidx.tv.material3.Text
 import androidx.tv.material3.Icon
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.semantics.LiveRegionMode
+import androidx.compose.ui.semantics.liveRegion
 import androidx.compose.ui.semantics.semantics
 import cloud.nalet.chino.tv.ui.theme.ChinoText
 import cloud.nalet.chino.tv.ui.theme.ChoiceMenu
@@ -103,6 +107,7 @@ fun SettingsScreen(
 ) {
     val s by viewModel.state.collectAsState()
     val reportsTaken by viewModel.reportsTaken.collectAsState()
+    val listsByKind by viewModel.listsByKind.collectAsState()
     val bugReport by viewModel.bugReport.collectAsState()
     var showReportPanel by remember { mutableStateOf(false) }
     // The languages each setting offers (LanguageChoices.kt): the server's
@@ -128,7 +133,9 @@ fun SettingsScreen(
     // last, DOWN from the last on the page; the rail's RIGHT onto the first.
     val back = rememberReturnFocus()
     val keys = listOfNotNull(
-        "intro", "credits", "next", "fewer", "more", "audio", "subtitles",
+        "intro", "credits", "next", "fewer", "more",
+        "kinds".takeIf { listsByKind.shown != null },
+        "audio", "subtitles",
         "profile".takeIf { onProfile != null },
         "switch".takeIf { onSwitchAccount != null },
         "delete".takeIf { onDeleteAccount != null },
@@ -239,6 +246,15 @@ fun SettingsScreen(
                     onChange = viewModel::setCountdownSec,
                     fewer = Modifier.inReadingOrder(order, "fewer"),
                     more = Modifier.inReadingOrder(order, "more"),
+                )
+            }
+            // After binge watching, only where the server keeps the setting
+            // and fills a list by kind, and the account's choice is known.
+            if (listsByKind.shown != null) {
+                ListsByKindGroup(
+                    setting = listsByKind,
+                    onChange = viewModel::setListsByKind,
+                    modifier = Modifier.inReadingOrder(order, "kinds"),
                 )
             }
             Section(
@@ -636,13 +652,14 @@ internal fun SettingButtons(content: @Composable androidx.compose.foundation.lay
 }
 
 /** A setting: its [title], its controls, and [subtitle], the text that
- *  explains them, under them. A focused control brings that text into view
- *  along with itself where both fit - "Connected to …" under change server,
- *  the page's last line, never cut at the screen's bottom. */
+ *  explains them, under them - none where each control has its own line.
+ *  A focused control brings that text into view along with itself where
+ *  both fit - "Connected to …" under change server, the page's last line,
+ *  never cut at the screen's bottom. */
 @Composable
 internal fun Section(
     title: String,
-    subtitle: String,
+    subtitle: String?,
     content: @Composable () -> Unit,
 ) {
     val bottom = remember { PartBottom() }
@@ -665,10 +682,61 @@ internal fun Section(
                 .padding(vertical = 8.dp),
         ) { CompositionLocalProvider(LocalFocusAlong provides (outer and bottom)) { content() } }
         // What the setting does, under it: read after the choice it explains.
-        Text(
-            text = subtitle,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        if (subtitle != null) {
+            Text(
+                text = subtitle,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+        }
+    }
+}
+
+/** The line under Separate movies and shows (section 16.4.7). */
+internal const val LISTS_BY_KIND_HINT = "Every list shows its movies in one row and its shows in another. " +
+    "Your choice goes with your account, to every device you sign in on."
+
+/** What a save of Separate movies and shows that failed says, before the
+ *  cause's sentence. */
+internal const val LISTS_BY_KIND_SAVE_FAILED = "Couldn't save the setting."
+
+/**
+ * The watchlist group (section 16.4.7): Separate movies and shows, its line
+ * under it, the account's choice on its switch. While it is read or saved the
+ * switch is busy: it shows the choice and takes no press. A save that failed
+ * puts the switch back and says so in the error banner under it, by the
+ * cause's sentence, until the switch is used again (section 16.8).
+ * [modifier] is the switch's.
+ */
+@Composable
+internal fun ListsByKindGroup(
+    setting: ListsByKindSetting,
+    onChange: (Boolean) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    val shown = setting.shown ?: return
+    Section(title = "watchlist", subtitle = null) {
+        ToggleRow(
+            label = "Separate movies and shows",
+            help = LISTS_BY_KIND_HINT,
+            value = shown,
+            busy = setting.busy,
+            onChange = onChange,
+            modifier = modifier,
         )
+        setting.failure?.let { failure ->
+            val cause = causeSentence(failure)
+            Text(
+                text = listOfNotNull(LISTS_BY_KIND_SAVE_FAILED, cause).joinToString(" "),
+                color = ChinoFg,
+                modifier = Modifier
+                    .padding(horizontal = 16.dp, vertical = 4.dp)
+                    .fillMaxWidth()
+                    .background(ChinoErrorBg)
+                    .border(1.dp, ChinoError, RectangleShape)
+                    .semantics { liveRegion = LiveRegionMode.Polite }
+                    .padding(horizontal = 14.dp, vertical = 10.dp),
+            )
+        }
     }
 }
 
@@ -680,6 +748,9 @@ private fun ToggleRow(
     onChange: (Boolean) -> Unit,
     /** On its on/off button. */
     modifier: Modifier = Modifier,
+    /** Its choice is being read or saved: it shows it, and a press does
+     *  nothing. */
+    busy: Boolean = false,
 ) {
     Row(
         modifier = Modifier
@@ -699,8 +770,9 @@ private fun ToggleRow(
         // A two-state pill: ON/OFF. Inactive uses surface tint, active uses
         // primary fill so the chip clearly reads as enabled; a filled one keeps
         // its fill on focus.
+        // Never disabled while busy: a disabled button would drop the focus.
         ChinoButton(
-            onClick = { onChange(!value) },
+            onClick = { if (!busy) onChange(!value) },
             modifier = modifier,
             container = if (value) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
             content = if (value) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurface,

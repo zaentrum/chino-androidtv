@@ -63,6 +63,11 @@ import cloud.nalet.chino.tv.ui.settings.Section
 import cloud.nalet.chino.tv.ui.settings.audioLanguageChoices
 import cloud.nalet.chino.tv.ui.settings.subtitleLanguageChoices
 import cloud.nalet.chino.tv.ui.watchlist.ConfirmDeleteListDialog
+import cloud.nalet.chino.tv.ui.watchlist.KindRow
+import cloud.nalet.chino.tv.ui.watchlist.KindRows
+import cloud.nalet.chino.tv.ui.watchlist.ListByKind
+import cloud.nalet.chino.tv.ui.settings.ListsByKindGroup
+import cloud.nalet.chino.tv.ui.settings.ListsByKindSetting
 import cloud.nalet.chino.tv.data.api.Watchlist
 import coil.Coil
 import coil.ImageLoader
@@ -151,6 +156,45 @@ class FocusScreenshotTest {
                 list = Watchlist(id = "l2", name = "Weekend", itemCount = 12),
                 onConfirm = {},
                 onDismiss = {},
+            )
+        }
+    }
+
+    // A list with Separate movies and shows on: its heading, the row of its
+    // movies that couldn't load - its name kept, the reason and try again,
+    // focused, in its cards' place - then "shows · 2" over its shows.
+    @Test fun listByKindRowFailed() = shot("watchlist_by_kind_row_failed_focused", focusLabel = "try again") {
+        Column(Modifier.width(900.dp)) {
+            ListByKind(
+                list = Watchlist(id = "l1", name = "Watchlist", itemCount = 5, isDefault = true),
+                rows = KindRows(
+                    movies = KindRow.Failed(LoadFailure(LoadFailure.Kind.Connection, "timeout")),
+                    shows = KindRow.Loaded(
+                        count = 2,
+                        items = listOf(
+                            Item(id = "s1", title = "Quiet Orchard", kind = "series", year = 2020),
+                            Item(id = "s2", title = "Lantern Bay", kind = "series", year = 2016),
+                        ),
+                    ),
+                ),
+                baseUrl = "https://artwork.test",
+                streamToken = "t",
+                savedItems = setOf("s1"),
+                onItemSelected = {},
+                onOpen = {},
+                onRetry = {},
+            )
+        }
+    }
+
+    // Separate movies and shows, its save failed: the switch back on the
+    // account's choice - focused, the one control - the error banner under
+    // it with the cause's sentence.
+    @Test fun listsByKindSaveFailed() = shot("settings_watchlist_save_failed_focused") {
+        Box(Modifier.width(900.dp)) {
+            ListsByKindGroup(
+                setting = ListsByKindSetting(shown = true, failure = LoadFailure(LoadFailure.Kind.Connection, "timeout")),
+                onChange = {},
             )
         }
     }

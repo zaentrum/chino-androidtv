@@ -107,6 +107,21 @@ fun LoadError(
     }
 }
 
+/**
+ * The cause's sentence for [failure] in a part of a page or after an action
+ * (a row, a save): the reason only, as on the error screen; a part's 404 and
+ * 410 are a request the server did not take. Null where the heading or the
+ * sign-in says it - no access, signed out.
+ */
+@Composable
+fun causeSentence(failure: LoadFailure): String? = when (failure.kind) {
+    LoadFailure.Kind.Connection -> stringResource(R.string.load_error_body)
+    LoadFailure.Kind.Server -> stringResource(R.string.load_error_body_server)
+    LoadFailure.Kind.Busy -> stringResource(R.string.load_error_body_busy)
+    LoadFailure.Kind.Rejected, LoadFailure.Kind.NotFound -> stringResource(R.string.load_error_body_rejected)
+    LoadFailure.Kind.Forbidden, LoadFailure.Kind.SignedOut -> null
+}
+
 @Composable
 private fun ErrorScreen(
     title: String,

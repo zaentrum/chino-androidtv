@@ -112,6 +112,21 @@ interface ChinoApi {
     @GET("v1/me")
     suspend fun me(): Me
 
+    /** The settings the account keeps, the same on every device it signs in
+     *  on (change 16.C25 of the specification), read for the account they
+     *  are of ([RequestAccount]). */
+    @GET("v1/me/settings")
+    suspend fun accountSettings(@Tag account: RequestAccount): AccountSettingsResponse
+
+    /** Changes the fields [body] names, for the account the change was made
+     *  under ([RequestAccount]): the settings as kept. A refusal (400, with a
+     *  code) changes nothing. */
+    @PATCH("v1/me/settings")
+    suspend fun changeAccountSettings(
+        @Body body: AccountSettingsChange,
+        @Tag account: RequestAccount,
+    ): AccountSettingsResponse
+
     /**
      * What addons contribute to a named UI slot
      * ([cloud.nalet.chino.tv.data.SLOT_SEARCH_EMPTY]), read from portal-api's
@@ -267,6 +282,19 @@ interface ChinoApi {
     /** A single list with its item ids (newest-added first). */
     @GET("v1/me/watchlists/{listId}")
     suspend fun getWatchlistDetail(@Path("listId") listId: String): WatchlistDetail
+
+    /**
+     * A list's titles of one [kind], in the list's order: `movie` its movies,
+     * `series` everything else it holds - its shows, its episodes, any other
+     * kind (section 8.8.1 of the specification). Only where /api/config says
+     * `features.watchlist_kinds`; 502 where the catalog could say none of the
+     * titles' kinds.
+     */
+    @GET("v1/me/watchlists/{listId}")
+    suspend fun getWatchlistOfKind(
+        @Path("listId") listId: String,
+        @Query("kind") kind: String,
+    ): WatchlistDetail
 
     /** Idempotent add of an item to a specific list. */
     @PUT("v1/me/watchlists/{listId}/items/{itemId}")
@@ -542,8 +570,25 @@ data class ServerConfigResponse(val features: Features = Features()) {
     data class Features(
         /** POST /v1/feedback files bug reports (it answers 503 without). */
         val feedback: Boolean = false,
+        /** The account keeps Separate movies and shows, and a list is
+         *  answered by kind (changes 8.C18 and 16.C25). */
+        @SerialName("watchlist_kinds") val watchlistKinds: Boolean = false,
     )
 }
+
+/** GET and PATCH /v1/me/settings: what the account keeps. */
+@Serializable
+data class AccountSettingsResponse(
+    /** Every list shows its movies and its shows apart; false while nothing
+     *  is set. */
+    @SerialName("watchlist_by_kind") val watchlistByKind: Boolean = false,
+)
+
+/** PATCH /v1/me/settings: the one field the switch sets. */
+@Serializable
+data class AccountSettingsChange(
+    @SerialName("watchlist_by_kind") val watchlistByKind: Boolean,
+)
 
 /** GET /v1/subtitles/languages: the server's subtitle languages, its order. */
 @Serializable

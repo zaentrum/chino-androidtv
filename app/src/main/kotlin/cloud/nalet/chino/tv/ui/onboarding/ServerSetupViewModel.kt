@@ -46,6 +46,8 @@ class ServerSetupViewModel(
     /** Non-null only on the change-server path; used to clear the old accounts
      *  on connect. */
     private val accountStore: AccountStore? = null,
+    /** What the TV keeps of an account's settings, for each account cleared. */
+    private val forgetAccount: (accountId: String) -> Unit,
 ) : ViewModel() {
     private val _state = MutableStateFlow<ServerSetupState>(ServerSetupState.Idle)
     val state: StateFlow<ServerSetupState> = _state.asStateFlow()
@@ -77,7 +79,10 @@ class ServerSetupViewModel(
                             // route to LIBRARY with stale wrong-issuer tokens that
                             // fail on first call instead of forcing re-auth.
                             val wiped = runCatching {
-                                acc.snapshotBlocking().accounts.forEach { acc.remove(it.id) }
+                                acc.snapshotBlocking().accounts.forEach {
+                                    acc.remove(it.id)
+                                    forgetAccount(it.id)
+                                }
                                 acc.snapshotBlocking().accounts.isEmpty()
                             }.getOrDefault(false)
                             if (!wiped) {
@@ -124,6 +129,7 @@ class ServerSetupViewModel(
                 ServerSetupViewModel(
                     store = container.serverConfigStore,
                     presetUrl = presetOrigin(),
+                    forgetAccount = container::forgetAccount,
                 )
             }
         }
@@ -144,6 +150,7 @@ class ServerSetupViewModel(
                     changeServer = true,
                     prefillUrl = currentOrigin,
                     accountStore = container.accountStore,
+                    forgetAccount = container::forgetAccount,
                 )
             }
         }

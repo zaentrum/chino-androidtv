@@ -23,6 +23,12 @@ import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.pressKey
 import androidx.test.core.app.ApplicationProvider
 import cloud.nalet.chino.tv.data.SettingsStore
+import cloud.nalet.chino.tv.data.AccountSettings
+import cloud.nalet.chino.tv.data.LastKnownInMemory
+import cloud.nalet.chino.tv.data.auth.ActiveChoice
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.feedback.BugReporter
@@ -64,6 +70,12 @@ class SettingsEdgesTest {
             serverHost = "media.test",
             takesReports = { true },
             subtitleLanguages = { listOf("en", "de") },
+            // A server without lists by kind: no watchlist group.
+            kindsOffered = { false },
+            kindsOfferedNow = { false },
+            accountSettings = AccountSettings(
+                api, CoroutineScope(SupervisorJob() + Dispatchers.IO), activeChanges = { 0 }, lastKnown = LastKnownInMemory(),
+            ) { ActiveChoice("viewer", 0) },
         )
         compose.setContent {
             ChinoTvTheme {

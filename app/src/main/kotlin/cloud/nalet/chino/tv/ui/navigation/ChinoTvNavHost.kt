@@ -269,7 +269,7 @@ fun ChinoTvNavHost(container: AppContainer) {
         // server-side, offline session idle, refresh failed), sign-in, for the
         // same user. Without the latter they'd hit a wall of API 401s and a
         // black library. Who's watching is among AccountNavHost's own routes.
-        AccountNavHost(navController, container.accountStore, snapshot, start) {
+        AccountNavHost(navController, container.accountStore, snapshot, start, forgetAccount = container::forgetAccount) {
             screen(Routes.SERVER) {
                 val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
@@ -331,6 +331,10 @@ fun ChinoTvNavHost(container: AppContainer) {
                 // container) and fully off the main thread — a cold home never
                 // waits on it.
                 LaunchedEffect(Unit) { container.warmFirstZapCard() }
+                // Beside it, the server's features and the account's
+                // Separate movies and shows: settings and the watchlist draw
+                // them from their first frame.
+                LaunchedEffect(Unit) { container.warmListsByKind() }
                 // Drain crash reports a previous process wrote on its way down.
                 // The library only mounts once an account is active, so the
                 // bearer the submit needs is available (chino-mobile drains from

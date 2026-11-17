@@ -97,6 +97,8 @@ internal fun StartOverOnAccountChange(nav: NavHostController, now: AccountStore.
  * followed, [StartOverOnAccountChange] on it, and who's watching
  * ([WhoIsWatching]) among the routes, beside the other [routes]. [boot] is the
  * store as it was when the app started, [startDestination] where it started.
+ * [forgetAccount] takes what the TV keeps of an account removed on who's
+ * watching.
  */
 @Composable
 internal fun AccountNavHost(
@@ -104,24 +106,27 @@ internal fun AccountNavHost(
     accountStore: AccountStore,
     boot: AccountStore.Snapshot,
     startDestination: String,
+    forgetAccount: (accountId: String) -> Unit,
     routes: NavGraphBuilder.() -> Unit,
 ) {
     val now by accountStore.snapshots.collectAsState(initial = boot)
     StartOverOnAccountChange(nav, now, boot.activeAccount?.id)
     NavHost(navController = nav, startDestination = startDestination) {
-        composable(Routes.PICKER) { ShellScreen { WhoIsWatching(nav, accountStore) } }
+        composable(Routes.PICKER) { ShellScreen { WhoIsWatching(nav, accountStore, forgetAccount) } }
         routes()
     }
 }
 
 /** Who's watching, as the app's back stack goes with it: an account chosen
  *  starts on its home, the one active already too. The active one removed
- *  changes the active account, and [StartOverOnAccountChange] starts over. */
+ *  changes the active account, and [StartOverOnAccountChange] starts over;
+ *  what the TV keeps of an account removed goes with it ([forgetAccount]). */
 @Composable
-internal fun WhoIsWatching(nav: NavController, accountStore: AccountStore) {
+internal fun WhoIsWatching(nav: NavController, accountStore: AccountStore, forgetAccount: (accountId: String) -> Unit) {
     AccountPickerScreen(
         accountStore = accountStore,
         onPicked = { account -> nav.startOverAt(Routes.LIBRARY, account.id) },
         onAddAccount = { nav.navigate(Routes.AUTH) },
+        forgetAccount = forgetAccount,
     )
 }

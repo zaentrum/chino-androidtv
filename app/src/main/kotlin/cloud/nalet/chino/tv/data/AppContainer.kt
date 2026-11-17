@@ -19,7 +19,14 @@ import kotlinx.coroutines.launch
  * than annotations + generated code, and survives configuration changes because
  * the Application instance does.
  */
-class AppContainer(context: Context) {
+class AppContainer internal constructor(
+    context: Context,
+    /** The accounts signed in on this TV, where a test brings its own; null
+     *  for the app's, kept encrypted ([AccountStore]). */
+    private val accounts: AccountStore?,
+) {
+    constructor(context: Context) : this(context, accounts = null)
+
     private val appCtx = context.applicationContext
 
     /** Application-lifetime CoroutineScope for fire-and-forget POSTs that
@@ -49,8 +56,7 @@ class AppContainer(context: Context) {
     val tokenStore: TokenStore by lazy { TokenStore(appCtx) }
 
     val accountStore: AccountStore by lazy {
-        AccountStore(appCtx).also { store ->
-            store.migrateFromTokenStoreIfPresent(tokenStore)
+        (accounts ?: AccountStore(appCtx).also { it.migrateFromTokenStoreIfPresent(tokenStore) }).also { store ->
             // Keep telemetry's account snapshot in sync with whatever's
             // active in AccountStore. Hot-collected on a long-lived
             // application-scoped coroutine so events fired off any thread
@@ -147,19 +153,50 @@ class AppContainer(context: Context) {
      *  the active account's, and nobody else's. */
     val userFlags: UserFlagsRepository by userFlagsLazy
 
+    /** Each account's Separate movies and shows as last known on this TV. */
+    private val lastKnownChoices: LastKnownChoices by lazy {
+        LastKnownOnDevice(appCtx.getSharedPreferences("account_settings", Context.MODE_PRIVATE))
+    }
+
+    private val accountSettingsLazy = lazy {
+        AccountSettings(
+            chinoApi,
+            // A save runs where the player's saves do: leaving settings
+            // doesn't take it with it.
+            scope = appScope,
+            activeChanges = accountStore::activeChangesNow,
+            activeChoice = { accountStore.activeChoiceBlocking() },
+            lastKnown = lastKnownChoices,
+        ).also { followActiveAccount }
+    }
+
+    /** The settings the active account keeps on the server - Separate movies
+     *  and shows - and nobody else's. */
+    val accountSettings: AccountSettings by accountSettingsLazy
+
+    /** [accountId] has left this TV - removed on who's watching, deleted, or
+     *  cleared by Change server: what the TV keeps of its settings goes with
+     *  it. Builds no API client where nothing has asked for one yet. */
+    fun forgetAccount(accountId: String) {
+        if (accountSettingsLazy.isInitialized()) accountSettings.forget(accountId)
+        else lastKnownChoices.forget(accountId)
+    }
+
     /**
      * Another account chosen, added or removed: what was kept or started for
      * the one before goes at once, before any screen of the new one asks - its
-     * lists and likes, and the Zap warm with its downloads. Started by the
-     * first of them, so nothing reads the account store before something
-     * needs it; each compares the account it holds with the active one, so
-     * the first value, the account active then, changes nothing.
+     * lists and likes, the settings it keeps, and the Zap warm with its
+     * downloads. Started by the first of them, so nothing reads the account
+     * store before something needs it; each compares the account it holds
+     * with the active one, so the first value, the account active then,
+     * changes nothing.
      */
     private val followActiveAccount: kotlinx.coroutines.Job by lazy {
         appScope.launch {
             accountStore.activeAccountId.distinctUntilChanged().collect { id ->
                 zapWarm.activeIs(id)
                 if (userFlagsLazy.isInitialized()) userFlags.activeIs(id)
+                if (accountSettingsLazy.isInitialized()) accountSettings.activeIs(id)
             }
         }
     }
@@ -171,9 +208,22 @@ class AppContainer(context: Context) {
     }
 
     /** What the server offers that the app shows only where it does - bug
-     *  reports - asked once a session. */
+     *  reports, lists by kind - asked once a session. */
     val serverFeatures: ServerFeatures by lazy {
-        ServerFeatures { chinoApi.serverConfig().features.feedback }
+        ServerFeatures { chinoApi.serverConfig().features }
+    }
+
+    /** Whether every list is drawn by kind for the active account: the server
+     *  fills lists by kind and the account's Separate movies and shows is on.
+     *  Off where either can't be said (section 8.8.1). */
+    val listsByKind: ListsByKind by lazy { ListsByKind(serverFeatures, accountSettings) }
+
+    /** Home opened: the server's features and the active account's choice
+     *  are asked now, beside the Zap warm, so that settings and the
+     *  watchlist have both at their first frame. Fire-and-forget; a failure
+     *  leaves them to ask again as they open. */
+    fun warmListsByKind() {
+        appScope.launch { runCatching { listsByKind.ask(fresh = false) } }
     }
 
     /** Sends the actions addons put in a UI slot: a POST with the bearer that

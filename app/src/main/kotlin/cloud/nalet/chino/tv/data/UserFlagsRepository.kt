@@ -44,13 +44,13 @@ class UserFlagsRepository(
     private val api: ChinoApi,
     /** Where the toggles' requests run. */
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
-    /** Who is active now, and which choice of them; blocking, so it is read
-     *  off the main thread. */
     /** How often the active account has changed so far, read without the
      *  store ([cloud.nalet.chino.tv.data.auth.AccountStore.activeChangesNow]):
      *  a press made after another account was chosen is never marked with the
      *  one before, also before the change has reached [activeIs]. */
     private val activeChanges: () -> Long,
+    /** Who is active now, and which choice of them; blocking, so it is read
+     *  off the main thread. */
     private val activeChoice: () -> ActiveChoice,
 ) {
     private val mutex = Mutex()

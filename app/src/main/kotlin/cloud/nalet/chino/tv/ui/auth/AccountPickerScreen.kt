@@ -70,6 +70,9 @@ fun AccountPickerScreen(
     accountStore: AccountStore,
     onPicked: (Account) -> Unit,
     onAddAccount: () -> Unit,
+    /** An account removed here has left this TV: what the TV keeps of its
+     *  settings goes with it. */
+    forgetAccount: (accountId: String) -> Unit,
 ) {
     // Seed the cold-emitting accounts flow with a synchronous snapshot of
     // EncryptedSharedPreferences so the picker renders its tile row on the
@@ -139,6 +142,7 @@ fun AccountPickerScreen(
             onConfirm = {
                 scope.launch {
                     accountStore.remove(acct.id)
+                    forgetAccount(acct.id)
                     pendingRemoval = null
                 }
             },

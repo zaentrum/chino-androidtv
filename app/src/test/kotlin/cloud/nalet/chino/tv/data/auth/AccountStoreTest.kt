@@ -59,6 +59,15 @@ class AccountStoreTest {
     }
 
     @Test
+    fun `how often the active account changed, read without the store, is the choice's count`() {
+        signedIn("parent", "child")
+        runBlocking { store.setActive("child") }
+        assertEquals(store.activeChoiceBlocking().changes, store.activeChangesNow())
+        store.updateTokensForBlocking("child", Tokens(accessToken = "renewed", refreshToken = null, expiresAtEpochMillis = 1))
+        assertEquals(store.activeChoiceBlocking().changes, store.activeChangesNow())
+    }
+
+    @Test
     fun `P_C16 the active account removed is another choice, another one removed is not`() {
         signedIn("parent", "child", "guest")
         val first = store.activeChoiceBlocking()

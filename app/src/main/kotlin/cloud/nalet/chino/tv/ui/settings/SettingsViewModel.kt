@@ -3,15 +3,20 @@ package cloud.nalet.chino.tv.ui.settings
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import cloud.nalet.chino.tv.data.AccountSettings
 import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.AppSettings
 import cloud.nalet.chino.tv.data.SettingsStore
+import cloud.nalet.chino.tv.data.api.LoadFailure
+import cloud.nalet.chino.tv.data.api.loadFailureOf
 import cloud.nalet.chino.tv.data.telemetry.Telemetry
 import cloud.nalet.chino.tv.feedback.BugReporter
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
@@ -25,6 +30,43 @@ sealed interface BugReportState {
     data class Failed(val message: String) : BugReportState
 }
 
+/**
+ * Separate movies and shows as settings show it (sections 16.4.7 and 16.8 of
+ * the specification): [shown] is the choice on the switch - the account's,
+ * the one last known on this device while it is read or where that read
+ * failed, or the one being saved - and null leaves the watchlist group out,
+ * where the server doesn't fill lists by kind. The switch is busy while the
+ * choice is [saving] or [reading]. [failure] says why the last save failed,
+ * until the switch is used again.
+ */
+data class ListsByKindSetting(
+    val shown: Boolean? = null,
+    val saving: Boolean = false,
+    val reading: Boolean = false,
+    val failure: LoadFailure? = null,
+) {
+    /** Busy: the switch shows its choice and takes no press. */
+    val busy: Boolean get() = saving || reading
+}
+
+/** The watchlist group as [offered], [held], [reading], [saving] and the
+ *  last save's [failure] make it: left out where it isn't offered or nothing
+ *  is held for the account. */
+private fun listsByKindShown(
+    offered: Boolean,
+    held: Boolean?,
+    reading: Boolean,
+    saving: Boolean?,
+    failure: LoadFailure?,
+): ListsByKindSetting =
+    if (!offered || held == null) ListsByKindSetting()
+    else ListsByKindSetting(
+        shown = saving ?: held,
+        saving = saving != null,
+        reading = reading && saving == null,
+        failure = failure.takeIf { saving == null },
+    )
+
 class SettingsViewModel(
     private val store: SettingsStore,
     private val telemetry: Telemetry,
@@ -36,8 +78,86 @@ class SettingsViewModel(
     private val takesReports: suspend () -> Boolean = { false },
     /** The server's subtitle languages ([cloud.nalet.chino.tv.data.SubtitleLanguages]). */
     private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
+    /** Whether the server keeps Separate movies and shows and fills a list by
+     *  kind ([cloud.nalet.chino.tv.data.ServerFeatures.watchlistKinds]),
+     *  asked where it hasn't answered yet. */
+    private val kindsOffered: suspend () -> Boolean,
+    /** The same as far as the server has answered, asking nothing
+     *  ([cloud.nalet.chino.tv.data.ServerFeatures.watchlistKindsNow]): what
+     *  the page's first frame shows. */
+    private val kindsOfferedNow: () -> Boolean,
+    /** The settings the active account keeps on the server. */
+    private val accountSettings: AccountSettings,
 ) : ViewModel() {
     init { telemetry.event("screen_view", extra = mapOf("screen" to "settings")) }
+
+    /** Whether the watchlist group is offered: as far as the server has
+     *  answered when the page opens, then as it answers. */
+    private val kindsAvailable = MutableStateFlow(kindsOfferedNow())
+
+    /** The read the page makes as it opens is still out: the switch is busy
+     *  from the first frame until it has answered. */
+    private val kindsOpening = MutableStateFlow(true)
+
+    /** The choice being saved, while it is. */
+    private val kindsSaving = MutableStateFlow<Boolean?>(null)
+    private val kindsFailure = MutableStateFlow<LoadFailure?>(null)
+
+    /** Separate movies and shows, as the watchlist group shows it: from the
+     *  first frame what is known already - the server's features as far as
+     *  they have answered, and the choice the account settings hold - then
+     *  as each answers. */
+    val listsByKind: StateFlow<ListsByKindSetting> = combine(
+        kindsAvailable,
+        accountSettings.watchlistByKind,
+        combine(accountSettings.reading, kindsOpening) { reading, opening -> reading || opening },
+        kindsSaving,
+        kindsFailure,
+    ) { offered, held, reading, saving, failure ->
+        listsByKindShown(offered, held, reading, saving, failure)
+    }.stateIn(
+        viewModelScope,
+        SharingStarted.Eagerly,
+        listsByKindShown(kindsAvailable.value, accountSettings.watchlistByKind.value, true, null, null),
+    )
+
+    init {
+        viewModelScope.launch {
+            try {
+                if (kindsOffered()) {
+                    kindsAvailable.value = true
+                    // Read again: it may have been changed on another device.
+                    accountSettings.watchlistByKind(fresh = true)
+                }
+            } finally {
+                kindsOpening.value = false
+            }
+        }
+    }
+
+    /** The switch pressed: [on] saved for the account whose choice it shows.
+     *  A press while the choice is saved or read does nothing; a press after
+     *  another account was chosen sends nothing. The save runs on the
+     *  account settings' own scope: leaving the page doesn't stop it. */
+    fun setListsByKind(on: Boolean) {
+        if (kindsSaving.value != null || kindsOpening.value) return
+        val under = accountSettings.pressedUnder() ?: return
+        telemetry.event("setting_change", extra = mapOf("key" to "watchlistByKind", "value" to on.toString()))
+        // The banner of a save before goes as the switch is used again.
+        kindsFailure.value = null
+        kindsSaving.value = on
+        val save = accountSettings.saveWatchlistByKind(on, under)
+        viewModelScope.launch {
+            kindsFailure.value = try {
+                save.await()
+            } catch (e: CancellationException) {
+                throw e
+            } catch (e: Exception) {
+                loadFailureOf(e)
+            }
+            kindsSaving.value = null
+        }
+    }
 
     private val _reportsTaken = MutableStateFlow(false)
 
@@ -147,6 +267,9 @@ class SettingsViewModel(
                         .takeIf { it.isNotBlank() },
                     takesReports = container.serverFeatures::feedback,
                     subtitleLanguages = container.subtitleLanguages::get,
+                    kindsOffered = container.serverFeatures::watchlistKinds,
+                    kindsOfferedNow = container.serverFeatures::watchlistKindsNow,
+                    accountSettings = container.accountSettings,
                 ) as T
         }
     }
