@@ -38,8 +38,8 @@ fun Avatar(
 ) {
     val seed = email.ifBlank { displayName }
     val bg = avatarColor(seed)
-    // Two-letter initials from the first two words ("Andreas Meinen" -> "AM",
-    // "andreas" -> "A"), matching the mobile/web avatar. Splits on whitespace
+    // Two-letter initials from the first two words ("Alex Example" -> "AE",
+    // "alex" -> "A"), matching the mobile/web avatar. Splits on whitespace
     // and common separators.
     val initial = displayName.split(Regex("[\\s._-]+"))
         .filter { it.isNotEmpty() }
