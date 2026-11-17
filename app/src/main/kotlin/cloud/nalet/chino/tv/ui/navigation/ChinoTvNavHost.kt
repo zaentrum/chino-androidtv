@@ -137,6 +137,18 @@ fun ChinoTvNavHost(container: AppContainer) {
                 container.serverConfigStore.save(container.buildDefaultServerConfig())
                 configured = true
             }
+            // Whether the server fills lists by kind and the account's choice,
+            // as this TV knows them: on settings' and the watchlist's first
+            // frame, wherever the start lands.
+            if (configured && accts.activeAccount != null) {
+                try {
+                    container.holdListsByKind()
+                } catch (e: kotlinx.coroutines.CancellationException) {
+                    throw e
+                } catch (e: Exception) {
+                    Unit
+                }
+            }
             BootState(accts, configured)
         }
     }

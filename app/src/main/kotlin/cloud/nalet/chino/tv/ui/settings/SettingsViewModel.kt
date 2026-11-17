@@ -80,9 +80,11 @@ class SettingsViewModel(
     private val subtitleLanguages: suspend () -> List<String> = { emptyList() },
     /** Whether the server keeps Separate movies and shows and fills a list by
      *  kind ([cloud.nalet.chino.tv.data.ServerFeatures.watchlistKinds]),
-     *  asked where it hasn't answered yet. */
+     *  asked where it hasn't answered yet; where that fails, as it said
+     *  before. */
     private val kindsOffered: suspend () -> Boolean,
-    /** The same as far as the server has answered, asking nothing
+    /** The same as far as is known, asking nothing - the server's answer,
+     *  or what it said before, kept on this device
      *  ([cloud.nalet.chino.tv.data.ServerFeatures.watchlistKindsNow]): what
      *  the page's first frame shows. */
     private val kindsOfferedNow: () -> Boolean,
@@ -91,8 +93,9 @@ class SettingsViewModel(
 ) : ViewModel() {
     init { telemetry.event("screen_view", extra = mapOf("screen" to "settings")) }
 
-    /** Whether the watchlist group is offered: as far as the server has
-     *  answered when the page opens, then as it answers. */
+    /** Whether the watchlist group is offered: as far as is known when the
+     *  page opens - the server's answer, or what it said before, kept on
+     *  this device - then as it answers. */
     private val kindsAvailable = MutableStateFlow(kindsOfferedNow())
 
     /** The read the page makes as it opens is still out: the switch is busy
@@ -104,9 +107,9 @@ class SettingsViewModel(
     private val kindsFailure = MutableStateFlow<LoadFailure?>(null)
 
     /** Separate movies and shows, as the watchlist group shows it: from the
-     *  first frame what is known already - the server's features as far as
-     *  they have answered, and the choice the account settings hold - then
-     *  as each answers. */
+     *  first frame what is known already - whether the server fills lists
+     *  by kind, as it answered or said before, and the choice the account
+     *  settings hold - then as each answers. */
     val listsByKind: StateFlow<ListsByKindSetting> = combine(
         kindsAvailable,
         accountSettings.watchlistByKind,
@@ -123,14 +126,26 @@ class SettingsViewModel(
 
     init {
         viewModelScope.launch {
-            try {
-                if (kindsOffered()) {
-                    kindsAvailable.value = true
-                    // Read again: it may have been changed on another device.
+            if (kindsAvailable.value) {
+                // Known as offered: the choice is read again at once - it may
+                // have been changed on another device - beside asking the
+                // server where it hasn't answered.
+                launch { kindsAvailable.value = kindsOffered() }
+                try {
                     accountSettings.watchlistByKind(fresh = true)
+                } finally {
+                    kindsOpening.value = false
                 }
-            } finally {
-                kindsOpening.value = false
+            } else {
+                try {
+                    if (kindsOffered()) {
+                        kindsAvailable.value = true
+                        // Read again: it may have been changed on another device.
+                        accountSettings.watchlistByKind(fresh = true)
+                    }
+                } finally {
+                    kindsOpening.value = false
+                }
             }
         }
     }

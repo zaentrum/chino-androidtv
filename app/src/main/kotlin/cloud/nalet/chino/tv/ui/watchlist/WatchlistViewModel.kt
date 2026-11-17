@@ -108,8 +108,8 @@ sealed interface WatchlistUiState {
  * against the other. The lists are asked for at once, alongside the setting
  * and the server's features, never after them: they are drawn with the
  * choice held for the account - the one last known on this device while it
- * is read, off where there is none or the server's features haven't
- * answered - and again where the answer differs.
+ * is read, off where there is none or the server never said it fills lists
+ * by kind - and again, once, where the answer differs.
  */
 class WatchlistViewModel(
     private val api: ChinoApi,
@@ -163,7 +163,8 @@ class WatchlistViewModel(
 
     init {
         // Separate movies and shows changed while the lists show - in
-        // settings, or read again: drawn anew, silently, an open list too.
+        // settings, or read again - or the server's word on lists by kind:
+        // drawn anew, silently, an open list too.
         viewModelScope.launch {
             listsByKind.changes.collect { on -> if (on != null) redrawIfChanged() }
         }
@@ -184,11 +185,10 @@ class WatchlistViewModel(
             // A load of its own - the first, try again - asks for the setting
             // again, beside the lists rather than before them: it may have
             // been changed on another device. The lists are drawn with the
-            // choice held meanwhile, and again where the answer differs.
-            viewModelScope.launch {
-                listsByKind.ask(fresh = true)
-                redrawIfChanged()
-            }
+            // choice held meanwhile, and again where the answer differs: an
+            // answer that changes what the lists are drawn by reaches the
+            // collector above, which draws them anew, once.
+            viewModelScope.launch { listsByKind.ask(fresh = true) }
         }
         viewModelScope.launch {
             try {

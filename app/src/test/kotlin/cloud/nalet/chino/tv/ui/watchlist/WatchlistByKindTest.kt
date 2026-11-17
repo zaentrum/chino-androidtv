@@ -11,6 +11,7 @@ import androidx.compose.ui.test.ExperimentalTestApi
 import androidx.compose.ui.test.SemanticsMatcher
 import androidx.compose.ui.test.assert
 import androidx.compose.ui.test.hasClickAction
+import androidx.compose.ui.test.hasContentDescription
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isFocused
 import androidx.compose.ui.test.junit4.createComposeRule
@@ -112,17 +113,23 @@ class WatchlistByKindTest {
     @Volatile private var holdLists = false
     @Volatile private var heldLists: Continuation<Any?>? = null
 
+    /** How often the lists were asked for: once a load of the hub. */
+    private val listsAsked = java.util.concurrent.atomic.AtomicInteger()
+
     @Suppress("UNCHECKED_CAST")
     private val api = java.lang.reflect.Proxy.newProxyInstance(
         ChinoApi::class.java.classLoader, arrayOf(ChinoApi::class.java),
     ) { _, method, args ->
         when (method.name) {
-            "getWatchlists" -> if (holdLists) {
-                holdLists = false
-                heldLists = args!!.last() as Continuation<Any?>
-                COROUTINE_SUSPENDED
-            } else {
-                WatchlistsResponse(lists)
+            "getWatchlists" -> {
+                listsAsked.incrementAndGet()
+                if (holdLists) {
+                    holdLists = false
+                    heldLists = args!!.last() as Continuation<Any?>
+                    COROUTINE_SUSPENDED
+                } else {
+                    WatchlistsResponse(lists)
+                }
             }
             "accountSettings" -> if (holdRead) {
                 holdRead = false
@@ -195,7 +202,13 @@ class WatchlistByKindTest {
         api, CoroutineScope(SupervisorJob() + Dispatchers.IO), activeChanges = { 0 }, lastKnown = lastKnown,
     ) { ActiveChoice("viewer", 0) }
 
-    private val listsByKind by lazy { ListsByKind(ServerFeatures { features.await() }, accountSettings) }
+    /** What this TV keeps of the server's word on lists by kind: what it
+     *  said the last time it answered; null where it never did. */
+    private var keptKinds: Boolean? = null
+
+    private val listsByKind by lazy {
+        ListsByKind(ServerFeatures(kept = keptKinds, keep = { keptKinds = it }) { features.await() }, accountSettings)
+    }
 
     private lateinit var vm: WatchlistViewModel
 
@@ -527,6 +540,125 @@ class WatchlistByKindTest {
         press(Key.DirectionUp)
         val focused = compose.onNode(isFocused()).fetchSemanticsNode().positionInRoot.y
         assertTrue("focus at $focused", focused < top("movies · 2") && focused > top("new list"))
+    }
+
+    /** Where the focus is, down the page. */
+    private fun focusedBounds() = compose.onNode(isFocused()).fetchSemanticsNode().boundsInRoot
+
+    /** Whether the focus is on the first list's heading, "Watchlist · 3". */
+    private fun focusOnFirstHeading(): Boolean {
+        val focused = compose.onAllNodes(isFocused()).fetchSemanticsNodes().singleOrNull() ?: return false
+        val count = compose.onNode(hasText("· 3")).fetchSemanticsNode().boundsInRoot.center
+        return focused.boundsInRoot.contains(count)
+    }
+
+    @Test
+    fun `8_8_1 on a slow server the lists are drawn by kind from the first draw, as the server said before`() {
+        keptKinds = true
+        lastKnown.keep("viewer", true)
+        features = CompletableDeferred()
+        // The start: the account's choice as last known held, asking nothing.
+        runBlocking { accountSettings.holdActive() }
+        show(on = true, warm = false)
+        assertNotNull((vm.state.value as WatchlistUiState.Ready).byKind)
+        assertEquals(1, count("movies · 2"))
+        assertTrue(asked.toString(), asked.none { it.endsWith("whole") })
+        assertEquals(1, listsAsked.get())
+    }
+
+    @Test
+    fun `8_8_1 an answer that differs after the first draw draws the lists anew once`() {
+        lastKnown.keep("viewer", false)
+        holdRead = true
+        show(on = true, warm = false)
+        waitFor { heldRead != null }
+        assertEquals(1, listsAsked.get())
+        compose.runOnIdle { heldRead!!.resumeWith(Result.success(AccountSettingsResponse(true))) }
+        waitFor { count("movies · 2") == 1 }
+        compose.waitForIdle()
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(2, listsAsked.get())
+        assertEquals(1, asked.count { it == "l1 movie" })
+    }
+
+    @Test
+    fun `8_8_1 the server's answer on lists by kind that differs from what was kept draws the lists anew once`() {
+        keptKinds = false
+        lastKnown.keep("viewer", true)
+        features = CompletableDeferred()
+        // The start: the account's choice as last known held, so that only
+        // the server's word changes.
+        runBlocking { accountSettings.holdActive() }
+        show(on = true, warm = false)
+        assertEquals(0, count("movies · 2"))
+        assertEquals(1, listsAsked.get())
+        features.complete(ServerConfigResponse.Features(watchlistKinds = true))
+        waitFor { count("movies · 2") == 1 }
+        compose.waitForIdle()
+        shadowOf(android.os.Looper.getMainLooper()).idle()
+        assertEquals(2, listsAsked.get())
+        assertEquals(true, keptKinds)
+    }
+
+    @Test
+    fun `8_C18 a redraw from whole to split sends the focus on the page to the first list's heading`() {
+        show(on = false)
+        card("Paper Station").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        compose.onNode(isFocused()).assert(hasText("Paper Station"))
+        serverOn = true
+        runBlocking { accountSettings.watchlistByKind(fresh = true) }
+        waitFor { count("movies · 2") == 1 }
+        assertTrue("focus at ${focusedBounds()}", focusOnFirstHeading())
+    }
+
+    @Test
+    fun `8_C18 a redraw from split to whole sends the focus on the page to the first list's heading`() {
+        show(on = true)
+        card("Quiet Orchard").onFirst().performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        compose.onNode(isFocused()).assert(hasText("Quiet Orchard"))
+        serverOn = false
+        runBlocking { accountSettings.watchlistByKind(fresh = true) }
+        waitFor { count("movies · 2") == 0 && card("Quiet Orchard").fetchSemanticsNodes().isNotEmpty() }
+        assertTrue("focus at ${focusedBounds()}", focusOnFirstHeading())
+    }
+
+    @Test
+    fun `8_C18 a redraw that changes the arrangement leaves the focus where it was off the page`() {
+        show(on = false)
+        // The rail's item of this screen: where the focus coming into the
+        // rail lands.
+        val rail = hasContentDescription("Watchlist") and hasClickAction()
+        compose.onNode(rail).performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        compose.onNode(isFocused()).assert(rail)
+        serverOn = true
+        runBlocking { accountSettings.watchlistByKind(fresh = true) }
+        waitFor { count("movies · 2") == 1 }
+        compose.onNode(isFocused()).assert(rail)
+        assertTrue(!focusOnFirstHeading())
+    }
+
+    @Test
+    fun `8_C18 in an opened list a part that loads with no card while the other still failed sends the focus to back`() {
+        byKind.getValue("l1")["movie"] = null
+        byKind.getValue("l1")["series"] = null
+        show()
+        compose.runOnIdle { vm.openList("l1") }
+        waitFor { vm.openKinds.value != null }
+        val retries = compose.onAllNodes(hasText("try again") and hasClickAction())
+        assertEquals(2, retries.fetchSemanticsNodes().size)
+        val moviesRetry = retries.onFirst()
+        moviesRetry.performSemanticsAction(SemanticsActions.RequestFocus)
+        compose.waitForIdle()
+        compose.onNode(isFocused()).assert(hasText("try again"))
+        // The movies answer: nothing to draw; the shows still fail.
+        byKind.getValue("l1")["movie"] = emptyList()
+        moviesRetry.performSemanticsAction(SemanticsActions.OnClick)
+        waitFor { vm.openKinds.value?.movies is KindRow.Loaded }
+        assertEquals(1, count("couldn't load this list"))
+        compose.onNode(isFocused()).assert(hasText("back"))
     }
 
     /** The remote's input: a TV is in keyboard mode. */

@@ -12,9 +12,11 @@ import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Deferred
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -187,6 +189,15 @@ class AccountSettings(
         }
     }
 
+    /** Holds the active account's setting as last known on this device, off
+     *  where there is none, reading nothing: what settings and the lists show
+     *  from their first frame until it is read. What is held for that
+     *  account already stays; where nobody is signed in, nothing is held.
+     *  Reads the account store off the main thread. */
+    suspend fun holdActive() {
+        hold(choiceNow())
+    }
+
     /** Holds [choice]'s setting, or nothing where nobody is signed in;
      *  whether somebody is. */
     private fun hold(choice: ActiveChoice): Boolean = synchronized(lock) {
@@ -317,11 +328,15 @@ class ListsByKind(private val features: ServerFeatures, private val settings: Ac
     suspend fun ask(fresh: Boolean): Boolean =
         features.watchlistKinds() && settings.watchlistByKind(fresh) == true
 
-    /** As far as is known now, asking nothing: off while the server's
-     *  features haven't answered or nothing is held for the account; the
-     *  choice held is the one last known on this device while it is read. */
+    /** As far as is known now, asking nothing: off where the server never
+     *  said it fills lists by kind - in this session, or before, as kept on
+     *  this device - or nothing is held for the account; the choice held is
+     *  the one last known on this device while it is read. */
     fun now(): Boolean = features.watchlistKindsNow() && settings.watchlistByKind.value == true
 
-    /** The account's choice as it changes: read, saved, or another account. */
-    val changes: StateFlow<Boolean?> get() = settings.watchlistByKind
+    /** [now] as what it is made of changes - the account's choice (read,
+     *  saved, or another account's) and the server's word on lists by kind;
+     *  null while nothing is held for the account. */
+    val changes: Flow<Boolean?>
+        get() = combine(features.watchlistKindsChanges, settings.watchlistByKind) { offered, on -> on?.let { offered && it } }
 }

@@ -3,6 +3,7 @@ package cloud.nalet.chino.tv.data
 import android.content.Context
 import androidx.datastore.preferences.core.MutablePreferences
 import androidx.datastore.preferences.core.Preferences
+import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
@@ -71,6 +72,11 @@ class ServerConfigStore(context: Context) {
 
     suspend fun save(c: ServerConfig) {
         ds.edit { p ->
+            // Another server: what the one before said it offers goes.
+            if (p[KEY_BASE_URL] != c.baseUrl) {
+                p.remove(KEY_FEATURES_OF)
+                p.remove(KEY_WATCHLIST_KINDS)
+            }
             p[KEY_BASE_URL] = c.baseUrl
             p[KEY_ISSUER] = c.issuer
             p[KEY_CLIENT_ID] = c.clientId
@@ -80,8 +86,30 @@ class ServerConfigStore(context: Context) {
         }
     }
 
-    /** Forgets the connected server — used by Settings "change server" (1b). */
+    /** Forgets the connected server — used by Settings "change server" (1b) —
+     *  and what it said it offers. */
     suspend fun clear() = ds.edit { it.clear() }
+
+    /** Whether the server at [baseUrl] said, the last time it answered
+     *  /api/config, that it keeps Separate movies and shows and fills a list
+     *  by kind (features.watchlist_kinds): kept so that settings and the
+     *  watchlist know it from their first frame after a start, before the
+     *  server answers again, and where it doesn't. Null where it never
+     *  answered. Another server saved, or the server forgotten, takes it
+     *  with it. Blocking, like [currentBlocking]. */
+    fun watchlistKindsBlocking(baseUrl: String): Boolean? = runBlocking {
+        val p = ds.data.first()
+        p[KEY_WATCHLIST_KINDS]?.takeIf { p[KEY_FEATURES_OF] == baseUrl }
+    }
+
+    /** Keeps what the server at [baseUrl] said ([watchlistKindsBlocking]):
+     *  one server's, the one connected. */
+    suspend fun saveWatchlistKinds(baseUrl: String, on: Boolean) {
+        ds.edit { p ->
+            p[KEY_FEATURES_OF] = baseUrl
+            p[KEY_WATCHLIST_KINDS] = on
+        }
+    }
 
     private fun putOrRemove(p: MutablePreferences, key: Preferences.Key<String>, v: String?) {
         if (v != null) p[key] = v else p.remove(key)
@@ -109,5 +137,9 @@ class ServerConfigStore(context: Context) {
         val KEY_TOKEN_EP = stringPreferencesKey("oidc_token_endpoint")
         val KEY_USERINFO_EP = stringPreferencesKey("oidc_userinfo_endpoint")
         val KEY_RECENTS = stringPreferencesKey("recent_server_urls")
+
+        /** The server [KEY_WATCHLIST_KINDS] is of. */
+        val KEY_FEATURES_OF = stringPreferencesKey("features_base_url")
+        val KEY_WATCHLIST_KINDS = booleanPreferencesKey("features_watchlist_kinds")
     }
 }

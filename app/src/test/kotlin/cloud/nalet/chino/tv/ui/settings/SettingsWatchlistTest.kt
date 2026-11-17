@@ -147,9 +147,9 @@ class SettingsWatchlistTest {
     private val entry = ViewModelStore()
     private val onPage = mutableStateOf(true)
 
-    /** Settings open, the server's features known as [offered]; [wait]: until
-     *  the group is drawn. */
-    private fun show(offered: Boolean = true, wait: Boolean = true) {
+    /** Settings open, the server's features known as [offered] - and [asked],
+     *  what asking the server answers; [wait]: until the group is drawn. */
+    private fun show(offered: Boolean = true, asked: suspend () -> Boolean = { offered }, wait: Boolean = true) {
         val ctx = ApplicationProvider.getApplicationContext<android.app.Application>()
         viewModel = ViewModelProvider(
             entry,
@@ -162,7 +162,7 @@ class SettingsWatchlistTest {
                     serverHost = "media.test",
                     takesReports = { false },
                     subtitleLanguages = { listOf("en", "de") },
-                    kindsOffered = { offered },
+                    kindsOffered = asked,
                     kindsOfferedNow = { offered },
                     accountSettings = accountSettings,
                 ) as T
@@ -457,6 +457,27 @@ class SettingsWatchlistTest {
         assertEquals("off", switchLabel())
         assertEquals(true, lastKnown.of("parent"))
         assertEquals(false, lastKnown.of("child"))
+    }
+
+    @Test
+    fun `16_4_7 known as offered, the choice is read at once and the switch works while the server is still asked`() {
+        // The start: the choice last known on this TV held, asking nothing.
+        lastKnown.keep("parent", true)
+        runBlocking { accountSettings.holdActive() }
+        holdReads = true
+        val server = kotlinx.coroutines.CompletableDeferred<Boolean>()
+        show(asked = { server.await() }, wait = false)
+        assertEquals(ListsByKindSetting(shown = true, reading = true), firstState)
+        // Read beside the server's answer, not after it.
+        kept["parent"] = false
+        answerRead()
+        assertEquals("off", switchLabel())
+        press(kindsSwitch())
+        waitFor { saves.isNotEmpty() && !viewModel.listsByKind.value.busy }
+        assertEquals(listOf("parent" to true), saves.toList())
+        // The server says it doesn't fill lists by kind after all: the group goes.
+        server.complete(false)
+        waitFor { !exists("Separate movies and shows") }
     }
 
     @Test

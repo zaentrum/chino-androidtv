@@ -208,15 +208,32 @@ class AppContainer internal constructor(
     }
 
     /** What the server offers that the app shows only where it does - bug
-     *  reports, lists by kind - asked once a session. */
+     *  reports, lists by kind - asked once a session; whether it fills lists
+     *  by kind known from the start, from what it said before, kept on this
+     *  TV with the server. */
     val serverFeatures: ServerFeatures by lazy {
-        ServerFeatures { chinoApi.serverConfig().features }
+        ServerFeatures(
+            kept = serverConfigStore.watchlistKindsBlocking(baseUrl),
+            keep = { serverConfigStore.saveWatchlistKinds(baseUrl, it) },
+        ) { chinoApi.serverConfig().features }
     }
 
     /** Whether every list is drawn by kind for the active account: the server
      *  fills lists by kind and the account's Separate movies and shows is on.
      *  Off where either can't be said (section 8.8.1). */
     val listsByKind: ListsByKind by lazy { ListsByKind(serverFeatures, accountSettings) }
+
+    /** The app started, with a server and somebody signed in: what the
+     *  server said before of lists by kind and the active account's choice
+     *  as last known on this TV are held now, asking nothing, so that
+     *  settings and the watchlist know both from their first frame after any
+     *  start - one restored straight into settings too. Off the main thread:
+     *  both read what this TV keeps. */
+    suspend fun holdListsByKind() {
+        // Built here, off the main thread: it reads what this TV kept.
+        serverFeatures.watchlistKindsNow()
+        accountSettings.holdActive()
+    }
 
     /** Home opened: the server's features and the active account's choice
      *  are asked now, beside the Zap warm, so that settings and the

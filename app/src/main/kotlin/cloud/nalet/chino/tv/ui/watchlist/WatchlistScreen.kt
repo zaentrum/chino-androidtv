@@ -274,12 +274,31 @@ private fun HubContent(
     onNewList: () -> Unit,
     newListFocus: FocusRequester,
 ) {
+    // A redraw that changes the arrangement - every list whole, or split by
+    // kind - takes the focused card or row with it: where the focus was on
+    // the page, it goes to the first list's heading.
+    val split = s.byKind != null
+    val firstHeading = remember { FocusRequester() }
+    val arrangement = remember { HubArrangement(split) }
+    if (arrangement.split != split) {
+        // Read as the new arrangement is composed, before the old one goes.
+        arrangement.split = split
+        arrangement.changes++
+        arrangement.refocus = arrangement.focusInside
+    }
+    if (arrangement.refocus) {
+        LaunchedEffect(arrangement.changes) {
+            runCatching { firstHeading.requestFocus() }
+            arrangement.refocus = false
+        }
+    }
     // From the rail's line and the top bar's to the screen's right and
     // bottom edges, as chino-web's page: the shelves run to the right edge,
     // the content a gutter in.
     Column(
         modifier = Modifier
             .fillMaxSize()
+            .onFocusChanged { arrangement.focusInside = it.hasFocus }
             .verticalScroll(rememberScrollState())
             .padding(bottom = Shell.Gutter),
     ) {
@@ -299,7 +318,7 @@ private fun HubContent(
             Spacer(modifier = Modifier.weight(1f))
             NewListChip(onClick = onNewList, modifier = Modifier.focusRequester(newListFocus))
         }
-        s.lists.forEach { list ->
+        s.lists.forEachIndexed { index, list ->
             if (s.byKind != null) key(list.id) {
                 ListByKind(
                     list = list,
@@ -310,9 +329,10 @@ private fun HubContent(
                     onItemSelected = onItemSelected,
                     onOpen = { onOpenList(list.id) },
                     onRetry = { kind -> onRetryRow(list.id, kind) },
+                    heading = if (index == 0) firstHeading else remember { FocusRequester() },
                 )
             } else {
-                ShelfHeader(list = list, onOpen = { onOpenList(list.id) })
+                ShelfHeader(list = list, onOpen = { onOpenList(list.id) }, focusRequester = firstHeading.takeIf { index == 0 })
                 val shelf = s.shelves[list.id]
                 when {
                     shelf == null -> ShelfHint("Loading…")
@@ -329,6 +349,17 @@ private fun HubContent(
             }
         }
     }
+}
+
+/** Which arrangement the hub was drawn in last - every list whole, or split
+ *  by kind - how often it [changes], and whether the focus was on it
+ *  ([focusInside]), as that changes; [refocus]: the arrangement changed while
+ *  it was, and the focus is to go to the first list's heading. Plain fields:
+ *  reading them recomposes nothing. */
+private class HubArrangement(var split: Boolean) {
+    var changes = 0
+    var focusInside = false
+    var refocus = false
 }
 
 /** Where a list's titles come from, in its empty row. */
@@ -413,8 +444,9 @@ internal fun ListByKind(
     onItemSelected: (String) -> Unit,
     onOpen: () -> Unit,
     onRetry: (TitleKind) -> Unit,
+    /** The list's heading: where the focus goes when a row it was on goes. */
+    heading: FocusRequester = remember { FocusRequester() },
 ) {
-    val heading = remember { FocusRequester() }
     ShelfHeader(list = list, onOpen = onOpen, focusRequester = heading)
     KindShelves(list, rows, baseUrl, streamToken, savedItems, onItemSelected, onOpen, onRetry, heading)
 }
@@ -636,6 +668,7 @@ private fun MoreContent(
                 onRetry = { kind -> retried = kind; onRetryPart(kind) },
                 retried = retried,
                 onRetryDone = { retried = null },
+                backButton = backButton,
             )
             kinds != null || items.isEmpty() -> {
                 Centered("“${list.name}” is empty. Save titles with the + button on any movie or show.")
@@ -681,8 +714,9 @@ private fun MoreContent(
  * left out, and so is one with no card to draw; one that couldn't load keeps
  * its name and says so in its place. Once the part whose try again was
  * pressed ([retried]) is loaded, the focus, which was on the button gone with
- * it, goes to its first card - to the other part's where it has none to draw
- * - and [onRetryDone] follows; it is dropped where the focus left the button
+ * it, goes to its first card - to the other part's where it has none to draw,
+ * and to [backButton] where neither has one, the other part still failed -
+ * and [onRetryDone] follows; it is dropped where the focus left the button
  * before.
  */
 @Composable
@@ -695,6 +729,7 @@ private fun KindParts(
     onRetry: (TitleKind) -> Unit,
     retried: TitleKind?,
     onRetryDone: () -> Unit,
+    backButton: FocusRequester,
 ) {
     val firstCards = remember { TitleKind.entries.associateWith { FocusRequester() } }
     val latest by rememberUpdatedState(kinds)
@@ -706,6 +741,9 @@ private fun KindParts(
         drawn(retried) -> retried
         else -> TitleKind.entries.firstOrNull(::drawn)
     }
+    // Loaded with no card, and no other part has one to draw: back, as where
+    // the list has no card left.
+    if (retried != null && kinds[retried] !is KindRow.Failed && focusTo == null) FocusOnce(backButton, onRetryDone)
     LazyVerticalGrid(
         columns = GridCells.Fixed(6),
         modifier = Modifier.fillMaxSize(),
