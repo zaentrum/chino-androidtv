@@ -11,6 +11,12 @@ permissions:
   contents: read
 
 jobs:
+  # The organisation's shared neutrality check.
+  neutrality-shared:
+    permissions:
+      contents: read
+    uses: zaentrum/.github/.github/workflows/neutrality.yml@v1
+
   # ---------------------------------------------------------------------------
   # Neutrality gate: this is a PUBLIC, vendor-neutral client. Fail the build if
   # any internal hostname, competitor product name, or acquisition vocabulary
