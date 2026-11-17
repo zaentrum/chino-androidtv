@@ -83,7 +83,7 @@ class UserFlagsRepositoryTest {
     } as ChinoApi
 
     private val job = SupervisorJob()
-    private val repo = UserFlagsRepository(api, CoroutineScope(job + Dispatchers.IO)) {
+    private val repo = UserFlagsRepository(api, CoroutineScope(job + Dispatchers.IO), activeChanges = { changes }) {
         ActiveChoice(active, changes).also { onChoice() }
     }
 
@@ -302,6 +302,16 @@ class UserFlagsRepositoryTest {
         choose("child")
         repo.activeIs("child")
         assertShowsNothing()
+    }
+
+    @Test
+    fun `P_C16 a like pressed after another account is chosen, before the change reached the lists, goes out as the new account's`() {
+        warm()
+        // The store has the child; the change has not reached activeIs yet.
+        choose("child")
+        repo.setLike("liked-on-child", present = true)
+        settle()
+        assertEquals(listOf("child"), sentUnder.toList())
     }
 
     @Test

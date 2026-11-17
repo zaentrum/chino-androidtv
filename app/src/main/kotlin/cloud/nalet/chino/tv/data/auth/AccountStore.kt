@@ -39,6 +39,7 @@ class AccountStore internal constructor(
     private val lock = Any()
 
     /** How often the active account has changed in this process; held by [lock]. */
+    @Volatile
     private var activeChanges = 0L
 
     private fun read(): AccountStoreBlob {
@@ -130,6 +131,10 @@ class AccountStore internal constructor(
     /** Who is active, read in one step with how often the active account has
      *  changed: two reads that agree saw the same choice, with no other in
      *  between - even one that was undone again. Blocking, like [snapshotBlocking]. */
+    /** How often the active account has changed so far, without reading
+     *  the store: a press compares the choice its screen shows with it. */
+    fun activeChangesNow(): Long = activeChanges
+
     fun activeChoiceBlocking(): ActiveChoice = synchronized(lock) {
         ActiveChoice(read().activeId, activeChanges)
     }

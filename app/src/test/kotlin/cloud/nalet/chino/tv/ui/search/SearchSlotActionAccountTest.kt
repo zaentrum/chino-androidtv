@@ -89,7 +89,7 @@ class SearchSlotActionAccountTest {
             telemetry = Telemetry(ctx) { null },
             baseUrl = "https://media.example/api",
             slotActions = slotActions,
-            userFlags = UserFlagsRepository(api) { ActiveChoice("child", 1) },
+            userFlags = UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("child", 1) },
             appScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
             openedFor = { "parent" },
         )

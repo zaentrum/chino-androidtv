@@ -55,10 +55,17 @@ object RetrofitFactory {
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
         accounts: AccountBearers,
-    ): OkHttpClient = httpClient(tokenProvider, forceRefresh, accounts)
+    ): OkHttpClient = httpClient(tokenProvider, forceRefresh, actionBearers(accounts))
         .followRedirects(false)
         .followSslRedirects(false)
         .build()
+
+    /** [accounts] for an addon's actions: an addon that refuses an action
+     *  with the renewed token too has refused the action, not the person's
+     *  sign-in - the press fails, and nobody is sent to sign in. */
+    private fun actionBearers(accounts: AccountBearers): AccountBearers = object : AccountBearers by accounts {
+        override fun refusedAfterRefresh(accountId: String) {}
+    }
 
     /** The client every chino-api call goes through: the bearer on every
      *  request - of the account it carries ([accounts]), else the active

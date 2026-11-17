@@ -68,7 +68,7 @@ class ContinueWatchingRefreshTest {
             streamTokens = StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
-            userFlags = UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            userFlags = UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("viewer", 0) },
             openedFor = { "viewer" },
             progressSaves = saves,
         )

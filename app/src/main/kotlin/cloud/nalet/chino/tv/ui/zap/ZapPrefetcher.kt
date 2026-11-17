@@ -209,8 +209,9 @@ class ZapPrefetcher(
     }
 
     /** Writes [spec] into the cache unless it is no longer [wanted]: checked
-     *  once the writer is in [inFlight], so a writer made just after
-     *  cancelAll's sweep downloads nothing. */
+     *  once the writer is in [inFlight], so a writer made after cancelAll has
+     *  cancelled the children downloads nothing, and one made before it is
+     *  in [inFlight] for cancelAll's sweep. */
     private fun cacheSpec(spec: DataSpec, wanted: () -> Boolean) {
         val ds = cacheFactory.createDataSource()
         val writer = CacheWriter(ds, spec, null, null)

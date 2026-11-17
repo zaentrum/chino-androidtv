@@ -140,7 +140,7 @@ class AppContainer(context: Context) {
     }
 
     private val userFlagsLazy = lazy {
-        UserFlagsRepository(chinoApi) { accountStore.activeChoiceBlocking() }.also { followActiveAccount }
+        UserFlagsRepository(chinoApi, activeChanges = accountStore::activeChangesNow) { accountStore.activeChoiceBlocking() }.also { followActiveAccount }
     }
 
     /** Shared watchlist + likes cache across DetailScreen and any future surfaces:

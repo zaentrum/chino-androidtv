@@ -111,7 +111,7 @@ class BrowseWatchedAccountTest {
             api = api,
             streamTokens = StreamTokenManager(api) { ActiveChoice("child", 1) },
             telemetry = Telemetry(ctx) { null },
-            userFlags = UserFlagsRepository(api) { ActiveChoice("child", 1) },
+            userFlags = UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("child", 1) },
             baseUrl = "https://media.test/api",
             type = "movie",
             openedFor = openedFor,

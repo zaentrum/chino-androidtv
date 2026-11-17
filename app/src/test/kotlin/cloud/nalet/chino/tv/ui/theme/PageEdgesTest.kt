@@ -152,7 +152,7 @@ class PageEdgesTest {
         val vm = cloud.nalet.chino.tv.ui.detail.DetailViewModel(
             api = api,
             streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("viewer", 0) },
             openedFor = { "viewer" },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
@@ -217,7 +217,7 @@ class PageEdgesTest {
             api = api,
             streamTokens = cloud.nalet.chino.tv.data.auth.StreamTokenManager(api) { ActiveChoice("viewer", 0) },
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("viewer", 0) },
             openedFor = { "viewer" },
             baseUrl = "https://media.test/api",
             type = "movie",
@@ -308,7 +308,7 @@ class PageEdgesTest {
             telemetry = cloud.nalet.chino.tv.data.telemetry.Telemetry(ctx) { null },
             baseUrl = "https://media.test/api",
             personId = "p1",
-            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api) { ActiveChoice("viewer", 0) },
+            userFlags = cloud.nalet.chino.tv.data.UserFlagsRepository(api, activeChanges = { 0 }) { ActiveChoice("viewer", 0) },
         )
         compose.setContent {
             ChinoTvTheme {

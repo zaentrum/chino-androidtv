@@ -68,8 +68,9 @@ class SearchViewModel(
 ) : ViewModel() {
     /** The account the screen was opened for: a slot action goes out under
      *  it, with its bearer, also where it is sent after another account was
-     *  chosen (change P.C16 of the specification). Read on the app's scope,
-     *  as the action is sent. */
+     *  chosen (change P.C16 of the specification). Read on the app's scope as
+     *  the screen opens; where it could not be read, the account active as
+     *  the action is sent. */
     private val writesUnder = OpenedFor(appScope, openedFor)
 
     init {

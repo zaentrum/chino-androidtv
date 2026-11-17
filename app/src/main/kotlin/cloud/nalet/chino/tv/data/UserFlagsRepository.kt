@@ -46,6 +46,11 @@ class UserFlagsRepository(
     private val scope: CoroutineScope = CoroutineScope(SupervisorJob() + Dispatchers.IO),
     /** Who is active now, and which choice of them; blocking, so it is read
      *  off the main thread. */
+    /** How often the active account has changed so far, read without the
+     *  store ([cloud.nalet.chino.tv.data.auth.AccountStore.activeChangesNow]):
+     *  a press made after another account was chosen is never marked with the
+     *  one before, also before the change has reached [activeIs]. */
+    private val activeChanges: () -> Long,
     private val activeChoice: () -> ActiveChoice,
 ) {
     private val mutex = Mutex()
@@ -202,7 +207,8 @@ class UserFlagsRepository(
     /** The choice a press is made under: the one the cache holds, unless
      *  another was found active since ([activeIs]) - the cache may still hold
      *  the one before while a read for it runs - and then none. */
-    private fun pressedUnder(): ActiveChoice? = cachedFor?.takeIf { it.changes >= newestChoice }
+    private fun pressedUnder(): ActiveChoice? =
+        cachedFor?.takeIf { it.changes >= maxOf(newestChoice, runCatching(activeChanges).getOrDefault(Long.MIN_VALUE)) }
 
     /** The account a press was made under: the one of the choice it was
      *  made under ([pressedUnder]), or, without one, the one active as its
