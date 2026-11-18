@@ -1,7 +1,5 @@
 package cloud.nalet.chino.tv.data.telemetry
 
-import cloud.nalet.chino.tv.data.api.TelemetryEvent
-
 /** The app's name in its events; chino-api counts what names a TV as a TV's. */
 const val TELEMETRY_CLIENT = "chino-androidtv"
 
@@ -13,13 +11,13 @@ const val QUEUE_FLUSH_MS = 30_000L
  * the oldest dropped first when more come, so a server that does not answer
  * costs no more than that. Thread-safe.
  */
-class EventQueue(private val max: Int = 200) {
-    private val events = ArrayDeque<TelemetryEvent>()
+class EventQueue<T>(private val max: Int = 200) {
+    private val events = ArrayDeque<T>()
 
     /** Adds [event]; true when it is the first since the last [drain] - the
      *  caller schedules the batch then. */
     @Synchronized
-    fun add(event: TelemetryEvent): Boolean {
+    fun add(event: T): Boolean {
         val first = events.isEmpty()
         if (events.size >= max) events.removeFirst()
         events.addLast(event)
@@ -28,5 +26,5 @@ class EventQueue(private val max: Int = 200) {
 
     /** Everything queued, in order, and the queue empty. */
     @Synchronized
-    fun drain(): List<TelemetryEvent> = events.toList().also { events.clear() }
+    fun drain(): List<T> = events.toList().also { events.clear() }
 }

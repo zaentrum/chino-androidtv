@@ -5,6 +5,7 @@ import androidx.test.core.app.ApplicationProvider
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
+import cloud.nalet.chino.tv.data.api.TelemetryBatch
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -208,10 +209,10 @@ class TokenManagerTest {
         ).create(ChinoApi::class.java)
         runBlocking {
             api.addLike("title-1", RequestAccount("parent"))
-            api.deleteWatchlist("list-1")
+            api.postTelemetry(TelemetryBatch(sessionId = "session-1", events = emptyList()))
         }
         assertEquals(
-            listOf("/api/v1/me/likes/title-1 renewed-by-refresh-of-parent", "/api/v1/me/watchlists/list-1 access-of-child"),
+            listOf("/api/v1/me/likes/title-1 renewed-by-refresh-of-parent", "/api/v1/play/events access-of-child"),
             provider.apiSeen.toList(),
         )
     }

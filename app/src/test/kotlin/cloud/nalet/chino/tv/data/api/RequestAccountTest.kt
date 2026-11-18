@@ -90,7 +90,7 @@ class RequestAccountTest {
     }
 
     @Test
-    fun `P_C16 each write of the lists, the player's saves and the notices goes out under the account it was made under`() {
+    fun `P_C16 each write of the lists, the player's saves and reports, the notices and the account goes out under the account it was made under`() {
         val api = api()
         runBlocking {
             api.addToWatchlist("title-1", RequestAccount("parent"))
@@ -104,15 +104,18 @@ class RequestAccountTest {
             api.readNotice("00000001-0000-4000-8000-000000000001", RequestAccount("parent"))
             api.readAllNotices(RequestAccount("parent"))
             api.deleteNotice("00000001-0000-4000-8000-000000000001", RequestAccount("parent"))
+            api.deleteWatchlist("list-1", RequestAccount("parent"))
+            api.postTelemetry(TelemetryBatch(sessionId = "session-1", events = emptyList()), RequestAccount("parent"))
+            api.deleteMe(RequestAccount("parent"))
         }
-        assertEquals(11, server.seen.size)
+        assertEquals(14, server.seen.size)
         assertTrue(server.seen.toString(), server.seen.all { it.endsWith(" parent-token") })
     }
 
     @Test
     fun `a request that carries no account goes out with the active account's bearer`() {
-        runBlocking { api().deleteWatchlist("list-1") }
-        assertEquals(listOf("/api/v1/me/watchlists/list-1 child-token"), server.seen.toList())
+        runBlocking { api().postTelemetry(TelemetryBatch(sessionId = "session-1", events = emptyList())) }
+        assertEquals(listOf("/api/v1/play/events child-token"), server.seen.toList())
     }
 
     @Test

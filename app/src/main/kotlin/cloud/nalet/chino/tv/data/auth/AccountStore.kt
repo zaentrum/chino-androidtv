@@ -84,12 +84,25 @@ class AccountStore internal constructor(
         }
     }
 
-    suspend fun remove(id: String) {
+    /** Takes [id] off this device. Where it was the active one, the next
+     *  account becomes active - or, without [nextActive], nobody: an account
+     *  deleted while its screens are still up hands nothing they still send
+     *  to another (section 16.5.6 of the specification). Says whether it was
+     *  signed in here and whether it was the active one, as read with the
+     *  removal, under the same lock. */
+    suspend fun remove(id: String, nextActive: Boolean = true): Removal {
         synchronized(lock) {
             val blob = read()
+            if (blob.accounts.none { it.id == id }) return Removal.NOT_HERE
             val updated = blob.accounts.filter { it.id != id }
-            val newActive = if (blob.activeId == id) updated.firstOrNull()?.id else blob.activeId
+            val wasActive = blob.activeId == id
+            val newActive = when {
+                !wasActive -> blob.activeId
+                nextActive -> updated.firstOrNull()?.id
+                else -> null
+            }
             write(blob, blob.copy(accounts = updated, activeId = newActive))
+            return if (wasActive) Removal.ACTIVE else Removal.INACTIVE
         }
     }
 
@@ -212,3 +225,15 @@ class AccountStore internal constructor(
  * the first was chosen again, the choice is another.
  */
 data class ActiveChoice(val accountId: String?, val changes: Long)
+
+/** What [AccountStore.remove] took off this device. */
+enum class Removal {
+    /** Nothing: the account was not signed in here. */
+    NOT_HERE,
+
+    /** An account signed in here, not the active one. */
+    INACTIVE,
+
+    /** The active account. */
+    ACTIVE,
+}

@@ -204,7 +204,9 @@ class PlayerViewModel(
     internal val quality: PlaybackQuality? = if (requests.telemetry) {
         PlaybackQuality(
             now = { android.os.SystemClock.elapsedRealtime() },
-            send = { kind, payload -> telemetry.queue(kind, itemId, payload) },
+            // Under the account the title plays for, as its saves: queued
+            // under it, never flushed as another account.
+            send = { kind, payload -> telemetry.queue(kind, itemId, payload) { playsForAccount.account() } },
         )
     } else {
         null

@@ -7,8 +7,10 @@ import cloud.nalet.chino.tv.data.AppContainer
 import cloud.nalet.chino.tv.data.NoticesRepository
 import cloud.nalet.chino.tv.data.UserFlagsRepository
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
+import cloud.nalet.chino.tv.data.auth.Removal
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.deleteAccountThenSignOut
 import cloud.nalet.chino.tv.data.isFinal
@@ -31,10 +33,11 @@ sealed interface DeleteAccountState {
 
 /**
  * Delete Account: asks chino-api to delete the account that was active when
- * the screen opened ([account]) and, once the server says it is gone — and
- * only then — signs it out on this TV: its tokens leave [AccountStore], and
- * the stream token, the lists, likes and notices cached for it, and the
- * settings choices the TV keeps for it go. Any other answer leaves it signed
+ * the screen opened ([account]), under that account, and, once the server
+ * says it is gone — and only then — signs it out on this TV: its tokens leave
+ * [AccountStore] and the settings choices the TV keeps for it go; where it was
+ * the active one, nobody is active after it, and the stream token, the lists,
+ * likes and notices cached for it go too. Any other answer leaves it signed
  * in, with the reason.
  *
  * The request and the sign-out run on the app's scope, not this screen's: a
@@ -70,14 +73,16 @@ class DeleteAccountViewModel(
         }
         _state.value = DeleteAccountState.Deleting
         appScope.launch {
-            // The request carries the active account's bearer: never send it
-            // for another account than the one on screen.
-            val answer = if (accounts.snapshotBlocking().activeAccount?.id != target.id) {
-                AccountDeletion.Failed("Another account is signed in now. Open Delete Account again.")
-            } else {
-                api.deleteAccountThenSignOut {
-                    accounts.remove(target.id)
-                    forgetAccount(target.id)
+            // The request carries the account on screen, with its bearer,
+            // whoever is active by then: never sent as another account, and
+            // not sent at all where it is no longer signed in here.
+            val answer = api.deleteAccountThenSignOut(RequestAccount(target.id)) {
+                // Nobody active after it, as after a deletion the server
+                // answered (section 16.5.6): nothing still on screen goes
+                // out as another account.
+                val removal = accounts.remove(target.id, nextActive = false)
+                forgetAccount(target.id)
+                if (removal == Removal.ACTIVE) {
                     streamTokens.clear()
                     userFlags.clear()
                     notices.clear()

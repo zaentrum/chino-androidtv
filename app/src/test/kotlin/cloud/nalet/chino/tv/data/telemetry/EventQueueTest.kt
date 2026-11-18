@@ -12,7 +12,7 @@ class EventQueueTest {
 
     @Test
     fun `the first event after a batch schedules the next one, the others ride along`() {
-        val queue = EventQueue()
+        val queue = EventQueue<TelemetryEvent>()
         assertTrue(queue.add(event(1)))
         assertFalse(queue.add(event(2)))
         assertFalse(queue.add(event(3)))
@@ -23,7 +23,7 @@ class EventQueueTest {
 
     @Test
     fun `past its bound the oldest go`() {
-        val queue = EventQueue(max = 3)
+        val queue = EventQueue<TelemetryEvent>(max = 3)
         (1..5).forEach { queue.add(event(it)) }
         assertEquals(listOf(3L, 4L, 5L), queue.drain().map { it.ts })
     }

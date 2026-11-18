@@ -2,6 +2,7 @@ package cloud.nalet.chino.tv.data
 
 import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import kotlinx.coroutines.runBlocking
 import okhttp3.MediaType.Companion.toMediaType
@@ -33,7 +34,15 @@ class AccountDeletionTest {
 
         val api: ChinoApi = RetrofitFactory.retrofit(
             BASE_URL,
-            RetrofitFactory.httpClient(tokenProvider = { token }, forceRefresh = { null }, accounts = AccountBearers.None)
+            RetrofitFactory.httpClient(
+                tokenProvider = { null },
+                forceRefresh = { null },
+                // The account deleted, signed in with [token]; nobody else.
+                accounts = object : AccountBearers {
+                    override fun tokenOf(accountId: String): String? = token.takeIf { accountId == ACCOUNT.accountId }
+                    override fun forceRefreshOf(accountId: String): String? = null
+                },
+            )
                 .addInterceptor { chain ->
                     val request = chain.request()
                     requests += request
@@ -50,7 +59,7 @@ class AccountDeletionTest {
         ).create(ChinoApi::class.java)
     }
 
-    private fun answer(server: FakeServer): AccountDeletion = runBlocking { server.api.deleteAccount() }
+    private fun answer(server: FakeServer): AccountDeletion = runBlocking { server.api.deleteAccount(ACCOUNT) }
 
     @Test
     fun `200 - the account and its data are deleted`() {
@@ -156,10 +165,20 @@ class AccountDeletionTest {
     }
 
     @Test
+    fun `16_5_6 an account no longer signed in here is not deleted as another - nothing is sent`() {
+        val server = FakeServer(200, """{"account":"deleted"}""")
+        assertEquals(
+            AccountDeletion.Failed("This account is no longer signed in on this TV."),
+            runBlocking { server.api.deleteAccount(RequestAccount("second")) },
+        )
+        assertTrue(server.requests.isEmpty())
+    }
+
+    @Test
     fun `the account is signed out only once the server says it is gone`() {
         fun signOuts(server: FakeServer): Int {
             var count = 0
-            runBlocking { server.api.deleteAccountThenSignOut { count++ } }
+            runBlocking { server.api.deleteAccountThenSignOut(ACCOUNT) { count++ } }
             return count
         }
         assertEquals(1, signOuts(FakeServer(200, """{"account":"deleted"}""")))
@@ -179,5 +198,8 @@ class AccountDeletionTest {
     private companion object {
         /** As ServerBootstrap stores it: the server's /api, Retrofit resolving "v1/..." on it. */
         const val BASE_URL = "https://media.example.org/api/"
+
+        /** The account deleted: the one on screen. */
+        val ACCOUNT = RequestAccount("first")
     }
 }

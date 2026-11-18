@@ -185,7 +185,12 @@ interface ChinoApi {
      * here, and [cloud.nalet.chino.tv.data.deleteAccount] reads it.
      */
     @DELETE("v1/me")
-    suspend fun deleteMe(): retrofit2.Response<okhttp3.ResponseBody>
+    suspend fun deleteMe(
+        /** The account to delete, the one on screen ([RequestAccount]): the
+         *  request goes out with its bearer, whoever is active by then, and
+         *  not at all where it is no longer signed in here. */
+        @Tag account: RequestAccount,
+    ): retrofit2.Response<okhttp3.ResponseBody>
 
     /**
      * Mints a 6-hour HMAC-signed token used as `?stream=<token>` on playback URLs.
@@ -239,7 +244,14 @@ interface ChinoApi {
 
     /** Batched playback telemetry — chino-api logs each event for observability. */
     @POST("v1/play/events")
-    suspend fun postTelemetry(@Body body: TelemetryBatch)
+    suspend fun postTelemetry(
+        @Body body: TelemetryBatch,
+        /** The account a batch the player queued was queued under, the one
+         *  the title plays for ([RequestAccount]): it goes out with that
+         *  account's bearer, and not at all where it is no longer signed in
+         *  here. None for an event sent on its own: the active account's. */
+        @Tag account: RequestAccount? = null,
+    )
 
     /** Flat list of item ids in the user's DEFAULT watchlist. Back-compat:
      *  unchanged from before named lists existed; == the default list's items. */
@@ -266,18 +278,28 @@ interface ChinoApi {
     /** Creates a new named list. 409 on duplicate name / too many lists,
      *  400 on empty name (trimmed; 1..60 chars). */
     @POST("v1/me/watchlists")
-    suspend fun createWatchlist(@Body body: WatchlistNameBody): Watchlist
+    suspend fun createWatchlist(
+        @Body body: WatchlistNameBody,
+        /** The account whose lists are shown, as for a press ([RequestAccount]). */
+        @Tag account: RequestAccount,
+    ): Watchlist
 
     /** Renames a list. Renaming the default keeps isDefault=true. */
     @PATCH("v1/me/watchlists/{listId}")
     suspend fun renameWatchlist(
         @Path("listId") listId: String,
         @Body body: WatchlistNameBody,
+        /** As [createWatchlist]'s. */
+        @Tag account: RequestAccount,
     ): Watchlist
 
     /** Deletes a list (cascades its items). 409 when it's the default list. */
     @DELETE("v1/me/watchlists/{listId}")
-    suspend fun deleteWatchlist(@Path("listId") listId: String)
+    suspend fun deleteWatchlist(
+        @Path("listId") listId: String,
+        /** As [createWatchlist]'s. */
+        @Tag account: RequestAccount,
+    )
 
     /** A single list with its item ids (newest-added first). */
     @GET("v1/me/watchlists/{listId}")

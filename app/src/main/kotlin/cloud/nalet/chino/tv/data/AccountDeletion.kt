@@ -1,6 +1,8 @@
 package cloud.nalet.chino.tv.data
 
+import cloud.nalet.chino.tv.data.api.AccountSignedOutException
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import kotlinx.coroutines.CancellationException
 import kotlinx.serialization.json.Json
 import kotlinx.serialization.json.contentOrNull
@@ -77,10 +79,12 @@ internal fun personMessage(body: String?): String? = runCatching {
     answerJson.parseToJsonElement(body.orEmpty()).jsonObject["message"]?.jsonPrimitive?.contentOrNull
 }.getOrNull()?.trim()?.takeIf { it.isNotEmpty() }?.take(MAX_MESSAGE)
 
-/** Asks chino-api to delete the signed-in account. Never throws but for
- *  cancellation: a request that does not reach the server is a failure. */
-suspend fun ChinoApi.deleteAccount(): AccountDeletion = try {
-    val response = deleteMe()
+/** Asks chino-api to delete [account], with its bearer, whoever is active
+ *  by then. Never throws but for cancellation: a request that does not reach
+ *  the server is a failure, and so is one not sent because [account] is no
+ *  longer signed in here. */
+suspend fun ChinoApi.deleteAccount(account: RequestAccount): AccountDeletion = try {
+    val response = deleteMe(account)
     if (response.code() == 200) {
         response.body()?.close()
         AccountDeletion.Deleted
@@ -89,6 +93,8 @@ suspend fun ChinoApi.deleteAccount(): AccountDeletion = try {
     }
 } catch (e: CancellationException) {
     throw e
+} catch (e: AccountSignedOutException) {
+    AccountDeletion.Failed("This account is no longer signed in on this TV.")
 } catch (e: IOException) {
     AccountDeletion.Failed("The server couldn't be reached.")
 } catch (e: Exception) {
@@ -96,11 +102,11 @@ suspend fun ChinoApi.deleteAccount(): AccountDeletion = try {
 }
 
 /**
- * Deletes the signed-in account and, once the server says it is gone — and
- * only then — runs [signOut]. Returns the answer.
+ * Deletes [account] and, once the server says it is gone — and only then —
+ * runs [signOut]. Returns the answer.
  */
-suspend fun ChinoApi.deleteAccountThenSignOut(signOut: suspend () -> Unit): AccountDeletion {
-    val answer = deleteAccount()
+suspend fun ChinoApi.deleteAccountThenSignOut(account: RequestAccount, signOut: suspend () -> Unit): AccountDeletion {
+    val answer = deleteAccount(account)
     if (answer == AccountDeletion.Deleted) signOut()
     return answer
 }

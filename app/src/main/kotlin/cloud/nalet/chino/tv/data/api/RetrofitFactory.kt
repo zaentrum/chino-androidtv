@@ -28,6 +28,9 @@ object RetrofitFactory {
      * @param accounts the bearer of the account a request carries ([RequestAccount]), in place
      *        of the active account's. Always given: a client without it sends no such request
      *        ([AccountBearers.None], for one that never makes any).
+     * @param onAccountDeleted chino-api answered a request that carries no account
+     *        that its account is deleted (401 `account_deleted`): the bearer it went
+     *        out with. A request that carries one says so to [accounts].
      */
     fun create(
         baseUrl: String,
@@ -35,7 +38,11 @@ object RetrofitFactory {
         forceRefresh: () -> String?,
         accounts: AccountBearers,
         onRefusedAfterRefresh: () -> Unit = {},
-    ): Retrofit = retrofit(baseUrl, httpClient(tokenProvider, forceRefresh, accounts, onRefusedAfterRefresh).build())
+        onAccountDeleted: (bearer: String) -> Unit = {},
+    ): Retrofit = retrofit(
+        baseUrl,
+        httpClient(tokenProvider, forceRefresh, accounts, onRefusedAfterRefresh, onAccountDeleted).build(),
+    )
 
     /** Retrofit over [client], decoding as every chino-api response is decoded. */
     internal fun retrofit(baseUrl: String, client: OkHttpClient): Retrofit =
@@ -62,21 +69,28 @@ object RetrofitFactory {
 
     /** [accounts] for an addon's actions: an addon that refuses an action
      *  with the renewed token too has refused the action, not the person's
-     *  sign-in - the press fails, and nobody is sent to sign in. */
+     *  sign-in - the press fails, and nobody is sent to sign in; and only
+     *  chino-api says an account is deleted - an addon's answer signs nobody
+     *  out. */
     private fun actionBearers(accounts: AccountBearers): AccountBearers = object : AccountBearers by accounts {
         override fun refusedAfterRefresh(accountId: String) {}
+        override fun deleted(accountId: String) {}
     }
 
     /** The client every chino-api call goes through: the bearer on every
      *  request - of the account it carries ([accounts]), else the active
      *  account's - one refresh-and-retry on a 401, and [onRefusedAfterRefresh]
-     *  where chino-api refuses the fresh token too. Internal: tests answer
-     *  on top of exactly this client. */
+     *  where chino-api refuses the fresh token too. A 401 `account_deleted`
+     *  is neither refreshed nor sent again: it is said to [accounts] for the
+     *  account the request carries, else to [onAccountDeleted] with the
+     *  bearer it went out with. Internal: tests answer on top of exactly
+     *  this client. */
     internal fun httpClient(
         tokenProvider: () -> String?,
         forceRefresh: () -> String?,
         accounts: AccountBearers,
         onRefusedAfterRefresh: () -> Unit = {},
+        onAccountDeleted: (bearer: String) -> Unit = {},
     ): OkHttpClient.Builder {
         val logging = HttpLoggingInterceptor().apply {
             level = HttpLoggingInterceptor.Level.BASIC
@@ -109,6 +123,19 @@ object RetrofitFactory {
             .authenticator(object : Authenticator {
                 override fun authenticate(route: Route?, response: Response): Request? {
                     val account = response.request.tag(RequestAccount::class.java)
+                    // The account is deleted on the server (section 16.5.6):
+                    // no fresh token mends that, so none is asked for and the
+                    // request is not sent again. The account goes from this
+                    // TV: the one the request carries, else the one whose
+                    // bearer it went out with.
+                    if (response.saysAccountDeleted()) {
+                        if (account != null) {
+                            accounts.deleted(account.accountId)
+                        } else {
+                            response.request.header("Authorization")?.removePrefix("Bearer ")?.let(onAccountDeleted)
+                        }
+                        return null
+                    }
                     if (response.request.header("X-Auth-Retry") != null) {
                         if (account != null) accounts.refusedAfterRefresh(account.accountId) else onRefusedAfterRefresh()
                         return null

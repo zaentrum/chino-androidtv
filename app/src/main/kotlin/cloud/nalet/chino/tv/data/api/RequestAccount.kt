@@ -35,6 +35,10 @@ interface AccountBearers {
     /** chino-api refused [accountId]'s fresh token too. */
     fun refusedAfterRefresh(accountId: String) {}
 
+    /** chino-api answered a request made under [accountId] that the account
+     *  is deleted (401 `account_deleted`); no fresh token was asked for. */
+    fun deleted(accountId: String) {}
+
     /** No account's bearer, for a client that sends no request carrying an
      *  account: one that does is not sent. */
     object None : AccountBearers {

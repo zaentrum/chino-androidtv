@@ -312,11 +312,21 @@ class UserFlagsRepository(
         }
     }
 
+    /** The account a change of the lists themselves - one made, renamed or
+     *  deleted - goes out under: as a press's ([pressedUnder], [madeUnder]),
+     *  so that it goes out with that account's bearer, or not at all where
+     *  nobody is. Where no choice holds it reads who is active: off the main
+     *  thread. */
+    private suspend fun listsChangedUnder(): RequestAccount {
+        val choice = pressedUnder()
+        return withContext(Dispatchers.IO) { madeUnder(choice) }
+    }
+
     /** Create a new named list, then refresh. Returns the new list (or null on
      *  failure, e.g. duplicate name / too many lists). */
     suspend fun createList(name: String): Watchlist? {
         val created = runCatching {
-            api.createWatchlist(cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()))
+            api.createWatchlist(cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()), listsChangedUnder())
         }.getOrNull() ?: return null
         mutex.withLock { reloadListsLocked() }
         return created
@@ -325,7 +335,7 @@ class UserFlagsRepository(
     /** Rename a list, then refresh. Returns false on failure. */
     suspend fun renameList(listId: String, name: String): Boolean {
         val ok = runCatching {
-            api.renameWatchlist(listId, cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()))
+            api.renameWatchlist(listId, cloud.nalet.chino.tv.data.api.WatchlistNameBody(name.trim()), listsChangedUnder())
         }.isSuccess
         if (ok) mutex.withLock { reloadListsLocked() }
         return ok
@@ -333,7 +343,7 @@ class UserFlagsRepository(
 
     /** Delete a list (cannot delete the default), then refresh. */
     suspend fun deleteList(listId: String): Boolean {
-        val ok = runCatching { api.deleteWatchlist(listId) }.isSuccess
+        val ok = runCatching { api.deleteWatchlist(listId, listsChangedUnder()) }.isSuccess
         if (ok) mutex.withLock { reloadListsLocked() }
         return ok
     }

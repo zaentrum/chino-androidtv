@@ -1,12 +1,14 @@
 package cloud.nalet.chino.tv.ui.navigation
 
 import android.content.Context
+import androidx.compose.runtime.remember
 import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.hasClickAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createComposeRule
 import androidx.compose.ui.test.longClick
 import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.junit4.StateRestorationTester
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performSemanticsAction
 import androidx.compose.ui.test.performTouchInput
@@ -101,15 +103,16 @@ class AccountChangeTest {
         compose.waitForIdle()
     }
 
-    /** Waits until [route] is all the back stack holds. */
-    private fun assertAloneAt(route: String) {
+    /** Waits until [route] is all the back stack holds; [shown] the store
+     *  the app shows. */
+    private fun assertAloneAt(route: String, shown: AccountStore = store) {
         try {
             compose.waitUntil(5_000) {
                 nav.currentDestination?.route == route && nav.previousBackStackEntry == null
             }
         } catch (e: androidx.compose.ui.test.ComposeTimeoutException) {
             val stack = compose.runOnIdle { nav.currentBackStack.value.mapNotNull { it.destination.route } }
-            val now = store.snapshotBlocking()
+            val now = shown.snapshotBlocking()
             throw AssertionError(
                 "not alone at $route: the back stack is $stack, the active account " +
                     "${now.activeAccount?.id}, signed in ${now.accounts.map { it.id }}",
@@ -281,6 +284,95 @@ class AccountChangeTest {
         compose.waitForIdle()
         compose.runOnIdle { nav.popBackStack() }
         assertAloneAt(Routes.AUTH)
+    }
+
+    /**
+     * The parent active, on its settings over its home; then the process
+     * killed, the parent deleted and signed out meanwhile (the player's save
+     * loop runs while the app is stopped), and the app opened again with its
+     * saved back stack, as Android restores it: the store is then [after].
+     */
+    private fun restoredAfter(after: AccountStore) {
+        runBlocking {
+            store.addOrUpdate(account("parent"))
+            store.addOrUpdate(account("child"))
+            store.setActive("parent")
+        }
+        var shown = store
+        val restoration = StateRestorationTester(compose)
+        restoration.setContent {
+            nav = rememberNavController()
+            val now = shown
+            // Read as ChinoTvNavHost reads it, as the app starts.
+            val boot = remember { now.snapshotBlocking() }
+            ChinoTvTheme {
+                AccountNavHost(nav, now, boot, startDestination = Routes.LIBRARY, forgetAccount = {}) {
+                    composable(Routes.LIBRARY) {}
+                    composable(Routes.AUTH) {}
+                    composable(Routes.SETTINGS) {}
+                }
+            }
+        }
+        compose.waitForIdle()
+        compose.runOnIdle { nav.navigate(Routes.SETTINGS) }
+        compose.waitForIdle()
+        shown = after
+        restoration.emulateSavedInstanceStateRestore()
+        compose.waitForIdle()
+    }
+
+    /** The accounts as the app finds them as it starts again: [ids] signed
+     *  in, [active] the active one, or nobody. */
+    private fun storeAsRestarted(vararg ids: String, active: String?): AccountStore {
+        val after = AccountStore(
+            ApplicationProvider.getApplicationContext<Context>()
+                .getSharedPreferences("account-change-test-after", Context.MODE_PRIVATE)
+                .also { it.edit().clear().commit() },
+        )
+        runBlocking {
+            ids.forEach { after.addOrUpdate(account(it)) }
+            active?.let { after.setActive(it) }
+        }
+        return after
+    }
+
+    @Test
+    fun `16_5_6 a back stack restored after its account was deleted, nobody active, starts over at who's watching`() {
+        val after = storeAsRestarted("child", active = null)
+        restoredAfter(after)
+        assertAloneAt(Routes.PICKER, shown = after)
+    }
+
+    @Test
+    fun `16_5_6 a back stack restored after its account was deleted, another active, starts over at who's watching`() {
+        val after = storeAsRestarted("child", active = "child")
+        restoredAfter(after)
+        assertAloneAt(Routes.PICKER, shown = after)
+    }
+
+    @Test
+    fun `a back stack restored with its account still active stays as it was`() {
+        restoredAfter(storeAsRestarted("parent", "child", active = "parent"))
+        compose.runOnIdle {
+            assertEquals(Routes.SETTINGS, nav.currentDestination?.route)
+            assertEquals(Routes.LIBRARY, nav.previousBackStackEntry?.destination?.route)
+        }
+    }
+
+    @Test
+    fun `where the app starts, from the accounts as it starts`() {
+        val parent = account("parent")
+        val child = account("child")
+        fun start(accounts: List<Account>, active: Account?, configured: Boolean = true) =
+            startDestination(configured, AccountStore.Snapshot(accounts, active))
+        assertEquals(Routes.SERVER, start(emptyList(), null, configured = false))
+        assertEquals(Routes.AUTH, start(emptyList(), null))
+        assertEquals(Routes.AUTH, start(listOf(account("parent", expired = true)), account("parent", expired = true)))
+        assertEquals(Routes.PICKER, start(listOf(parent, child), parent))
+        assertEquals(Routes.LIBRARY, start(listOf(parent), parent))
+        // 16.5.6: the active account deleted, the one left not made active.
+        assertEquals(Routes.PICKER, start(listOf(child), null))
+        assertEquals(Routes.PICKER, start(listOf(parent, child), null))
     }
 
     @Test

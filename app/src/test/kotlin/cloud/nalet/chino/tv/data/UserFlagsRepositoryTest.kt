@@ -5,6 +5,7 @@ import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.UserFlagList
 import cloud.nalet.chino.tv.data.api.Watchlist
 import cloud.nalet.chino.tv.data.api.WatchlistDetail
+import cloud.nalet.chino.tv.data.api.WatchlistNameBody
 import cloud.nalet.chino.tv.data.api.WatchlistsResponse
 import cloud.nalet.chino.tv.data.auth.ActiveChoice
 import kotlinx.coroutines.CoroutineScope
@@ -13,6 +14,7 @@ import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.joinAll
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.IOException
@@ -46,6 +48,9 @@ class UserFlagsRepositoryTest {
     /** The account each write of the Watchlist was made under, as it carries it. */
     private val bookmarkedUnder = java.util.concurrent.CopyOnWriteArrayList<String>()
 
+    /** The account each list made, renamed or deleted was changed under, as it carries it. */
+    private val listChangesUnder = java.util.concurrent.CopyOnWriteArrayList<String>()
+
     /** Runs as the active choice is read, once it is read. */
     private var onChoice: () -> Unit = {}
 
@@ -73,6 +78,18 @@ class UserFlagsRepositoryTest {
             }
             "addToWatchlist", "removeFromWatchlist" -> {
                 bookmarkedUnder += (args!![1] as RequestAccount).accountId
+                Unit
+            }
+            "createWatchlist" -> {
+                listChangesUnder += (args!![1] as RequestAccount).accountId
+                Watchlist(id = "list-2", name = (args[0] as WatchlistNameBody).name)
+            }
+            "renameWatchlist" -> {
+                listChangesUnder += (args!![2] as RequestAccount).accountId
+                Watchlist(id = args[0] as String, name = (args[1] as WatchlistNameBody).name)
+            }
+            "deleteWatchlist" -> {
+                listChangesUnder += (args!![1] as RequestAccount).accountId
                 Unit
             }
             "hashCode" -> 0
@@ -312,6 +329,35 @@ class UserFlagsRepositoryTest {
         repo.setLike("liked-on-child", present = true)
         settle()
         assertEquals(listOf("child"), sentUnder.toList())
+    }
+
+    @Test
+    fun `16_5_6 a list made, renamed or deleted goes out under the account whose lists are shown`() {
+        warm()
+        runBlocking {
+            assertEquals("list-2", repo.createList("first list")?.id)
+            assertTrue(repo.renameList("list-2", "second list"))
+            assertTrue(repo.deleteList("list-2"))
+        }
+        assertEquals(listOf("parent", "parent", "parent"), listChangesUnder.toList())
+    }
+
+    @Test
+    fun `16_5_6 nobody active after the active account was deleted - its screen's presses and list changes are not sent`() {
+        warm()
+        choose(null)
+        repo.activeIs(null)
+        repo.setLike("liked-after", present = true)
+        repo.setWatchlist("saved-after", present = true)
+        runBlocking {
+            assertNull(repo.createList("first list"))
+            assertEquals(false, repo.renameList("list-of-parent", "second list"))
+            assertEquals(false, repo.deleteList("list-of-parent"))
+        }
+        settle()
+        assertEquals(emptyList<String>(), sentUnder.toList())
+        assertEquals(emptyList<String>(), bookmarkedUnder.toList())
+        assertEquals(emptyList<String>(), listChangesUnder.toList())
     }
 
     @Test

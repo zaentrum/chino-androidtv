@@ -2,10 +2,13 @@ package cloud.nalet.chino.tv.data
 
 import android.content.Context
 import cloud.nalet.chino.tv.BuildConfig
+import cloud.nalet.chino.tv.data.api.AccountBearers
 import cloud.nalet.chino.tv.data.api.ChinoApi
 import cloud.nalet.chino.tv.data.api.RetrofitFactory
 import cloud.nalet.chino.tv.data.auth.AccountStore
+import cloud.nalet.chino.tv.data.auth.DeletedAccounts
 import cloud.nalet.chino.tv.data.auth.OidcDeviceClient
+import cloud.nalet.chino.tv.data.auth.Removal
 import cloud.nalet.chino.tv.data.auth.SignInLapses
 import cloud.nalet.chino.tv.data.auth.StreamTokenManager
 import cloud.nalet.chino.tv.data.auth.TokenManager
@@ -118,6 +121,10 @@ class AppContainer internal constructor(
         TokenManager(accountStore, oidcDeviceClient, onLapsed = signInLapses::lapsed)
     }
 
+    /** Accounts chino-api answered deleted: each signed out on this TV
+     *  ([signOutDeleted]), and said once, for the toast. */
+    val deletedAccounts: DeletedAccounts by lazy { DeletedAccounts(appScope, ::signOutDeleted) }
+
     private val retrofit by lazy {
         RetrofitFactory.create(
             baseUrl = serverConfig.baseUrl,
@@ -127,8 +134,18 @@ class AppContainer internal constructor(
                 accountStore.snapshotBlocking().activeAccount?.id?.let(signInLapses::lapsed)
             },
             // A request made under an account (a press, the player's saves)
-            // goes out with that account's bearer.
-            accounts = tokenManager,
+            // goes out with that account's bearer; one chino-api answers
+            // deleted signs that account out.
+            accounts = object : AccountBearers by tokenManager {
+                override fun deleted(accountId: String) = deletedAccounts.deleted(accountId)
+            },
+            // A request that carries no account, answered deleted: the
+            // account whose bearer it went out with is signed out. None
+            // where no account holds that bearer any more.
+            onAccountDeleted = { bearer ->
+                accountStore.snapshotBlocking().accounts.firstOrNull { it.accessToken == bearer }
+                    ?.let { deletedAccounts.deleted(it.id) }
+            },
         )
     }
 
@@ -180,6 +197,25 @@ class AppContainer internal constructor(
     fun forgetAccount(accountId: String) {
         if (accountSettingsLazy.isInitialized()) accountSettings.forget(accountId)
         else lastKnownChoices.forget(accountId)
+    }
+
+    /** [accountId], which the server has deleted, signed out on this TV as
+     *  delete account signs one out: its tokens leave the account store and
+     *  what the TV keeps of its settings goes; where it was the active
+     *  account, nobody is active after it - its screens, up until the app
+     *  starts over, send nothing more as another account - and the stream
+     *  token, lists, likes and notices held for it go too. False where it
+     *  was not signed in here (any more). */
+    private suspend fun signOutDeleted(accountId: String): Boolean {
+        val removal = accountStore.remove(accountId, nextActive = false)
+        if (removal == Removal.NOT_HERE) return false
+        forgetAccount(accountId)
+        if (removal == Removal.ACTIVE) {
+            streamTokenManager.clear()
+            if (userFlagsLazy.isInitialized()) userFlags.clear()
+            notices.clear()
+        }
+        return true
     }
 
     /**

@@ -1,11 +1,17 @@
 package cloud.nalet.chino.tv.ui.navigation
 
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.setValue
+import androidx.compose.ui.Alignment
+import androidx.compose.ui.Modifier
 import androidx.navigation.NavController
 import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
@@ -16,12 +22,18 @@ import cloud.nalet.chino.tv.data.auth.Account
 import cloud.nalet.chino.tv.data.auth.AccountStore
 import cloud.nalet.chino.tv.ui.auth.AccountPickerScreen
 import cloud.nalet.chino.tv.ui.theme.ShellScreen
+import cloud.nalet.chino.tv.ui.theme.Toast
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.emptyFlow
 
 /** The back stack entry's note of the account its screen was started for. */
 private const val STARTED_FOR = "startedFor"
 
 /** [STARTED_FOR] of a screen started while nobody was active. */
 private const val NOBODY = ""
+
+/** The toast after an account was deleted (section 16.5.6 of the specification). */
+internal const val ACCOUNT_DELETED_TOAST = "Account deleted"
 
 /**
  * Starts over at [route], started for [forAccount] (the account active now):
@@ -74,6 +86,11 @@ internal fun startOverFor(before: String?, now: Account?, accounts: List<Account
  * account store as the screen shows it, the accounts and the active one as one
  * value; [initial] the account active when the back stack was started.
  *
+ * The account the back stack is of is kept with the saved state, as the back
+ * stack is: one restored after the process was killed is compared with the
+ * account active now, not taken for its - its account deleted meanwhile (section
+ * 16.5.6 of the specification), the app starts over.
+ *
  * Not while Change server is on the screen: it removes every account, saves the
  * new server and restarts the app on it, and its screen stays until then. Left
  * without that restart (BACK, or a removal that failed part-way), the app
@@ -81,7 +98,7 @@ internal fun startOverFor(before: String?, now: Account?, accounts: List<Account
  */
 @Composable
 internal fun StartOverOnAccountChange(nav: NavHostController, now: AccountStore.Snapshot, initial: String?) {
-    val shownFor = remember { mutableStateOf(initial) }
+    val shownFor = rememberSaveable { mutableStateOf(initial) }
     val entry by nav.currentBackStackEntryAsState()
     val onServerChange = entry?.destination?.route == Routes.SERVER_CHANGE
     LaunchedEffect(now.activeAccount?.id, now.activeAccount?.expiresAtEpochMillis, onServerChange) {
@@ -98,7 +115,9 @@ internal fun StartOverOnAccountChange(nav: NavHostController, now: AccountStore.
  * ([WhoIsWatching]) among the routes, beside the other [routes]. [boot] is the
  * store as it was when the app started, [startDestination] where it started.
  * [forgetAccount] takes what the TV keeps of an account removed on who's
- * watching.
+ * watching. Each account in [deleted], signed out because it was deleted, is
+ * said in the toast "Account deleted", over the screen the app started over
+ * on: who's watching, or sign-in.
  */
 @Composable
 internal fun AccountNavHost(
@@ -107,13 +126,22 @@ internal fun AccountNavHost(
     boot: AccountStore.Snapshot,
     startDestination: String,
     forgetAccount: (accountId: String) -> Unit,
+    deleted: Flow<String> = emptyFlow(),
     routes: NavGraphBuilder.() -> Unit,
 ) {
     val now by accountStore.snapshots.collectAsState(initial = boot)
     StartOverOnAccountChange(nav, now, boot.activeAccount?.id)
-    NavHost(navController = nav, startDestination = startDestination) {
-        composable(Routes.PICKER) { ShellScreen { WhoIsWatching(nav, accountStore, forgetAccount) } }
-        routes()
+    var toast by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(deleted) {
+        deleted.collect { toast = ACCOUNT_DELETED_TOAST }
+    }
+    Box(modifier = Modifier.fillMaxSize()) {
+        // The screens fill the TV; the toast lies over them.
+        NavHost(navController = nav, startDestination = startDestination, modifier = Modifier.fillMaxSize()) {
+            composable(Routes.PICKER) { ShellScreen { WhoIsWatching(nav, accountStore, forgetAccount) } }
+            routes()
+        }
+        toast?.let { Toast(text = it, modifier = Modifier.align(Alignment.BottomCenter)) { toast = null } }
     }
 }
 

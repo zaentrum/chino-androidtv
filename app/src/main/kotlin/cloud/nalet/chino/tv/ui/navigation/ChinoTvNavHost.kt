@@ -17,6 +17,7 @@ import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NamedNavArgument
 import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavGraphBuilder
+import androidx.navigation.NavHostController
 import androidx.navigation.NavType
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
@@ -101,6 +102,28 @@ object Routes {
  *  would look up. */
 internal fun detailPlayRoute(itemId: String, resumeSec: Int): String =
     Routes.player(itemId, fromStart = resumeSec <= 0, resumeSec = resumeSec.coerceAtLeast(0))
+
+/**
+ * Where the app starts, [snapshot] the accounts as it starts:
+ *  - 0 accounts                              → AUTH (first-run sign-in)
+ *  - active account exists but needs reauth  → AUTH (re-sign-in same user)
+ *  - 2+ accounts (with or without active)    → PICKER ("who's watching?")
+ *  - 1 account, healthy                      → LIBRARY (auto-select)
+ *  - accounts left but nobody active         → PICKER: the active one was
+ *    deleted (section 16.5.6), and another is not made active for it
+ * Important: the 2+ branch goes ABOVE the "active != null" branch so the
+ * picker always shows on launch when multiple profiles exist, even if
+ * one is marked active. Matches the common pattern of TV apps + the user
+ * expectation laid out when the feature was scoped.
+ */
+internal fun startDestination(serverConfigured: Boolean, snapshot: AccountStore.Snapshot): String = when {
+    !serverConfigured -> Routes.SERVER
+    snapshot.accounts.isEmpty() -> Routes.AUTH
+    snapshot.activeAccount?.needsReauth() == true -> Routes.AUTH
+    snapshot.accounts.size >= 2 -> Routes.PICKER
+    snapshot.activeAccount != null -> Routes.LIBRARY
+    else -> Routes.PICKER
+}
 
 /** Idle-reset threshold: backgrounded shorter than this resumes in place;
  *  longer (or equal) reopens at the Library root. 30 minutes. */
@@ -245,24 +268,7 @@ fun ChinoTvNavHost(container: AppContainer) {
         onDispose { activityLifecycleOwner.lifecycle.removeObserver(observer) }
     }
 
-    // Start-destination decision:
-    //  - 0 accounts                              → AUTH (first-run sign-in)
-    //  - active account exists but needs reauth  → AUTH (re-sign-in same user)
-    //  - 2+ accounts (with or without active)    → PICKER ("who's watching?")
-    //  - 1 account, healthy                      → LIBRARY (auto-select)
-    //  - default fallback                        → LIBRARY
-    // Important: the 2+ branch goes ABOVE the "active != null" branch so the
-    // picker always shows on launch when multiple profiles exist, even if
-    // one is marked active. Matches the common pattern of TV apps + the user
-    // expectation laid out when the feature was scoped.
-    val start = when {
-        !bootState.serverConfigured -> Routes.SERVER
-        snapshot.accounts.isEmpty() -> Routes.AUTH
-        snapshot.activeAccount?.needsReauth() == true -> Routes.AUTH
-        snapshot.accounts.size >= 2 -> Routes.PICKER
-        snapshot.activeAccount != null -> Routes.LIBRARY
-        else -> Routes.LIBRARY
-    }
+    val start = startDestination(bootState.serverConfigured, snapshot)
 
     // A sign-in that no longer holds after the silent refresh (SignInLapses):
     // no error screen - straight to sign-in, for the account chosen. The
@@ -281,7 +287,16 @@ fun ChinoTvNavHost(container: AppContainer) {
         // server-side, offline session idle, refresh failed), sign-in, for the
         // same user. Without the latter they'd hit a wall of API 401s and a
         // black library. Who's watching is among AccountNavHost's own routes.
-        AccountNavHost(navController, container.accountStore, snapshot, start, forgetAccount = container::forgetAccount) {
+        // An account the server deleted is signed out with the toast
+        // "Account deleted" (DeletedAccounts).
+        AccountNavHost(
+            navController,
+            container.accountStore,
+            snapshot,
+            start,
+            forgetAccount = container::forgetAccount,
+            deleted = container.deletedAccounts.signedOut,
+        ) {
             screen(Routes.SERVER) {
                 val vm: cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel =
                     viewModel(factory = cloud.nalet.chino.tv.ui.onboarding.ServerSetupViewModel.factory(container))
@@ -510,19 +525,8 @@ fun ChinoTvNavHost(container: AppContainer) {
                     activeAccount = activeAccount,
                 )
             }
-            screen(Routes.DELETE_ACCOUNT) {
-                val vm: cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel =
-                    viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
-                cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
-                    viewModel = vm,
-                    onCancel = { navController.popBackStack() },
-                    // Deleted and signed out: back to the start, the back stack
-                    // gone with the account — who's watching when others are
-                    // signed in on this TV, else sign-in.
-                    onSignedOut = { othersRemain ->
-                        navController.startOverAt(if (othersRemain) Routes.PICKER else Routes.AUTH, forAccount = null)
-                    },
-                )
+            deleteAccountScreen(navController, deletedHere = container.deletedAccounts::deletedHere) {
+                viewModel(factory = cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel.factory(container))
             }
             screen(Routes.PROFILE) {
                 val vm: cloud.nalet.chino.tv.ui.profile.ProfileViewModel =
@@ -724,6 +728,28 @@ private fun NavGraphBuilder.screen(
     arguments: List<NamedNavArgument> = emptyList(),
     content: @Composable (NavBackStackEntry) -> Unit,
 ) = composable(route = route, arguments = arguments) { entry -> ShellScreen { content(entry) } }
+
+/**
+ * Delete Account, from Settings → Account, with [model]'s view model. Deleted and
+ * signed out: back to the start, the back stack gone with the account — who's
+ * watching when others are signed in on this TV, else sign-in — with the toast
+ * "Account deleted" ([deletedHere]), as for an account the server deleted.
+ */
+internal fun NavGraphBuilder.deleteAccountScreen(
+    nav: NavHostController,
+    deletedHere: (accountId: String) -> Unit,
+    model: @Composable () -> cloud.nalet.chino.tv.ui.settings.DeleteAccountViewModel,
+) = screen(Routes.DELETE_ACCOUNT) {
+    val vm = model()
+    cloud.nalet.chino.tv.ui.settings.DeleteAccountScreen(
+        viewModel = vm,
+        onCancel = { nav.popBackStack() },
+        onSignedOut = { othersRemain ->
+            vm.account?.id?.let(deletedHere)
+            nav.startOverAt(if (othersRemain) Routes.PICKER else Routes.AUTH, forAccount = null)
+        },
+    )
+}
 
 /** Brand-coloured cold-launch splash. Shows for the duration of the
  *  AccountStore EncryptedSharedPreferences open + decrypt — typically

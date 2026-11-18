@@ -6,6 +6,7 @@ import android.net.NetworkCapabilities
 import android.os.Build
 import cloud.nalet.chino.tv.BuildConfig
 import cloud.nalet.chino.tv.data.api.ChinoApi
+import cloud.nalet.chino.tv.data.api.RequestAccount
 import cloud.nalet.chino.tv.data.api.TelemetryBatch
 import cloud.nalet.chino.tv.data.api.TelemetryEvent
 import kotlinx.coroutines.CoroutineScope
@@ -111,7 +112,10 @@ class Telemetry(
         }
     }
 
-    private val queued = EventQueue()
+    /** A [queue]d event and the account it goes out under. */
+    private class Queued(val event: TelemetryEvent, val account: suspend () -> RequestAccount?)
+
+    private val queued = EventQueue<Queued>()
 
     /**
      * A playback-quality report (PlaybackQuality): queued, and sent with the
@@ -121,15 +125,18 @@ class Telemetry(
      * sent again, and past [EventQueue]'s bound the oldest go. Its payload is
      * what it is given and the client's name, which chino-api counts a TV
      * by - no device, account or network context: chino-web sends none.
+     * It goes out under [account] - the account the title plays for - with
+     * that account's bearer, whoever is active by then; not at all where that
+     * account is no longer signed in here, or there is none.
      */
-    fun queue(kind: String, itemId: String?, payload: Map<String, String>) {
+    fun queue(kind: String, itemId: String?, payload: Map<String, String>, account: suspend () -> RequestAccount?) {
         val event = TelemetryEvent(
             ts = System.currentTimeMillis(),
             kind = kind,
             itemId = itemId,
             payload = payload + ("client" to TELEMETRY_CLIENT),
         )
-        if (queued.add(event)) {
+        if (queued.add(Queued(event, account))) {
             scope.launch {
                 delay(QUEUE_FLUSH_MS)
                 flush()
@@ -137,7 +144,8 @@ class Telemetry(
         }
     }
 
-    /** Sends what is [queue]d, if anything, in one batch. */
+    /** Sends what is [queue]d, if anything: one batch for each account the
+     *  events were queued under, with its bearer. */
     fun flush() {
         val events = queued.drain()
         if (events.isEmpty()) return
@@ -145,7 +153,14 @@ class Telemetry(
             runCatching {
                 // No server yet: the batch has nowhere to go and is dropped.
                 val client = api() ?: return@launch
-                client.postTelemetry(TelemetryBatch(sessionId = sessionId, events = events))
+                val byAccount = events.groupBy { runCatching { it.account() }.getOrNull() }
+                for ((account, batch) in byAccount) {
+                    // Under nobody: dropped, never sent as the active account.
+                    if (account == null) continue
+                    runCatching {
+                        client.postTelemetry(TelemetryBatch(sessionId = sessionId, events = batch.map { it.event }), account)
+                    }
+                }
             }
         }
     }
