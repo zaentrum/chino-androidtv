@@ -79,11 +79,24 @@ class AccountChangeTest {
             ids.forEach { store.addOrUpdate(account(it)) }
             store.setActive(ids.first())
         }
+        hostAt(Routes.LIBRARY)
+    }
+
+    /** [ids] signed in and nobody active, as the active account deleted
+     *  leaves them; the app where it starts then (who's watching). */
+    private fun hostNobodyActive(vararg ids: String) {
+        runBlocking { ids.forEach { store.addOrUpdate(account(it)) } }
+        hostAt(startDestination(serverConfigured = true, store.snapshotBlocking()))
+    }
+
+    /** The app on the store as it is, started at [start]. */
+    private fun hostAt(start: String) {
         val boot = store.snapshotBlocking()
         compose.setContent {
             nav = rememberNavController()
             ChinoTvTheme {
-                AccountNavHost(nav, store, boot, startDestination = Routes.LIBRARY, forgetAccount = settings::forget) {
+                AccountNavHost(nav, store, boot, startDestination = start, forgetAccount = settings::forget) {
+                    composable(Routes.SERVER) {}
                     composable(Routes.LIBRARY) {}
                     composable(Routes.AUTH) {}
                     composable(Routes.SETTINGS) {}
@@ -178,6 +191,38 @@ class AccountChangeTest {
         tile("Parent").performTouchInput { longClick() }
         removeButton().performSemanticsAction(SemanticsActions.OnClick)
         assertAloneAt(Routes.AUTH)
+    }
+
+    @Test
+    fun `16_5_6 with nobody active, the last account removed on who's watching leaves sign-in alone on the stack`() {
+        hostNobodyActive("child")
+        assertAloneAt(Routes.PICKER)
+        tile("Child").performTouchInput { longClick() }
+        removeButton().performSemanticsAction(SemanticsActions.OnClick)
+        assertAloneAt(Routes.AUTH)
+        assertEquals(emptyList<String>(), store.snapshotBlocking().accounts.map { it.id })
+    }
+
+    @Test
+    fun `16_5_6 with nobody active, one of two accounts removed on who's watching leaves who's watching`() {
+        hostNobodyActive("parent", "child")
+        assertAloneAt(Routes.PICKER)
+        tile("Child").performTouchInput { longClick() }
+        removeButton().performSemanticsAction(SemanticsActions.OnClick)
+        compose.waitUntil(5_000) { store.snapshotBlocking().accounts.size == 1 }
+        compose.waitForIdle()
+        assertAloneAt(Routes.PICKER)
+        assertEquals(listOf("parent"), store.snapshotBlocking().accounts.map { it.id })
+        assertNull(store.snapshotBlocking().activeAccount)
+        tile("Parent").assertExists()
+    }
+
+    @Test
+    fun `a first run's server setup, with no account signed in, stays as it is`() {
+        hostAt(startDestination(serverConfigured = false, store.snapshotBlocking()))
+        compose.mainClock.advanceTimeBy(1_000)
+        compose.waitForIdle()
+        assertAloneAt(Routes.SERVER)
     }
 
     @Test

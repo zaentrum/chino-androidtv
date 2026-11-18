@@ -73,6 +73,8 @@ fun AccountPickerScreen(
     /** An account removed here has left this TV: what the TV keeps of its
      *  settings goes with it. */
     forgetAccount: (accountId: String) -> Unit,
+    /** The last account was removed here: there is none left to choose. */
+    onNoneLeft: () -> Unit,
 ) {
     // Seed the cold-emitting accounts flow with a synchronous snapshot of
     // EncryptedSharedPreferences so the picker renders its tile row on the
@@ -144,6 +146,11 @@ fun AccountPickerScreen(
                     accountStore.remove(acct.id)
                     forgetAccount(acct.id)
                     pendingRemoval = null
+                    // With nobody active (the active account deleted,
+                    // section 16.5.6) a removal changes no active account,
+                    // so nothing else starts over: the last one gone, who's
+                    // watching would be left with no account on it.
+                    if (accountStore.snapshotBlocking().accounts.isEmpty()) onNoneLeft()
                 }
             },
             onDismiss = { pendingRemoval = null },

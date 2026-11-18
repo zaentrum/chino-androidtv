@@ -148,7 +148,10 @@ internal fun AccountNavHost(
 /** Who's watching, as the app's back stack goes with it: an account chosen
  *  starts on its home, the one active already too. The active one removed
  *  changes the active account, and [StartOverOnAccountChange] starts over;
- *  what the TV keeps of an account removed goes with it ([forgetAccount]). */
+ *  what the TV keeps of an account removed goes with it ([forgetAccount]).
+ *  The last account removed starts over at sign-in, also with nobody active,
+ *  where no active account changes: here, not in [startOverFor], which also
+ *  sees no account on a first run's server setup, and leaves it as it is. */
 @Composable
 internal fun WhoIsWatching(nav: NavController, accountStore: AccountStore, forgetAccount: (accountId: String) -> Unit) {
     AccountPickerScreen(
@@ -156,5 +159,6 @@ internal fun WhoIsWatching(nav: NavController, accountStore: AccountStore, forge
         onPicked = { account -> nav.startOverAt(Routes.LIBRARY, account.id) },
         onAddAccount = { nav.navigate(Routes.AUTH) },
         forgetAccount = forgetAccount,
+        onNoneLeft = { nav.startOverAt(Routes.AUTH, forAccount = null) },
     )
 }
