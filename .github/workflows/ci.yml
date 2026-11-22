@@ -18,36 +18,10 @@ jobs:
     uses: zaentrum/.github/.github/workflows/neutrality.yml@v1
 
   # ---------------------------------------------------------------------------
-  # Neutrality gate: this is a PUBLIC, vendor-neutral client. Fail the build if
-  # any internal hostname, competitor product name, or acquisition vocabulary
-  # leaks into the tree. Runs first; build jobs depend on it.
-  # ---------------------------------------------------------------------------
-  neutrality:
-    name: Neutrality check
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-
-      - name: Install ripgrep
-        run: sudo apt-get update && sudo apt-get install -y ripgrep
-
-      # No internal hostname and no competitor product name anywhere in the
-      # tree (comments included), no acquisition vocabulary in user-facing
-      # surfaces (Android resources and docs). The script holds the patterns,
-      # assembled from fragments so the tree (this workflow and the script
-      # included) stays literally free of every banned string. A name counts
-      # with "_" beside it (FOO_API_URL), which \b and rg -w let through; the
-      # script first checks its patterns against lines they must and must not
-      # flag, and fails when one has gone blind.
-      - name: Neutrality guard
-        run: bash scripts/check-neutrality.sh
-
-  # ---------------------------------------------------------------------------
   # Debug builds: always build both flavors so every push is exercised.
   # ---------------------------------------------------------------------------
   build:
     name: Build debug APKs
-    needs: neutrality
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -140,7 +114,7 @@ jobs:
   release:
     name: Build signed release AAB
     # A signed release is built only once the tests have passed.
-    needs: [neutrality, check-secrets, build]
+    needs: [check-secrets, build]
     if: ${{ needs.check-secrets.outputs.has_keystore == 'true' }}
     runs-on: ubuntu-latest
     steps:

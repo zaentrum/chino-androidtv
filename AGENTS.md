@@ -26,20 +26,18 @@ id and no product flavor; the debug app id ends in `.debug`, so it installs
 beside a release. A release (`:app:bundleRelease`) is signed only when
 `SIGNING_KEYSTORE_FILE`, `SIGNING_KEYSTORE_PASSWORD`, `SIGNING_KEY_ALIAS` and
 `SIGNING_KEY_PASSWORD` are set: the workflow's `release` job builds the signed
-AAB where the keystore is held as a repository secret, and only once the jobs
-`neutrality` and `build` (the tests) have passed.
+AAB where the keystore is held as a repository secret, and only once the job
+`build` (the tests) has passed.
 
 ## Test
 
 ```sh
-bash scripts/check-neutrality.sh
 ./gradlew :app:verifyRoborazziDebug
 ```
 
-`.github/workflows/ci.yml` runs these on a pull request to `main`, on `main`
-and on a pushed tag `v*` (jobs `neutrality` and `build`), then builds the
-debug APK. The guard needs
-ripgrep (`rg`) on the PATH. `verifyRoborazziDebug` runs the JVM unit tests and
+`.github/workflows/ci.yml` runs it on a pull request to `main`, on `main`
+and on a pushed tag `v*` (job `build`), then builds the debug APK.
+`verifyRoborazziDebug` runs the JVM unit tests and
 compares the screenshots that `FocusScreenshotTest` takes with the golden
 images in `app/src/test/screenshots`; a screenshot in which more than 0.5 % of
 the pixels differ fails the run, with the images of the difference in
@@ -93,7 +91,6 @@ run the app against.
 
 ## Before a pull request
 
-- `bash scripts/check-neutrality.sh`, as the `neutrality` job runs it.
 - A change to a look that a screenshot shows: `./gradlew :app:recordRoborazziDebug`
   writes the golden images in `app/src/test/screenshots` anew. They are
   committed with the change, since the workflow compares against them.
