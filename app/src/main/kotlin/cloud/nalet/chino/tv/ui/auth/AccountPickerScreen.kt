@@ -12,6 +12,8 @@ import cloud.nalet.chino.tv.ui.theme.ChinoText
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.focusGroup
+import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -34,8 +36,10 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusProperties
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.graphics.RectangleShape
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -85,6 +89,18 @@ fun AccountPickerScreen(
     val accounts by accountStore.accounts.collectAsState(initial = seedAccounts)
     val scope = rememberCoroutineScope()
     var pendingRemoval by remember { mutableStateOf<Account?>(null) }
+    // Each tile's focus, by its account, and the add tile's: the remove
+    // dialog takes the focus while it is open and hands it back when it
+    // closes - to the tile that opened it, or after a removal to the first
+    // tile left.
+    val tileFocus = remember { mutableMapOf<String, FocusRequester>() }
+    val addFocus = remember { FocusRequester() }
+    var focusBack by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(focusBack) {
+        val id = focusBack ?: return@LaunchedEffect
+        runCatching { (tileFocus[id] ?: addFocus).requestFocus() }
+        focusBack = null
+    }
     ChinoPage {
         Column(
             // Centred on the screen, which the shell lays out edge to edge.
@@ -110,10 +126,9 @@ fun AccountPickerScreen(
             // this the focus would land on the trailing "Add account" tile,
             // which makes the common case (pick the same account as last
             // time) a two-button-press round-trip.
-            val initialFocus = remember { androidx.compose.ui.focus.FocusRequester() }
             LaunchedEffect(accounts.firstOrNull()?.id) {
-                if (accounts.isNotEmpty()) {
-                    runCatching { initialFocus.requestFocus() }
+                accounts.firstOrNull()?.let { first ->
+                    runCatching { tileFocus.getOrPut(first.id) { FocusRequester() }.requestFocus() }
                 }
             }
             Row(
@@ -131,10 +146,11 @@ fun AccountPickerScreen(
                             }
                         },
                         onLongPress = { pendingRemoval = account },
-                        focusRequester = if (index == 0) initialFocus else null,
+                        focusRequester = tileFocus.getOrPut(account.id) { FocusRequester() },
+                        preFocused = index == 0,
                     )
                 }
-                AddAccountTile(onClick = onAddAccount)
+                AddAccountTile(onClick = onAddAccount, focusRequester = addFocus)
             }
         }
     }
@@ -150,10 +166,14 @@ fun AccountPickerScreen(
                     // section 16.5.6) a removal changes no active account,
                     // so nothing else starts over: the last one gone, who's
                     // watching would be left with no account on it.
-                    if (accountStore.snapshotBlocking().accounts.isEmpty()) onNoneLeft()
+                    val left = accountStore.snapshotBlocking().accounts
+                    if (left.isEmpty()) onNoneLeft() else focusBack = left.first().id
                 }
             },
-            onDismiss = { pendingRemoval = null },
+            onDismiss = {
+                pendingRemoval = null
+                focusBack = acct.id
+            },
         )
     }
 }
@@ -164,23 +184,23 @@ private fun AccountTile(
     account: Account,
     onSelect: () -> Unit,
     onLongPress: () -> Unit,
-    focusRequester: FocusRequester? = null,
+    focusRequester: FocusRequester,
+    preFocused: Boolean = false,
 ) {
-    // A card, the avatar its artwork. The most-recent tile (the one carrying
-    // a FocusRequester) is drawn focused from the first frame, so there is no
-    // jump from no ring to a ring when the LaunchedEffect-driven focus request
-    // lands a frame later: onFocusChanged fires `false` on first attach —
-    // BEFORE that request lands — and ItemFocus honours `false` only once real
-    // focus has come, so the preselected tile does not flicker.
-    val focus = rememberItemFocus(preFocused = focusRequester != null)
-    val focusModifier = focusRequester?.let { Modifier.focusRequester(it) } ?: Modifier
+    // A card, the avatar its artwork. The most-recent tile ([preFocused]) is
+    // drawn focused from the first frame, so there is no jump from no ring to
+    // a ring when the LaunchedEffect-driven focus request lands a frame later:
+    // onFocusChanged fires `false` on first attach — BEFORE that request lands
+    // — and ItemFocus honours `false` only once real focus has come, so the
+    // preselected tile does not flicker.
+    val focus = rememberItemFocus(preFocused = preFocused)
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(12.dp),
         modifier = Modifier
             .width(160.dp)
             .padding(8.dp)
-            .then(focusModifier)
+            .focusRequester(focusRequester)
             .focusStyle(focus, FocusKind.Card)
             // combinedClickable is itself focusable — a separate .focusable()
             // here created a SECOND focus node, so the first CENTER only moved
@@ -209,28 +229,42 @@ private fun AccountTile(
     }
 }
 
+/**
+ * The question before an account leaves this TV (the design system's
+ * confirm): "cancel" has the focus when it opens, the remote moves between
+ * its two buttons and never out of it, so OK never reaches a tile behind it.
+ * BACK, or a tap beside it, cancels.
+ */
+@OptIn(androidx.compose.ui.ExperimentalComposeUiApi::class)
 @Composable
 private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismiss: () -> Unit) {
     // Full-screen dim with a centered card. Compose-for-TV doesn't have a
     // first-class AlertDialog, so we draw our own card on top of a scrim
-    // Box that intercepts clicks (BackHandler covers BACK).
+    // (BackHandler covers BACK).
     androidx.activity.compose.BackHandler { onDismiss() }
+    val cancel = remember { FocusRequester() }
+    LaunchedEffect(Unit) { runCatching { cancel.requestFocus() } }
     Box(
         modifier = Modifier
             .fillMaxSize()
             .scrim()
-            .clickable(onClick = onDismiss),
+            // A tap beside the card cancels; the scrim is no stop of the
+            // focus, as a clickable would be one.
+            .pointerInput(onDismiss) { detectTapGestures { onDismiss() } },
         contentAlignment = Alignment.Center,
     ) {
         Surface(
             modifier = Modifier
                 .width(420.dp)
                 .padding(24.dp)
-                .clickable(enabled = false) { }, // swallow scrim clicks on the card
+                .pointerInput(Unit) { detectTapGestures { } }, // swallow scrim taps on the card
             shape = RectangleShape,
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier
+                    .focusProperties { exit = { FocusRequester.Cancel } }
+                    .focusGroup()
+                    .padding(24.dp),
                 verticalArrangement = Arrangement.spacedBy(16.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
             ) {
@@ -257,7 +291,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
                     textAlign = TextAlign.Center,
                 )
                 Row(horizontalArrangement = Arrangement.spacedBy(ChinoFocus.ControlGap)) {
-                    ChinoButton(onClick = onDismiss) { Text("cancel") }
+                    ChinoButton(onClick = onDismiss, modifier = Modifier.focusRequester(cancel)) { Text("cancel") }
                     ChinoDangerButton(onClick = onConfirm) { Text("remove account") }
                 }
             }
@@ -266,7 +300,7 @@ private fun ConfirmRemoveDialog(account: Account, onConfirm: () -> Unit, onDismi
 }
 
 @Composable
-private fun AddAccountTile(onClick: () -> Unit) {
+private fun AddAccountTile(onClick: () -> Unit, focusRequester: FocusRequester) {
     val focus = rememberItemFocus()
     Column(
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -274,6 +308,7 @@ private fun AddAccountTile(onClick: () -> Unit) {
         modifier = Modifier
             .width(160.dp)
             .padding(8.dp)
+            .focusRequester(focusRequester)
             .focusStyle(focus, FocusKind.Card)
             // clickable is focusable on its own — no separate .focusable()
             // (which would need two CENTER presses to activate).
