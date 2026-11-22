@@ -42,20 +42,28 @@ class KindsKnownAtStartTest {
     private enum class ConfigAnswer { Held, Fails, Offers, OffersNot }
 
     @Volatile private var config = ConfigAnswer.Offers
-    private val configGoesOn = CountDownLatch(1)
+
+    /** The account's settings not answered while the test looks: settings
+     *  read the choice again as they open, and a first frame checked then
+     *  must not depend on whether that read is out or answered yet. */
+    @Volatile private var settingsHeld = false
+    private val heldGoOn = CountDownLatch(1)
 
     private val server = LocalServer { method, path ->
         when ("$method $path") {
             "GET /api/config" -> when (config) {
                 ConfigAnswer.Held -> {
-                    configGoesOn.await(20, TimeUnit.SECONDS)
+                    heldGoOn.await(20, TimeUnit.SECONDS)
                     503 to "{}"
                 }
                 ConfigAnswer.Fails -> 503 to "{}"
                 ConfigAnswer.Offers -> 200 to """{"features":{"feedback":false,"watchlist_kinds":true}}"""
                 ConfigAnswer.OffersNot -> 200 to """{"features":{"feedback":false,"watchlist_kinds":false}}"""
             }
-            "GET /api/v1/me/settings" -> 200 to """{"watchlist_by_kind":true}"""
+            "GET /api/v1/me/settings" -> {
+                if (settingsHeld) heldGoOn.await(20, TimeUnit.SECONDS)
+                200 to """{"watchlist_by_kind":true}"""
+            }
             "PATCH /api/v1/me/settings" -> 200 to """{"watchlist_by_kind":false}"""
             else -> null
         }
@@ -87,7 +95,7 @@ class KindsKnownAtStartTest {
 
     @After
     fun stop() {
-        configGoesOn.countDown()
+        heldGoOn.countDown()
         server.stop()
     }
 
@@ -111,12 +119,15 @@ class KindsKnownAtStartTest {
     fun `16_4_7 right after a start on a slow server settings and the watchlist know it from their first frame`() {
         ServerConfigStore(ctx).run { runBlocking { saveWatchlistKinds(base, true) } }
         config = ConfigAnswer.Held
+        settingsHeld = true
         val c = started()
+        // The start asked nothing: it holds what this TV kept.
+        assertTrue(server.seen.toString(), server.seen.none { it == "GET /api/v1/me/settings" })
 
-        // The first state, before anything was answered.
+        // The first state, before anything was answered - settings' own read
+        // of the choice, out or not, is held.
         assertEquals(ListsByKindSetting(shown = true, reading = true), settings(c).listsByKind.value)
         assertTrue(c.listsByKind.now())
-        assertTrue(server.seen.toString(), server.seen.none { it == "GET /api/v1/me/settings" })
     }
 
     @Test
@@ -148,11 +159,16 @@ class KindsKnownAtStartTest {
         // Restored: a graph anew over what the TV keeps, the start's hold,
         // then settings first - no home, no warm - while the server is slow.
         config = ConfigAnswer.Held
+        settingsHeld = true
         val asked = server.seen.size
         val c = started()
+        // The start asked nothing: it holds what this TV kept.
+        assertTrue(server.seen.drop(asked).toString(), server.seen.drop(asked).none { it == "GET /api/v1/me/settings" })
+
+        // Settings' first frame, their own read of the choice, out or not,
+        // held.
         assertEquals(ListsByKindSetting(shown = true, reading = true), settings(c).listsByKind.value)
         assertTrue(c.listsByKind.now())
-        assertTrue(server.seen.drop(asked).toString(), server.seen.drop(asked).none { it == "GET /api/v1/me/settings" })
     }
 
     @Test
